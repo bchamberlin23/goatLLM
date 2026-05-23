@@ -1,0 +1,25 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for MVP 2",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "dialog:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://opencode.ai/**" },
+        { "url": "https://api.openai.com/**" },
+        { "url": "https://api.anthropic.com/**" },
+        { "url": "https://api.groq.com/**" }
+      ]
+    },
+    {
+      "identifier": "shell:default",
+      "allow": [
+        { "name": "git", "cmd": "git", "args": true }
+      ]
+    }
+  ]
+}

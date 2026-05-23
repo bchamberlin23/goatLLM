@@ -1,3 +1,21 @@
+## Design System
+
+Always read `DESIGN.md` before making any visual or UI decision. All font choices, color tokens, spacing, border radius, motion timings, and aesthetic direction are defined there. Do not deviate without explicit user approval.
+
+Quick reference (full detail in `DESIGN.md`):
+- Fonts: Geist (sans), JetBrains Mono (mono). Never reach for Inter, Roboto, system-ui, or `-apple-system` as primary.
+- Accent: `#f59e42` amber, single. No second accent. Use it for active state and the primary action only.
+- Tertiary text floor: `#a0a0a0`. Anything dimmer fails WCAG AA on `#1a1a1c`.
+- Surfaces: `#1a1a1c` (bg) → `#2a2a2c` / `#2d2d2d` (cards) → `#161618` (sunken/code).
+- Hairline: `rgba(255,255,255,0.06)` default, `0.10` on hover/focus.
+- Send button is solid `#f59e42`, never cream or white. The most repeated action is the most confident color.
+
+When reviewing UI changes (in `/design-review`, `/qa`, or PR review), flag any:
+- Hex value that isn't in `DESIGN.md`'s token list.
+- Tertiary text below 4.5:1 against its background.
+- Use of decorative gradients, blobs, 3-column icon grids, centered-everything, or any AI-slop pattern listed in `DESIGN.md`.
+- New "primary" colors. There is one accent.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
