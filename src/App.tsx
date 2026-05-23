@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
 import { Settings } from "./components/Settings";
 import { useChatStore } from "./stores/chat";
+import { useKeyboardShortcuts } from "./lib/keyboard";
 
 export default function App() {
   const selectedModelId = useChatStore((s) => s.selectedModelId);
@@ -32,6 +33,12 @@ export default function App() {
 
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
+
+  useKeyboardShortcuts({
+    onOpenSettings: handleOpenSettings,
+    onCloseSettings: handleCloseSettings,
+    isSettingsOpen: settingsOpen,
+  });
 
   return (
     <div className="w-full h-screen flex overflow-hidden" style={{ background: "#1e1e1e" }}>

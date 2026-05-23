@@ -54,7 +54,7 @@ A desktop AI coding agent with workspace-aware tool calling. Built with Tauri 2,
 | State | Zustand 5 |
 | Database | SQLite via `rusqlite` (bundled) |
 | Markdown | `react-markdown` + `shiki` + `remark-gfm` |
-| Styling | Plain CSS (no framework, ~3KB) |
+| Styling | Tailwind 4 + CSS variables (DESIGN.md is source of truth) |
 
 ## Architecture
 
@@ -132,6 +132,19 @@ The app opens a desktop window. Vite dev server runs on `http://localhost:1420`.
 3. Ask the model to read files, search code, or make changes
 4. Write operations show a diff preview — approve or deny each change
 5. Commands classified as destructive require double confirmation
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘N` / `Ctrl+N` | New chat (returns to empty state) |
+| `⌘B` / `Ctrl+B` | Toggle sidebar |
+| `⌘,` / `Ctrl+,` | Open / close Settings |
+| `⌘\` / `Ctrl+\` | Toggle Chat ↔ Agent mode |
+| `⌘.` / `Ctrl+.` | Stop streaming response |
+| `⌘1`–`⌘9` | Switch to conversation by position |
+| `⌘F` / `Ctrl+F` | Focus the conversation search box |
+| `Esc` | Close Settings (when open) |
 
 ## Roadmap
 
