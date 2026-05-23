@@ -57,7 +57,24 @@ Restrained: one warm accent, three-tier neutral system, four semantic colors.
 
 ### Tokens
 
-CSS variables defined in `:root` (`src/index.css`). Tailwind arbitrary values still reference these by literal hex throughout the codebase — DESIGN.md is the source of truth, the variables let future themes override.
+CSS variables defined in `:root` (`src/index.css`) AND mirrored as Tailwind 4 `@theme` color tokens. **New code should prefer Tailwind utilities** over arbitrary hex values:
+
+| Hex | CSS variable | Tailwind utility |
+|-----|--------------|------------------|
+| `#1a1a1c` | `--bg` | `bg-bg` `text-bg` |
+| `#2a2a2c` | `--surface-1` | `bg-surface-1` `text-surface-1` |
+| `#2d2d2d` | `--surface-2` | `bg-surface-2` |
+| `#212122` | `--surface-3` | `bg-surface-3` |
+| `#161618` | `--sunken` | `bg-sunken` |
+| `#ececec` | `--text-1` | `text-text-1` |
+| `#b4b4b4` | `--text-2` | `text-text-2` |
+| `#a0a0a0` | `--text-3` | `text-text-3` |
+| `#888888` | `--text-4` | `text-text-4` |
+| `#f59e42` | `--accent` | `text-accent` `bg-accent` |
+| `#34d399` | `--success` | `text-success` |
+| `#f87171` | `--error` | `text-error` |
+
+Older code still uses raw `text-[#a0a0a0]` arbitraries — both forms work, the Tailwind utility is preferred for new code. Both forms reference the same source values.
 
 ```
 /* Surfaces (lightest at top to darkest at bottom in z-stack) */
@@ -166,6 +183,10 @@ Hierarchical, not uniform. Bigger radius signals more discrete element.
 - **Default size:** 13–16 px. 13 for inline metadata, 14–15 for buttons, 16 for primary actions.
 - **Default stroke width:** 1.75. Lighter (1.5) for very small icons, heavier (2–2.4) for primary action icons (Send arrow).
 - **Always pair icon-only buttons with `aria-label`.** Decorative icons get `aria-hidden="true"`.
+
+## Touch / click targets
+
+goatLLM is a desktop application (Tauri). Mouse and trackpad are the primary input. The universal 44 px touch-target rule does **not** apply here — it would inflate the chrome and waste pixels on a tool optimized for keyboard-and-mouse use. The implicit floor is **24 px** (icon-only buttons) and **28 px** (with text). Hit areas can be expanded via padding without growing the visual footprint.
 
 ## Component patterns
 

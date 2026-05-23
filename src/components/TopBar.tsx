@@ -94,7 +94,7 @@ export function TopBar() {
 
           {activeId && (
             <>
-              <span className="text-[13px] font-medium text-[#ececec] truncate max-w-[300px] select-none ml-1">
+              <span className="text-[13px] font-medium text-[#ececec] truncate max-w-[300px] ml-1">
                 {renaming ? (
                   ""
                 ) : isTitlePending ? (

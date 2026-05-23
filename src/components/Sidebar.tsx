@@ -377,7 +377,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 <X size={12} strokeWidth={2} />
               </button>
             ) : (
-              <span className="text-[10px] text-[#a0a0a0] font-medium tracking-wide select-none">{cmdKey}F</span>
+              <span className="text-[10px] text-[#a0a0a0] font-medium tracking-wide tabular-nums">{cmdKey}F</span>
             )}
           </div>
         </div>

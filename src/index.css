@@ -4,6 +4,28 @@
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* ─── Color tokens (mirrors :root vars, exposed as Tailwind utilities) ─── */
+  /* Surfaces — text-bg, bg-bg, border-hairline, etc. */
+  --color-bg: #1a1a1c;
+  --color-surface-1: #2a2a2c;
+  --color-surface-2: #2d2d2d;
+  --color-surface-3: #212122;
+  --color-sunken: #161618;
+
+  /* Text */
+  --color-text-1: #ececec;
+  --color-text-2: #b4b4b4;
+  --color-text-3: #a0a0a0;
+  --color-text-4: #888888;
+
+  /* Accent + semantics */
+  --color-accent: #f59e42;
+  --color-accent-hover: #f0903a;
+  --color-success: #34d399;
+  --color-warning: #f59e42;
+  --color-error: #f87171;
+  --color-info: #60a5fa;
 }
 
 /* ─── Design tokens (DESIGN.md is the source of truth) ─── */
