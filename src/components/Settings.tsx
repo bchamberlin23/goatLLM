@@ -6,6 +6,7 @@ import { ProviderCard } from "./settings/ProviderCard";
 import { LocalProviderCard } from "./settings/LocalProviderCard";
 import { ArtifactToggleRow } from "./settings/ArtifactToggleRow";
 import { FreeWebSearchRow } from "./settings/FreeWebSearchRow";
+import { ChatCodeExecRow } from "./settings/ChatCodeExecRow";
 import { TavilyKeyRow } from "./settings/TavilyKeyRow";
 import { SemanticIndexSection } from "./settings/SemanticIndexSection";
 import { SystemPromptSection } from "./settings/SystemPromptSection";
@@ -59,6 +60,8 @@ function SettingsContent() {
   const setTavilyApiKey = useChatStore((s) => s.setTavilyApiKey);
   const freeWebSearch = useChatStore((s) => s.freeWebSearch);
   const setFreeWebSearch = useChatStore((s) => s.setFreeWebSearch);
+  const chatCodeExec = useChatStore((s) => s.chatCodeExec);
+  const setChatCodeExec = useChatStore((s) => s.setChatCodeExec);
   const autoArtifacts = useChatStore((s) => s.autoArtifacts);
   const setAutoArtifacts = useChatStore((s) => s.setAutoArtifacts);
   const officeArtifacts = useChatStore((s) => s.officeArtifacts);
@@ -120,6 +123,7 @@ function SettingsContent() {
           Pick a backend for the agent's web_search tool. Free Web Search needs no key. Tavily is more structured but requires an API key.
         </p>
         <FreeWebSearchRow enabled={freeWebSearch} onToggle={setFreeWebSearch} />
+        <ChatCodeExecRow enabled={chatCodeExec} onToggle={setChatCodeExec} />
         <TavilyKeyRow apiKey={tavilyApiKey} onSave={setTavilyApiKey} onRemove={() => setTavilyApiKey("")} />
       </section>
 

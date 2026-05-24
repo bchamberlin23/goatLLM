@@ -6,7 +6,13 @@
 
 export type LlmContentPart =
   | { type: "text"; text: string }
-  | { type: "image"; image: string; mimeType?: string };
+  | { type: "image"; image: string; mimeType?: string }
+  /** Raw file content (typically a PDF) sent to providers that natively
+   *  understand the format — Anthropic does server-side OCR + layout
+   *  parsing on PDF parts, which is what we use for scanned PDFs. The AI
+   *  SDK rejects this part on providers that don't support it, so the
+   *  send pipeline routes it conditionally. */
+  | { type: "file"; data: string; mimeType: string };
 
 export interface LlmMessage {
   role: "user" | "assistant" | "system";
@@ -18,6 +24,13 @@ export interface LlmConfig {
   modelId: string;
   apiKey: string | null;
   baseUrl?: string;
+  /** User override for max output/response tokens. When set, this is passed
+   *  as maxOutputTokens to the model instead of relying on provider defaults. */
+  maxResponseTokens?: number;
+  /** Reasoning/thinking effort level.
+   *  "off" means no extended thinking; otherwise one of the pi-ai
+   *  ThinkingLevel values: "minimal" | "low" | "medium" | "high" | "xhigh". */
+  reasoningEffort?: string;
 }
 
 export interface ToolCallInfo {

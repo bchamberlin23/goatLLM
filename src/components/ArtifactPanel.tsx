@@ -1,145 +1,412 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useChatStore, type Artifact, type ArtifactKind } from "../stores/chat";
-import { Code, FileCode, FileText, X, ChevronLeft, Copy, Columns } from "lucide-react";
+import { CritiqueButton } from "./design/CritiqueButton";
+import {
+  Code,
+  FileCode,
+  FileText,
+  FileType,
+  Presentation,
+  FileSpreadsheet,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Download,
+  Printer,
+  RotateCw,
+  Undo2,
+  Redo2,
+  History,
+} from "lucide-react";
+import {
+  renderDocxPreview,
+  renderPptxPreview,
+  renderXlsxPreview,
+  exportDocxBlob,
+  exportPptxBlob,
+  exportXlsxBlob,
+  officeFilename,
+  officeMimeType,
+} from "../lib/office-artifacts";
 
-const KIND_ICON: Record<ArtifactKind, typeof Code> = { html: FileCode, latex: FileText, python: Code };
-const KIND_LABEL: Record<ArtifactKind, string> = { html: "HTML", latex: "LaTeX", python: "Python" };
+const MonacoEditor = lazy(() =>
+  import("@monaco-editor/react").then((m) => ({ default: m.default })),
+);
+
+const ARTIFACT_LANG: Record<ArtifactKind, string> = {
+  html: "html",
+  latex: "plaintext",
+  python: "python",
+  // The office kinds are authored as Markdown (with table extensions), so we
+  // give Monaco the markdown grammar — gets us list/heading/table coloring
+  // for free.
+  docx: "markdown",
+  pptx: "markdown",
+  xlsx: "markdown",
+};
+
+const KIND_ICON: Record<ArtifactKind, typeof Code> = {
+  html: FileCode,
+  latex: FileText,
+  python: Code,
+  docx: FileType,
+  pptx: Presentation,
+  xlsx: FileSpreadsheet,
+};
+const KIND_LABEL: Record<ArtifactKind, string> = {
+  html: "HTML",
+  latex: "LaTeX",
+  python: "Python",
+  docx: "Word",
+  pptx: "Slides",
+  xlsx: "Excel",
+};
+
+const OFFICE_KINDS = new Set<ArtifactKind>(["docx", "pptx", "xlsx"]);
 
 // ── Rendered artifact content ──
 
-function ArtifactContent({ artifact }: { artifact: Artifact }) {
+function ArtifactContent({
+  artifact,
+  view,
+  htmlReloadKey,
+}: {
+  artifact: Artifact;
+  view: "preview" | "code";
+  htmlReloadKey: number;
+}) {
+  const activeId = useChatStore((s) => s.activeId);
+  const updateArtifact = useChatStore((s) => s.updateArtifact);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pyOutput, setPyOutput] = useState<string | null>(null);
   const [pyRunning, setPyRunning] = useState(false);
   const [pyError, setPyError] = useState<string | null>(null);
-  const [viewCode, setViewCode] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [officeHtml, setOfficeHtml] = useState<string | null>(null);
+  const [officeError, setOfficeError] = useState<string | null>(null);
 
   useEffect(() => {
     setPdfDataUrl(null); setPdfError(null);
     setPyOutput(null); setPyError(null);
-    setViewCode(false);
+    setOfficeHtml(null); setOfficeError(null);
   }, [artifact.id]);
 
-  const handleRenderLatex = useCallback(async () => {
-    if (pdfDataUrl) return;
+  // Render the Office preview HTML whenever the source changes. All three
+  // formats share the same iframe slot — we just swap the body.
+  useEffect(() => {
+    if (!OFFICE_KINDS.has(artifact.kind)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let html: string;
+        if (artifact.kind === "docx") {
+          html = await renderDocxPreview(artifact.code, artifact.title);
+        } else if (artifact.kind === "pptx") {
+          html = renderPptxPreview(artifact.code, artifact.title);
+        } else {
+          html = renderXlsxPreview(artifact.code, artifact.title);
+        }
+        if (!cancelled) setOfficeHtml(html);
+      } catch (e) {
+        if (!cancelled) setOfficeError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [artifact.id, artifact.kind, artifact.code, artifact.title]);
+
+  // Auto-compile LaTeX whenever the code or active version changes.
+  useEffect(() => {
+    if (artifact.kind !== "latex") return;
+    let cancelled = false;
     setPdfLoading(true); setPdfError(null);
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const result = await invoke<string>("compile_latex", { content: artifact.code });
-      setPdfDataUrl(result);
-    } catch (e) { setPdfError(e instanceof Error ? e.message : String(e)); }
-    finally { setPdfLoading(false); }
-  }, [artifact.code, pdfDataUrl]);
+    (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const result = await invoke<string>("compile_latex", { content: artifact.code });
+        if (!cancelled) setPdfDataUrl(result);
+      } catch (e) {
+        if (!cancelled) setPdfError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setPdfLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [artifact.id, artifact.kind, artifact.code]);
 
   const handleRunPython = useCallback(async () => {
-    if (pyOutput !== null) return;
-    setPyRunning(true); setPyError(null);
+    if (pyRunning) return;
+    setPyRunning(true); setPyError(null); setPyOutput(null);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke<string>("run_python", { code: artifact.code });
       setPyOutput(result);
     } catch (e) { setPyError(e instanceof Error ? e.message : String(e)); }
     finally { setPyRunning(false); }
-  }, [artifact.code, pyOutput]);
+  }, [artifact.code, pyRunning]);
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(artifact.code).then(() => {
-      setCopied(true); setTimeout(() => setCopied(false), 2000);
-    });
-  }, [artifact.code]);
+  if (view === "code") {
+    const handleEditorChange = (value: string | undefined) => {
+      if (value === undefined || !activeId) return;
+      updateArtifact(activeId, artifact.id, value);
+    };
 
-  if (viewCode) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0">
-          <button onClick={() => setViewCode(false)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-            <Columns size={12} /> View preview
-          </button>
-          <div className="flex-1" />
-          <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-            <Copy size={12} /> {copied ? "Copied" : "Copy code"}
-          </button>
-        </div>
-        <div className="flex-1 overflow-auto">
-          <pre className="p-4 text-[13px] font-mono text-[#d5d5d5] whitespace-pre-wrap m-0"><code>{artifact.code}</code></pre>
-        </div>
+      <div className="flex-1 min-h-0">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-full text-[12px] text-[#a0a0a0]">
+              Loading editor…
+            </div>
+          }
+        >
+          <MonacoEditor
+            height="100%"
+            defaultLanguage={ARTIFACT_LANG[artifact.kind]}
+            language={ARTIFACT_LANG[artifact.kind]}
+            value={artifact.code}
+            theme="vs-dark"
+            onChange={handleEditorChange}
+            options={{
+              fontSize: 13,
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              wordWrap: "on",
+              tabSize: 2,
+              automaticLayout: true,
+              renderLineHighlight: "line",
+              lineNumbers: "on",
+              padding: { top: 12, bottom: 12 },
+            }}
+          />
+        </Suspense>
       </div>
     );
   }
 
   switch (artifact.kind) {
-    case "html":
+    case "html": {
+      // Design-mode artifacts use a stricter sandbox by default — the model
+      // generates arbitrary HTML and we don't auto-execute scripts. Users
+      // can toggle scripts on via a small control in the panel footer.
+      const isDesignArtifact = useChatStore.getState().designMode;
+      const sandboxAttr = isDesignArtifact
+        ? "allow-same-origin"
+        : "allow-scripts allow-same-origin";
       return (
-        <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0">
-            <button onClick={() => setViewCode(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Columns size={12} /> View code
-            </button>
-            <div className="flex-1" />
-            <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Copy size={12} /> {copied ? "Copied" : "Copy code"}
-            </button>
-          </div>
-          <iframe className="flex-1 w-full border-none bg-white" srcDoc={artifact.code} sandbox="allow-scripts allow-same-origin" title={artifact.title} />
-        </div>
+        <iframe
+          key={htmlReloadKey}
+          className="flex-1 w-full border-none bg-white"
+          srcDoc={artifact.code}
+          sandbox={sandboxAttr}
+          title={artifact.title}
+        />
       );
+    }
     case "latex":
       return (
-        <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0">
-            <button onClick={() => setViewCode(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Columns size={12} /> View code
-            </button>
-            <div className="flex-1" />
-            <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Copy size={12} /> {copied ? "Copied" : "Copy code"}
-            </button>
-          </div>
-          {!pdfDataUrl && !pdfLoading && (
-            <div className="flex flex-col items-center justify-center gap-4 flex-1">
-              <FileText size={28} strokeWidth={1.5} className="text-[#a0a0a0]" />
-              <p className="text-[13px] text-[#8e8e8e] text-center max-w-[300px]">Compile this LaTeX document to preview the rendered PDF.</p>
-              <button onClick={handleRenderLatex} className="px-4 py-2 rounded-lg bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors">Compile PDF</button>
+        <>
+          {pdfLoading && (
+            <div className="flex flex-col items-center justify-center gap-3 flex-1 text-[#a0a0a0]">
+              <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+              <span className="text-[12.5px]">Compiling…</span>
+              <span className="text-[11px] text-[#888888]">First run downloads the LaTeX engine ({String.fromCharCode(0x007e)}30 MB)</span>
             </div>
           )}
-          {pdfLoading && <div className="flex items-center justify-center flex-1 text-[13px] text-[#8e8e8e]">Compiling…</div>}
           {pdfDataUrl && <iframe className="flex-1 w-full border-none" src={pdfDataUrl} title="PDF Preview" />}
-          {pdfError && <div className="p-4 text-[12px] text-[#f87171] whitespace-pre-wrap">{pdfError}</div>}
-        </div>
+          {pdfError && (
+            <div className="flex flex-col gap-2 p-4">
+              <p className="text-[12px] text-[#f87171] whitespace-pre-wrap leading-relaxed">{pdfError}</p>
+            </div>
+          )}
+        </>
       );
     case "python":
       return (
-        <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0">
-            <button onClick={() => setViewCode(true)} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Columns size={12} /> View code
-            </button>
-            <div className="flex-1" />
-            <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors">
-              <Copy size={12} /> {copied ? "Copied" : "Copy code"}
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex items-center justify-between px-4 py-2 bg-[#161618] shrink-0 border-b border-white/5">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#a0a0a0]">Output</span>
+            <button
+              onClick={handleRunPython}
+              disabled={pyRunning}
+              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${pyRunning ? "bg-white/5 text-[#a0a0a0]" : "bg-white text-black hover:bg-[#e5e5e5]"}`}
+            >
+              {pyRunning ? "Running…" : "Run"}
             </button>
           </div>
-          <div className="flex flex-col flex-1">
-            <div className="flex items-center justify-between px-4 py-2 bg-[#161618] shrink-0 border-b border-white/5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#a0a0a0]">Output</span>
-              <button onClick={handleRunPython} disabled={pyRunning}
-                className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${pyRunning ? "bg-white/5 text-[#a0a0a0]" : "bg-white text-black hover:bg-[#e5e5e5]"}`}>
-                {pyRunning ? "Running…" : "Run"}
-              </button>
-            </div>
-            {pyOutput !== null && <pre className="flex-1 p-4 text-[13px] font-mono text-[#d5d5d5] whitespace-pre-wrap overflow-auto m-0">{pyOutput}</pre>}
-            {pyError && <div className="p-3 text-[12px] text-[#f87171] whitespace-pre-wrap border-t border-white/5">{pyError}</div>}
-            {pyOutput === null && !pyRunning && !pyError && <p className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Click Run to execute.</p>}
-          </div>
+          {pyOutput !== null && <pre className="flex-1 p-4 text-[13px] font-mono text-[#d5d5d5] whitespace-pre-wrap overflow-auto m-0">{pyOutput}</pre>}
+          {pyError && <div className="p-3 text-[12px] text-[#f87171] whitespace-pre-wrap border-t border-white/5">{pyError}</div>}
+          {pyOutput === null && !pyRunning && !pyError && <p className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Click Run to execute.</p>}
         </div>
+      );
+    case "docx":
+    case "pptx":
+    case "xlsx":
+      if (officeError) {
+        return (
+          <div className="flex flex-col gap-2 p-4">
+            <p className="text-[12px] text-[#f87171] whitespace-pre-wrap leading-relaxed">{officeError}</p>
+          </div>
+        );
+      }
+      if (!officeHtml) {
+        return (
+          <div className="flex flex-col items-center justify-center gap-3 flex-1 text-[#a0a0a0]">
+            <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+            <span className="text-[12.5px]">Rendering preview…</span>
+          </div>
+        );
+      }
+      return (
+        <iframe
+          key={`${artifact.id}-office`}
+          className="flex-1 w-full border-none"
+          srcDoc={officeHtml}
+          sandbox="allow-scripts"
+          title={artifact.title}
+        />
       );
   }
 }
 
-// ── Full-view overlay ──
+// ── Header pill: Code | Preview ──
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: "preview" | "code";
+  onChange: (v: "preview" | "code") => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-white/[0.05] border border-white/[0.06]">
+      <button
+        onClick={() => onChange("code")}
+        aria-pressed={view === "code"}
+        className={`px-2.5 py-0.5 text-[11.5px] font-medium rounded-full transition-colors ${
+          view === "code" ? "bg-white/[0.10] text-[#ececec]" : "text-[#a0a0a0] hover:text-[#ececec]"
+        }`}
+      >
+        Code
+      </button>
+      <button
+        onClick={() => onChange("preview")}
+        aria-pressed={view === "preview"}
+        className={`px-2.5 py-0.5 text-[11.5px] font-medium rounded-full transition-colors ${
+          view === "preview" ? "bg-white/[0.10] text-[#ececec]" : "text-[#a0a0a0] hover:text-[#ececec]"
+        }`}
+      >
+        Preview
+      </button>
+    </div>
+  );
+}
+
+// ── History dropdown ──
+
+function HistoryMenu({
+  artifact,
+  conversationId,
+  onClose,
+}: {
+  artifact: Artifact;
+  conversationId: string;
+  onClose: () => void;
+}) {
+  const restore = useChatStore((s) => s.restoreArtifactVersion);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    // The iframe (HTML preview, LaTeX PDF) eats clicks — they never bubble
+    // to document, so a mousedown listener alone misses them. Window blur
+    // fires when an iframe takes focus, so we use it as the iframe-aware
+    // outside-click signal.
+    const onBlur = () => {
+      // Defer one tick: blur fires before document.activeElement updates.
+      setTimeout(() => {
+        if (document.activeElement?.tagName === "IFRAME") onClose();
+      }, 0);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [onClose]);
+
+  const versions = artifact.versions ?? [];
+  const activeIdx = artifact.activeVersionIndex ?? versions.length - 1;
+
+  const fmt = (ts: number) => {
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return "just now";
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full right-0 mt-1.5 w-[280px] max-h-[400px] overflow-y-auto rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease]"
+    >
+      <div className="px-3 py-2 border-b border-white/5 sticky top-0 bg-[#2a2a2c]">
+        <span className="text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+          Version history
+        </span>
+      </div>
+      <div className="p-1">
+        {versions.length === 0 && (
+          <p className="text-[12px] text-[#a0a0a0] px-3 py-3">No history yet.</p>
+        )}
+        {[...versions].map((_, idxAsc) => {
+          // Show newest first.
+          const i = versions.length - 1 - idxAsc;
+          const ver = versions[i];
+          const isActive = i === activeIdx;
+          return (
+            <button
+              key={i}
+              onClick={() => {
+                restore(conversationId, artifact.id, i);
+                onClose();
+              }}
+              className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors ${
+                isActive ? "bg-[#f59e42]/10" : "hover:bg-white/[0.06]"
+              }`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                ver.source === "agent" ? "bg-[#60a5fa]" : "bg-[#f59e42]"
+              }`} />
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className={`text-[12px] truncate ${isActive ? "text-[#f59e42]" : "text-[#d5d5d5]"}`}>
+                  {ver.source === "agent" ? "Agent" : "You"}
+                  {ver.restoredFrom !== undefined && ` (restored)`}
+                  {i === versions.length - 1 ? " — latest" : ""}
+                </span>
+                <span className="text-[10.5px] text-[#888]">{fmt(ver.createdAt)}</span>
+              </div>
+              {isActive && <span className="text-[10px] text-[#f59e42] shrink-0">current</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Full panel ──
 
 export function ArtifactPanel() {
   const activeId = useChatStore((s) => s.activeId);
@@ -147,52 +414,328 @@ export function ArtifactPanel() {
   const activeArtifactId = useChatStore((s) => s.activeArtifactId);
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
+  const undoArtifact = useChatStore((s) => s.undoArtifact);
+  const redoArtifact = useChatStore((s) => s.redoArtifact);
+
+  const [view, setView] = useState<"preview" | "code">("preview");
+  const [htmlReloadKey, setHtmlReloadKey] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [flashed, setFlashed] = useState<string | null>(null);
+  const flashTimer = useRef<number | null>(null);
+  /** True when the user has manually flipped the toggle for this artifact.
+   *  Once they've expressed a preference, we stop auto-switching. */
+  const userPickedView = useRef<string | null>(null);
+
+  const flash = useCallback((key: string) => {
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    setFlashed(key);
+    flashTimer.current = window.setTimeout(() => setFlashed(null), 450);
+  }, []);
+
+  useEffect(() => () => {
+    if (flashTimer.current) window.clearTimeout(flashTimer.current);
+  }, []);
+
+  // Reset the user's view preference whenever the active artifact changes —
+  // they're looking at a different document now, so prior intent doesn't
+  // apply.
+  useEffect(() => {
+    userPickedView.current = null;
+  }, [activeArtifactId]);
+
+  // Auto-switch: while the agent is streaming, pin the editor open so the
+  // user watches the code being typed; once streaming finishes, snap to
+  // preview so they see the rendered result. Skip both moves once the user
+  // has expressed their own preference for this artifact.
+  const streamingForActive = (() => {
+    if (!artifacts) return false;
+    const a = artifacts.find((x) => x.id === activeArtifactId) ?? artifacts[0];
+    if (!a) return false;
+    const v = a.versions?.[a.activeVersionIndex ?? a.versions.length - 1];
+    return !!v?.streaming;
+  })();
+  useEffect(() => {
+    if (userPickedView.current === activeArtifactId) return;
+    setView(streamingForActive ? "code" : "preview");
+  }, [streamingForActive, activeArtifactId]);
 
   if (!activeId || !artifacts || artifacts.length === 0 || !artifactPanelOpen) return null;
 
   const activeIdx = artifacts.findIndex((a) => a.id === activeArtifactId);
   const activeArtifact = activeIdx >= 0 ? artifacts[activeIdx] : artifacts[0];
-
-  const handleClose = () => {
-    setActiveArtifact(null);
-  };
-
-  const handlePrev = () => {
-    if (activeIdx > 0) setActiveArtifact(artifacts[activeIdx - 1].id);
-  };
-
-  const handleNext = () => {
-    if (activeIdx < artifacts.length - 1) setActiveArtifact(artifacts[activeIdx + 1].id);
-  };
-
   const Icon = KIND_ICON[activeArtifact.kind];
 
+  const versions = activeArtifact.versions ?? [];
+  const verIdx = activeArtifact.activeVersionIndex ?? versions.length - 1;
+  const canUndo = verIdx > 0;
+  const canRedo = verIdx < versions.length - 1;
+
+  // Brief amber tint when a button is pressed, so the click registers visually.
+  const flashTint = (key: string) =>
+    flashed === key ? "bg-[#f59e42]/20 text-[#f59e42]" : "";
+
+  const handleClose = () => { flash("close"); setActiveArtifact(null); };
+  const handleUndo = () => { flash("undo"); undoArtifact(activeId, activeArtifact.id); };
+  const handleRedo = () => { flash("redo"); redoArtifact(activeId, activeArtifact.id); };
+  const handleReload = () => { flash("reload"); setHtmlReloadKey((k) => k + 1); };
+
+  const handleCopy = () => {
+    flash("copy");
+    navigator.clipboard.writeText(activeArtifact.code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  // Slugify title for filename.
+  const filename = (() => {
+    const k = activeArtifact.kind;
+    if (k === "docx" || k === "pptx" || k === "xlsx") {
+      return officeFilename(k, activeArtifact.title);
+    }
+    const ext = k === "html" ? "html" : k === "python" ? "py" : "tex";
+    const base = (activeArtifact.title || "artifact")
+      .toLowerCase()
+      .replace(/[^\w\s.-]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .slice(0, 80) || "artifact";
+    return `${base}.${ext}`;
+  })();
+
+  const handlePrint = () => {
+    flash("print");
+    if (activeArtifact.kind !== "html") return;
+    // Open the artifact in a new window and trigger the browser's print
+    // dialog from inside it. Users can pick "Save as PDF" from there —
+    // matches Open Design's deck export pattern (window.print on the same
+    // document tree the iframe rendered).
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) return;
+    w.document.open();
+    w.document.write(activeArtifact.code);
+    w.document.close();
+    // Wait one tick so styles + fonts paint before the print dialog fires.
+    setTimeout(() => {
+      try {
+        w.focus();
+        w.print();
+      } catch {
+        /* user closed the popup before we got here */
+      }
+    }, 250);
+  };
+
+  const handleDownload = async () => {
+    flash("download");
+    const k = activeArtifact.kind;
+
+    // Office formats build a real .docx/.pptx/.xlsx blob from source.
+    if (k === "docx" || k === "pptx" || k === "xlsx") {
+      try {
+        let blob: Blob;
+        if (k === "docx") blob = await exportDocxBlob(activeArtifact.code, activeArtifact.title);
+        else if (k === "pptx") blob = await exportPptxBlob(activeArtifact.code, activeArtifact.title);
+        else blob = await exportXlsxBlob(activeArtifact.code, activeArtifact.title);
+        // Re-wrap to ensure the MIME type is the OOXML one even when the
+        // generator returns application/octet-stream.
+        const typed = new Blob([await blob.arrayBuffer()], { type: officeMimeType(k) });
+        const url = URL.createObjectURL(typed);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (e) {
+        console.error("[artifact] office export failed", e);
+        // Fall through to source download below as a safety net.
+      }
+    }
+
+    // For LaTeX, prefer the compiled PDF if we have it. Otherwise download
+    // the source. We don't have the pdfDataUrl up here; the simplest cross-
+    // type behavior is to always download source — users can right-click the
+    // rendered PDF iframe to save.
+    const mime =
+      activeArtifact.kind === "html"
+        ? "text/html;charset=utf-8"
+        : activeArtifact.kind === "python"
+          ? "text/x-python"
+          : activeArtifact.kind === "latex"
+            ? "application/x-tex"
+            : "text/plain";
+    const blob = new Blob([activeArtifact.code], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1c1c1e] animate-[fadeIn_120ms_ease]">
-      <div className="h-[32px] shrink-0" data-tauri-drag-region />
+    <div className="flex-1 min-h-0 flex flex-col bg-[#1c1c1e] rounded-2xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden animate-[fadeIn_120ms_ease]">
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-white/5 shrink-0">
-        <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
-        <span className="text-[13px] font-medium text-[#ececec] truncate">{activeArtifact.title}</span>
-        <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded">{KIND_LABEL[activeArtifact.kind]}</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0">
+        <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
+        <span className="text-[13px] font-medium text-[#ececec] truncate min-w-0">
+          {activeArtifact.title}
+        </span>
+        <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+          {KIND_LABEL[activeArtifact.kind]}
+        </span>
+
+        {/* Inter-artifact navigation when there's more than one */}
+        {artifacts.length > 1 && (
+          <div className="flex items-center gap-0.5 ml-1 shrink-0">
+            <button
+              onClick={() => activeIdx > 0 && setActiveArtifact(artifacts[activeIdx - 1].id)}
+              disabled={activeIdx <= 0}
+              aria-label="Previous artifact"
+              className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronLeft size={13} strokeWidth={2} aria-hidden="true" />
+            </button>
+            <span className="text-[10.5px] text-[#a0a0a0] min-w-[28px] text-center tabular-nums">
+              {activeIdx + 1}/{artifacts.length}
+            </span>
+            <button
+              onClick={() => activeIdx < artifacts.length - 1 && setActiveArtifact(artifacts[activeIdx + 1].id)}
+              disabled={activeIdx >= artifacts.length - 1}
+              aria-label="Next artifact"
+              className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronRight size={13} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
         <div className="flex-1" />
+
+        {/* History undo/redo */}
         <div className="flex items-center gap-0.5">
-          <button onClick={handlePrev} disabled={activeIdx <= 0} aria-label="Previous artifact" className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] disabled:opacity-30 transition-colors">
-            <ChevronLeft size={15} strokeWidth={2} aria-hidden="true" />
+          <button
+            onClick={handleUndo}
+            disabled={!canUndo}
+            aria-label="Undo"
+            title="Previous version"
+            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("undo")}`}
+          >
+            <Undo2 size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
-          <span className="text-[11px] text-[#a0a0a0] min-w-[32px] text-center" aria-live="polite">{activeIdx + 1}/{artifacts.length}</span>
-          <button onClick={handleNext} disabled={activeIdx >= artifacts.length - 1} aria-label="Next artifact" className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] disabled:opacity-30 transition-colors">
-            <ChevronLeft size={15} strokeWidth={2} className="rotate-180" aria-hidden="true" />
+          <button
+            onClick={handleRedo}
+            disabled={!canRedo}
+            aria-label="Redo"
+            title="Next version"
+            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("redo")}`}
+          >
+            <Redo2 size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
-        <button onClick={handleClose} aria-label="Close artifact panel" className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors ml-1">
-          <X size={15} strokeWidth={2} aria-hidden="true" />
+
+        {/* History dropdown — sits left of the Code/Preview toggle */}
+        <div className="relative">
+          <button
+            onClick={() => setHistoryOpen((v) => !v)}
+            aria-label="Version history"
+            title="Version history"
+            className={`p-1.5 rounded-md transition-colors ${
+              historyOpen ? "text-[#ececec] bg-white/[0.08]" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06]"
+            }`}
+          >
+            <History size={13} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          {historyOpen && (
+            <HistoryMenu
+              artifact={activeArtifact}
+              conversationId={activeId}
+              onClose={() => setHistoryOpen(false)}
+            />
+          )}
+        </div>
+
+        {/* Code/Preview toggle */}
+        <ViewToggle
+          view={view}
+          onChange={(v) => {
+            userPickedView.current = activeArtifactId;
+            setView(v);
+          }}
+        />
+
+        {/* Refresh — HTML preview only */}
+        {activeArtifact.kind === "html" && view === "preview" && (
+          <button
+            onClick={handleReload}
+            aria-label="Reload preview"
+            title="Reload preview"
+            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("reload")}`}
+          >
+            <RotateCw size={13} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
+
+        {/* Copy */}
+        <button
+          onClick={handleCopy}
+          aria-label="Copy code"
+          title={copied ? "Copied" : "Copy code"}
+          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("copy")}`}
+        >
+          <Copy size={13} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+
+        {/* 5-dim critique — design mode + HTML only */}
+        {activeArtifact.kind === "html" && useChatStore.getState().designMode && (
+          <CritiqueButton code={activeArtifact.code} />
+        )}
+
+        {/* Print — HTML only, opens browser print dialog (Save as PDF) */}
+        {activeArtifact.kind === "html" && (
+          <button
+            onClick={handlePrint}
+            aria-label="Print or save as PDF"
+            title="Print / Save as PDF"
+            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("print")}`}
+          >
+            <Printer size={13} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
+
+        {/* Download */}
+        <button
+          onClick={handleDownload}
+          aria-label="Download"
+          title="Download source"
+          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("download")}`}
+        >
+          <Download size={13} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+
+        {/* Close */}
+        <button
+          onClick={handleClose}
+          aria-label="Close artifact panel"
+          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("close")}`}
+        >
+          <X size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0">
-        <ArtifactContent artifact={activeArtifact} />
+      <div className="flex-1 min-h-0 flex flex-col">
+        <ArtifactContent
+          artifact={activeArtifact}
+          view={view}
+          htmlReloadKey={htmlReloadKey}
+        />
       </div>
     </div>
   );
@@ -220,3 +763,45 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
     </button>
   );
 }
+
+/**
+ * Inline card shown while the model is still streaming the artifact body.
+ * The actual `Artifact` row doesn't exist yet — we don't run detection until
+ * the message finalizes — so this card carries just enough metadata to look
+ * like the real one and shows a shimmer label so the user knows something
+ * is being authored.
+ */
+export function ArtifactPlaceholderCard({
+  kind,
+  title,
+}: {
+  kind: ArtifactKind;
+  title: string;
+}) {
+  const Icon = KIND_ICON[kind];
+  const verb = KIND_VERB[kind];
+  const label = KIND_LABEL[kind];
+  return (
+    <div className="flex items-center gap-3 w-full px-3 py-2.5 bg-[#212122] border border-white/5 rounded-xl text-left">
+      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+        <Icon size={15} strokeWidth={1.75} className="text-[#a0a0a0]" />
+      </div>
+      <div className="flex flex-col min-w-0 flex-1">
+        <span className="text-[12px] font-medium text-[#d5d5d5] truncate">
+          {title || `Untitled ${label}`}
+        </span>
+        <span className="text-[11px] text-[#a0a0a0] thinking-line">{verb}…</span>
+      </div>
+      <span className="w-1.5 h-1.5 rounded-full bg-[#f59e42] animate-[pulseSoft_1.6s_ease-in-out_infinite] shrink-0" />
+    </div>
+  );
+}
+
+const KIND_VERB: Record<ArtifactKind, string> = {
+  html: "Building page",
+  latex: "Drafting document",
+  python: "Writing script",
+  docx: "Writing",
+  pptx: "Building deck",
+  xlsx: "Building sheet",
+};

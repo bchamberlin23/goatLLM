@@ -1,8 +1,12 @@
 import { create } from "zustand";
 import type { LlmConfig } from "../lib/llm";
+import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders } from "../lib/providers";
+import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
+import type { Skill } from "../lib/skills";
 import {
   loadAllFromDb,
+  loadMessagesForConversation,
   persistConversation,
   persistMessage,
   deleteConversationFromDb,
@@ -11,6 +15,7 @@ import {
 } from "../lib/db";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
+const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
 
 function loadProviderConfigs(): Record<string, ProviderConfig> {
   try {
@@ -24,6 +29,23 @@ function loadProviderConfigs(): Record<string, ProviderConfig> {
 function saveProviderConfigs(configs: Record<string, ProviderConfig>) {
   try {
     localStorage.setItem(PROVIDER_CONFIGS_KEY, JSON.stringify(configs));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function loadModelOverrides(): Record<string, ModelOverride> {
+  try {
+    const raw = localStorage.getItem(MODEL_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveModelOverrides(overrides: Record<string, ModelOverride>) {
+  try {
+    localStorage.setItem(MODEL_OVERRIDES_KEY, JSON.stringify(overrides));
   } catch {
     // ignore quota errors
   }
@@ -48,6 +70,9 @@ export interface ToolCallEntry {
   dangerLevel?: "safe" | "suspicious" | "destructive";
   /** Human-readable danger reason. */
   dangerReason?: string | null;
+  /** Length of message content at the time this tool call was added. Used to
+   * interleave tool calls with text in chronological order. */
+  contentAtInvocation?: number;
 }
 
 export interface Message {
@@ -57,8 +82,16 @@ export interface Message {
   content: string;
   createdAt: number;
   isStreaming?: boolean;
+  /** True for assistant messages that were streaming when the app closed.
+   *  Set during hydrate when we find an `isStreaming: true` row with no live
+   *  abort controller. The UI shows a "Continue" affordance so the user can
+   *  re-send the conversation from that point instead of leaving a stuck
+   *  partial message. */
+  interrupted?: boolean;
   attachments?: Attachment[];
   toolCalls?: ToolCallEntry[];
+  /** Pinned messages survive context-manager compaction. */
+  pinned?: boolean;
 }
 
 export interface Conversation {
@@ -72,6 +105,23 @@ export interface Conversation {
   createdAt: number;
   modelId: string | null;
   systemPrompt: string;
+  /** Which mode this conversation was started in. Drives sidebar filtering
+   *  so design conversations don't bleed into the chat list and vice
+   *  versa. Older rows without a mode default to "chat". */
+  mode?: "chat" | "agent" | "design";
+  /** Workspace path this conversation belongs to (agent mode). */
+  workspacePath?: string | null;
+  /** Skill that's active for this conversation. The SKILL.md content gets
+   *  injected into the system prompt for every turn until the user toggles
+   *  it off. */
+  activeSkillName?: string | null;
+  /** Archived conversations are hidden from the main sidebar and live in
+   *  the collapsible "Archived" section at the bottom. Same data otherwise. */
+  archived?: boolean;
+  /** User-managed tag list. Stored as a JSON array on the row; surfaces as
+   *  filter chips above the sidebar list and per-conversation context-menu
+   *  manager. Lowercase, free-form. */
+  tags?: string[];
 }
 
 export interface Provider {
@@ -89,6 +139,27 @@ export interface Model {
   name: string;
   providerId: string;
   isAvailable: boolean;
+  /** Maximum input tokens this model accepts. For local models this comes
+   * from `/api/show` (Ollama) or the LM Studio `/v1/models` extras; for
+   * cloud models it's pulled from the static catalog. */
+  contextWindow: number;
+  /** Whether this model can read images natively. Used at send time to
+   *  warn or OCR-fallback when the user attaches images to a text-only
+   *  model. Undefined means "unknown" — we treat that as text-only to
+   *  avoid silently dropping images on a model that can't see. */
+  vision?: boolean;
+}
+
+/** Per-model overrides a user can set via the gear icon in the model
+ *  picker dropdown. Keyed by the combined model id ("providerId:modelId").
+ *  Persisted to localStorage alongside provider configs. */
+export interface ModelOverride {
+  /** Override the auto-detected context window (max input tokens). */
+  contextWindow?: number;
+  /** Override the provider-default max response/output tokens. */
+  maxResponseTokens?: number;
+  /** Reasoning/thinking effort: "off" | "minimal" | "low" | "medium" | "high" | "xhigh". */
+  reasoningEffort?: string;
 }
 
 export interface ProviderConfig {
@@ -113,7 +184,28 @@ export interface MessageSearchResult {
   created_at: number;
 }
 
-export type ArtifactKind = "html" | "latex" | "python";
+export type ArtifactKind = "html" | "latex" | "python" | "docx" | "pptx" | "xlsx";
+
+export interface ArtifactVersion {
+  code: string;
+  title: string;
+  createdAt: number;
+  /** Who produced this version. "agent" = LLM message, "user" = Monaco edit
+   *  or manual restore. */
+  source: "agent" | "user";
+  /** Message id that contained this code (agent versions only). */
+  messageId?: string;
+  /** When this version is a restoration of a prior version, points to the
+   *  index it was restored from. */
+  restoredFrom?: number;
+  /** True while the agent is still streaming tokens into this version. The
+   *  canvas pins itself to the code view while streaming and auto-flips to
+   *  preview once this clears. */
+  streaming?: boolean;
+  /** Per-message fence index. Lets the streaming upsert distinguish the
+   *  first fence in a message from a second one with the same heading. */
+  fenceIndex?: number;
+}
 
 export interface Artifact {
   id: string;
@@ -122,6 +214,128 @@ export interface Artifact {
   code: string;
   messageId: string;
   createdAt: number;
+  /** Chronological history of code+title pairs. Last entry mirrors the
+   *  top-level `code` and `title` — i.e. the current state. */
+  versions: ArtifactVersion[];
+  /** Which version is currently displayed. Undo/redo move this pointer.
+   *  When the agent or user produces a new version, this snaps to the end
+   *  (and any "future" branch from prior undos is dropped). */
+  activeVersionIndex: number;
+}
+
+const ARTIFACT_LANG_MAP: Record<string, ArtifactKind> = {
+  html: "html",
+  latex: "latex",
+  tex: "latex",
+  python: "python",
+  docx: "docx",
+  word: "docx",
+  pptx: "pptx",
+  powerpoint: "pptx",
+  slides: "pptx",
+  xlsx: "xlsx",
+  excel: "xlsx",
+  spreadsheet: "xlsx",
+};
+
+const ARTIFACT_KIND_LABEL: Record<ArtifactKind, string> = {
+  html: "HTML",
+  latex: "LaTeX",
+  python: "Python",
+  docx: "Word",
+  pptx: "Slides",
+  xlsx: "Excel",
+};
+
+/** Lowercase + collapse whitespace so "Resume Page" and "  resume  page  "
+ *  match. Empty strings stay empty (we treat that as "no name given"). */
+export function normalizeTitle(t: string): string {
+  return t.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+interface ParsedArtifactBlock {
+  kind: ArtifactKind;
+  title: string;
+  code: string;
+}
+
+/**
+ * Pull artifact blocks out of an assistant message.
+ *
+ * Title resolution, in priority order:
+ *   1. An explicit `### Title` (or `## Title`, `# Title`) markdown heading on
+ *      the line immediately preceding the fence — model-controlled, the
+ *      "official" way to address an artifact.
+ *   2. The first non-empty comment-or-code line inside the block, sliced to
+ *      60 chars — best effort for legacy / unlabeled messages.
+ *   3. The kind label ("HTML", "LaTeX", "Python") — last resort fallback.
+ *
+ * Same (kind, normalized title) → updates an existing artifact in place.
+ * Different titles → distinct artifacts, even when the kind matches.
+ */
+export function extractArtifactBlocks(
+  content: string,
+  options?: { enabledKinds?: ReadonlySet<ArtifactKind> },
+): ParsedArtifactBlock[] {
+  const enabled = options?.enabledKinds;
+  const out: (ParsedArtifactBlock & { _idx?: number })[] = [];
+
+  // ── Pass 1: markdown fenced code blocks ────────────────────────────
+  // Capture optional preceding markdown heading on its own line, then the fence.
+  // Heading group is optional and may have surrounding whitespace lines.
+  const fenceRe = /(?:^|\n)(?:#{1,6}[ \t]+(.+?)[ \t]*\n+)?[ \t]*```(\w+)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = fenceRe.exec(content)) !== null) {
+    const heading = (m[1] ?? "").trim();
+    const lang = (m[2] ?? "").toLowerCase();
+    const code = (m[3] ?? "").trim();
+    const kind = ARTIFACT_LANG_MAP[lang];
+    if (!kind || code.length === 0) continue;
+    if (enabled && !enabled.has(kind)) continue;
+
+    let title = heading;
+    if (!title) {
+      const firstLine = code.split("\n")[0].slice(0, 60).trim();
+      title = firstLine || ARTIFACT_KIND_LABEL[kind];
+    } else if (title.length > 80) {
+      title = title.slice(0, 80).trim();
+    }
+
+    // Track position so we can interleave with XML artifacts correctly.
+    out.push({ kind, title, code, _idx: m.index });
+  }
+
+  // ── Pass 2: XML <artifact> tags (design-mode contract) ─────────────
+  const xmlRe = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi;
+  while ((m = xmlRe.exec(content)) !== null) {
+    const attrs = m[1] ?? "";
+    const code = (m[2] ?? "").trim();
+    if (code.length === 0) continue;
+
+    const kindMatch = attrs.match(/\bkind\s*=\s*"([^"]+)"/i);
+    const kindRaw = (kindMatch ? kindMatch[1] : "html").toLowerCase();
+    const kind = ARTIFACT_LANG_MAP[kindRaw];
+    if (!kind) continue;
+    if (enabled && !enabled.has(kind)) continue;
+
+    const titleMatch = attrs.match(/\btitle\s*=\s*"([^"]*)"/i);
+    let title = titleMatch ? titleMatch[1].trim() : "";
+    if (!title) {
+      const firstLine = code.split("\n")[0].slice(0, 60).trim();
+      title = firstLine || ARTIFACT_KIND_LABEL[kind];
+    } else if (title.length > 80) {
+      title = title.slice(0, 80).trim();
+    }
+
+    out.push({ kind, title, code, _idx: m.index });
+  }
+
+  // Sort by position in source so XML and fence artifacts interleave
+  // in the order they appear in the stream.
+  const sorted = out.sort((a, b) => (a._idx ?? 0) - (b._idx ?? 0));
+
+  // Strip the internal _idx field before returning.
+  return sorted.map(({ _idx: _, ...rest }) => rest) as ParsedArtifactBlock[];
 }
 
 interface ChatStore {
@@ -130,6 +344,21 @@ interface ChatStore {
   /** Bumps every time `setActiveConversation` is called, even when the new id matches
    * the current one. Lets InputBar re-focus the textarea on repeated New chat presses. */
   focusNonce: number;
+  /** Files dropped anywhere on the window — InputBar consumes and clears these. */
+  pendingDroppedFiles: Attachment[];
+  addPendingDroppedFiles: (files: Attachment[]) => void;
+  clearPendingDroppedFiles: () => void;
+  /** Per-conversation draft of the input bar — text + staged attachments —
+   * so switching between chats (or visiting an existing one and coming back
+   * to "new chat") preserves whatever the user was composing. The key is
+   * either a conversation id or `NEW_CHAT_DRAFT_KEY` for the empty state. */
+  drafts: Record<string, { content: string; attachments: Attachment[] }>;
+  setDraftContent: (key: string, content: string) => void;
+  setDraftAttachments: (key: string, attachments: Attachment[]) => void;
+  appendDraftAttachments: (key: string, attachments: Attachment[]) => void;
+  clearDraft: (key: string) => void;
+  /** Bump focusNonce to re-focus the chat textarea. */
+  focusInput: () => void;
   messages: Record<string, Message[]>;
   selectedModelId: string | null;
   isStreaming: boolean;
@@ -141,12 +370,32 @@ interface ChatStore {
   /** Per-provider user config (API keys, custom base URLs). Persisted. */
   providerConfigs: Record<string, ProviderConfig>;
 
+  /** Per-model overrides set by the user via the gear icon in the
+   *  model picker. Keyed by combined model id ("providerId:modelId").
+   *  Persisted to localStorage. */
+  modelOverrides: Record<string, ModelOverride>;
+
+  /**
+   * Models discovered from local provider `/models` endpoints (Ollama,
+   * LM Studio). Non-persisted; refreshed on app start and when the user
+   * edits a local provider's base URL. Keyed by providerId.
+   */
+  discoveredModels: Record<string, { id: string; name: string; contextWindow?: number }[]>;
+  discoveryStatus: Record<string, "idle" | "loading" | "ok" | "error">;
+  discoveryError: Record<string, string | null>;
+
   // Conversation actions
   createConversation: () => string;
   deleteConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
+  setConversationArchived: (id: string, archived: boolean) => void;
+  setConversationTags: (id: string, tags: string[]) => void;
+  /** Reassign a conversation to a different workspace, or to none. Persists. */
+  moveConversationToWorkspace: (id: string, workspacePath: string | null) => void;
   setTitleGenerating: (id: string, generating: boolean) => void;
   setSystemPrompt: (id: string, systemPrompt: string) => void;
+  /** Set or clear the conversation-scoped active skill. */
+  setConversationSkill: (id: string, skillName: string | null) => void;
   setActiveConversation: (id: string | null) => void;
 
   // Message actions
@@ -155,17 +404,28 @@ interface ChatStore {
   appendToMessage: (conversationId: string, messageId: string, chunk: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   removeMessagesAfter: (conversationId: string, messageId: string) => void;
+  deleteMessage: (conversationId: string, messageId: string) => void;
   addToolCallToMessage: (conversationId: string, messageId: string, tc: ToolCallEntry) => void;
   completeToolCall: (conversationId: string, messageId: string, toolCallId: string, output: unknown) => void;
   updateToolCallState: (conversationId: string, messageId: string, toolCallId: string, state: ToolCallEntry["state"]) => void;
+  /** Mark any tool calls still in "running" state on the given message as done. Used to recover when a stream ends without a tool-result chunk. */
+  finalizeStuckToolCalls: (conversationId: string, messageId: string) => void;
 
   // Provider actions
   configureProvider: (providerId: string, config: ProviderConfig) => void;
   removeProvider: (providerId: string) => void;
   setEnabledModels: (providerId: string, modelIds: string[]) => void;
+  /** Hit a local provider's /models endpoint and cache the result. */
+  discoverLocalModels: (providerId: string) => Promise<void>;
+  /** Refresh every configured local provider in parallel. */
+  discoverAllLocalModels: () => Promise<void>;
 
-  // Model selection
+  // Model selection & per-model overrides
   setSelectedModel: (modelId: string | null) => void;
+  /** Set or update overrides for a single model (contextWindow,
+   *  maxResponseTokens, reasoningEffort). Passing undefined for a key
+   *  removes that override. Persisted to localStorage. */
+  setModelOverride: (modelId: string, override: Partial<ModelOverride>) => void;
 
   // UI actions
   setSearchQuery: (query: string) => void;
@@ -190,10 +450,40 @@ interface ChatStore {
   artifacts: Record<string, Artifact[]>;
   artifactPanelOpen: boolean;
   activeArtifactId: string | null;
+  /** Per-conversation artifact panel state so switching chats remembers open/closed. */
+  _artifactStatePerConv: Record<string, { panelOpen: boolean; activeId: string | null }>;
   setArtifactPanelOpen: (open: boolean) => void;
   setActiveArtifact: (id: string | null) => void;
   detectArtifacts: (conversationId: string, messageId: string, content: string) => void;
+  /** Live-stream a partial artifact body into the canvas while tokens arrive.
+   *  Upserts a single "streaming" version per (messageId, fenceIndex) so the
+   *  Monaco editor reflects the model's typing in real time. */
+  streamArtifactDelta: (
+    conversationId: string,
+    messageId: string,
+    kind: ArtifactKind,
+    title: string,
+    fenceIndex: number,
+    code: string,
+  ) => void;
+  /** Clear the streaming flag on any in-flight versions for this message.
+   *  Called from onDone so the canvas auto-flips to preview. */
+  finalizeStreamingArtifacts: (conversationId: string, messageId: string) => void;
+  /** Edit the code of an existing artifact. Triggered by the Monaco editor. */
+  updateArtifact: (conversationId: string, artifactId: string, code: string) => void;
+  /** Move the version pointer back/forward. No-op at the ends. */
+  undoArtifact: (conversationId: string, artifactId: string) => void;
+  redoArtifact: (conversationId: string, artifactId: string) => void;
+  /** Jump the version pointer to an arbitrary index. Used by the history menu. */
+  restoreArtifactVersion: (conversationId: string, artifactId: string, versionIndex: number) => void;
   clearArtifacts: (conversationId: string) => void;
+
+  // Attachment viewer (non-persisted) — opens an attachment from a message bubble
+  // in the same side panel slot as artifacts. Mutually exclusive with the
+  // artifact panel; opening one closes the other.
+  activeAttachment: Attachment | null;
+  attachmentPanelOpen: boolean;
+  setActiveAttachment: (a: Attachment | null) => void;
 
   // Sidebar (non-persisted)
   sidebarOpen: boolean;
@@ -208,10 +498,60 @@ interface ChatStore {
   workspacePath: string | null;
   setWorkspace: (path: string | null) => void;
 
-  // Mode (chat vs agent)
+  /** Design-mode workspace — separate pool so switching modes doesn't carry
+   *  the agent's folder selection into design and vice versa. */
+  designWorkspacePath: string | null;
+  setDesignWorkspace: (path: string | null) => void;
+  /** The full list of design workspace paths, shared across sidebar + picker. */
+  designWorkspaces: string[];
+  addDesignWorkspace: (path: string) => void;
+  removeDesignWorkspace: (path: string) => void;
+
+  // Mode (chat vs agent vs design)
+  // The three are mutually exclusive — toggling any of agent/design off the
+  // others. Chat is the implicit default when both are false.
   agentMode: boolean;
   setAgentMode: (enabled: boolean) => void;
   toggleAgentMode: () => void;
+
+  // Design mode — third tab next to Chat and Agent. Swaps the empty-state
+  // hero for a skill picker, the system prompt for the design stack
+  // (DESIGN.md + SKILL.md + directives), and exposes the design system /
+  // direction pills in the InputBar. See lib/design/.
+  designMode: boolean;
+  setDesignMode: (enabled: boolean) => void;
+  toggleDesignMode: () => void;
+
+  // Design-mode question-form submissions need to trigger a send from
+  // outside the InputBar (the form renders inside MessageBubble). Setting
+  // this asks the InputBar to consume the text on the next render.
+  pendingFormSubmission: { conversationId: string; text: string } | null;
+  setPendingFormSubmission: (payload: { conversationId: string; text: string } | null) => void;
+
+  // Active design selections (design mode only). Persisted across reloads
+  // and shared across conversations — the user picks a skill once and it
+  // stays selected until they pick another.
+  activeSkillId: string | null;
+  setActiveSkill: (id: string | null) => void;
+  activeDesignSystemId: string | null;
+  setActiveDesignSystem: (id: string | null) => void;
+  activeDirectionId: string | null;
+  setActiveDirection: (id: string | null) => void;
+
+  // Research mode — when on, agent uses a research-focused prompt and bigger
+  // tool budget. Independent of agent vs chat mode.
+  researchMode: boolean;
+  setResearchMode: (enabled: boolean) => void;
+  toggleResearchMode: () => void;
+
+  // Plan mode — agent-only. When on, the model gets the read-only tool
+  // subset and a planning preamble. The bubble surfaces a "Build" button
+  // when the plan finishes streaming so the user can flip into write mode
+  // and execute. Persisted across reloads, but always cleared if the user
+  // leaves agent mode.
+  planMode: boolean;
+  setPlanMode: (enabled: boolean) => void;
+  togglePlanMode: () => void;
 
   // Permission mode: manual = approve every write, auto = auto-approve file edits
   // but still gate shell commands, yolo = approve everything without prompting.
@@ -238,6 +578,49 @@ interface ChatStore {
   tavilyApiKey: string;
   setTavilyApiKey: (key: string) => void;
 
+  // Free web search (deepcode-style endpoint, no API key needed)
+  freeWebSearch: boolean;
+  setFreeWebSearch: (enabled: boolean) => void;
+  /** Stable per-install token sent as the `Token` header. Generated on first use. */
+  freeWebSearchToken: string;
+
+  /** Code execution in chat mode — when true, run_python and run_javascript
+   *  surface as approved tools so a student can ask the model to compute
+   *  something inline. Off by default; opt-in via Settings. */
+  chatCodeExec: boolean;
+  setChatCodeExec: (enabled: boolean) => void;
+
+  // Artifact behavior toggles
+  /** When true (default), HTML/Python/LaTeX/Office fences are detected and
+   *  rendered in the side-panel canvas; the chat shows reference cards.
+   *  When false, every fence stays inline in chat as a normal code block. */
+  autoArtifacts: boolean;
+  setAutoArtifacts: (enabled: boolean) => void;
+  /** When true (default), the docx/pptx/xlsx artifact kinds are available
+   *  to the model. When false, the office tooling is omitted from the
+   *  system prompt and any office fences fall back to inline code blocks. */
+  officeArtifacts: boolean;
+  setOfficeArtifacts: (enabled: boolean) => void;
+
+  // ── Skills ──
+  /** Extra skill directories configured by the user. Persisted. */
+  skillPaths: string[];
+  setSkillPaths: (paths: string[]) => void;
+  addSkillPath: (path: string) => void;
+  removeSkillPath: (path: string) => void;
+  /** Set of enabled skill names (empty = all enabled). Persisted. */
+  disabledSkills: Set<string>;
+  setSkillEnabled: (name: string, enabled: boolean) => void;
+  /** Discovered skill list (non-persisted). */
+  discoveredSkills: Skill[];
+  setDiscoveredSkills: (skills: Skill[]) => void;
+
+  // Semantic index config
+  ollamaUrl: string;
+  setOllamaUrl: (url: string) => void;
+  embeddingModel: string;
+  setEmbeddingModel: (model: string) => void;
+
   // Persistence
   _hydrated: boolean;
   hydrate: () => Promise<void>;
@@ -255,47 +638,147 @@ interface ChatStore {
 const generateId = (): string =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+// Tracks the last time each in-flight streaming message was flushed to disk.
+// Used by appendToMessage to throttle writes to ~750ms so partial content
+// survives a crash without hammering SQLite on every token.
+const streamingPersistTimestamps = new Map<string, number>();
+
+// Monotonic timestamp source for new messages. `Date.now()` resolution is 1ms
+// and on fast machines two messages added back-to-back (user prompt + empty
+// assistant placeholder) routinely land in the same millisecond. When we sort
+// by createdAt later, ties get broken by whatever order the merge happened to
+// pick — which is how the assistant reply ends up above the user message.
+// `nextCreatedAt()` guarantees strictly increasing values within a session.
+let lastIssuedCreatedAt = 0;
+function nextCreatedAt(): number {
+  const now = Date.now();
+  const ts = now > lastIssuedCreatedAt ? now : lastIssuedCreatedAt + 1;
+  lastIssuedCreatedAt = ts;
+  return ts;
+}
+
+// Role priority used to break ties in chronological sorts. Within a single
+// turn a user message is always conceptually before its assistant reply.
+const ROLE_ORDER: Record<string, number> = {
+  system: 0,
+  user: 1,
+  assistant: 2,
+  tool: 3,
+};
+
+export function compareMessages(a: { createdAt: number; role: string }, b: { createdAt: number; role: string }): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  const ra = ROLE_ORDER[a.role] ?? 99;
+  const rb = ROLE_ORDER[b.role] ?? 99;
+  return ra - rb;
+}
+
 const BUILTIN_PROVIDERS = getBuiltInProviders();
 
-export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string }[]> = {
+/** Side-channel from `getFilteredConversations` to the sidebar so we can
+ *  render "matches in N messages" without re-running the substring scan.
+ *  Keyed by conversation id; rebuilt on every call so stale entries are
+ *  naturally pruned. */
+export const bodyMatchCounts: Map<string, number> = new Map();
+
+export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; contextWindow: number; vision?: boolean }[]> = {
   openai: [
-    { id: "gpt-4o", name: "GPT-4o" },
-    { id: "gpt-4o-mini", name: "GPT-4o Mini" },
-    { id: "gpt-4.1", name: "GPT-4.1" },
+    { id: "gpt-4o", name: "GPT-4o", contextWindow: 128_000, vision: true },
+    { id: "gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128_000, vision: true },
+    { id: "gpt-4.1", name: "GPT-4.1", contextWindow: 1_000_000, vision: true },
   ],
-  // anthropic: removed — API is not OpenAI-compatible, needs @ai-sdk/anthropic adapter
+  anthropic: [
+    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
+    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
+    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200_000, vision: true },
+    { id: "claude-3-opus-20240229", name: "Claude 3 Opus", contextWindow: 200_000, vision: true },
+  ],
+  deepseek: [
+    { id: "deepseek-chat", name: "DeepSeek V3", contextWindow: 64_000 },
+    { id: "deepseek-reasoner", name: "DeepSeek R1", contextWindow: 64_000 },
+  ],
+  openrouter: [
+    { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
+    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
+    { id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128_000, vision: true },
+    { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", contextWindow: 1_000_000, vision: true },
+    { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", contextWindow: 1_000_000, vision: true },
+    { id: "deepseek/deepseek-r1", name: "DeepSeek R1", contextWindow: 64_000 },
+    { id: "deepseek/deepseek-chat-v3", name: "DeepSeek V3", contextWindow: 64_000 },
+    { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", contextWindow: 1_000_000, vision: true },
+  ],
+  ollama: [],
+  lmstudio: [],
   "opencode-go": [
-    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash (Free)" },
-    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro" },
-    { id: "glm-5", name: "GLM 5" },
-    { id: "glm-5.1", name: "GLM 5.1" },
-    { id: "kimi-k2.5", name: "Kimi K2.5" },
-    { id: "kimi-k2.6", name: "Kimi K2.6" },
-    { id: "mimo-v2.5", name: "MiMo V2.5" },
-    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro" },
-    { id: "minimax-m2.5", name: "MiniMax M2.5" },
-    { id: "minimax-m2.7", name: "MiniMax M2.7" },
-    { id: "qwen3.5-plus", name: "Qwen 3.5 Plus" },
-    { id: "qwen3.6-plus", name: "Qwen 3.6 Plus" },
+    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash (Free)", contextWindow: 200_000 },
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000 },
+    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000 },
+    { id: "glm-5", name: "GLM 5", contextWindow: 200_000 },
+    { id: "glm-5.1", name: "GLM 5.1", contextWindow: 200_000 },
+    { id: "kimi-k2.5", name: "Kimi K2.5", contextWindow: 262_144 },
+    { id: "kimi-k2.6", name: "Kimi K2.6", contextWindow: 262_144 },
+    { id: "mimo-v2.5", name: "MiMo V2.5", contextWindow: 1_000_000 },
+    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
+    { id: "minimax-m2.5", name: "MiniMax M2.5", contextWindow: 204_800 },
+    { id: "minimax-m2.7", name: "MiniMax M2.7", contextWindow: 204_800 },
+    { id: "qwen3.5-plus", name: "Qwen 3.5 Plus", contextWindow: 262_144 },
+    { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", contextWindow: 262_144 },
   ],
   groq: [
-    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
-    { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-    { id: "gemma2-9b-it", name: "Gemma 2 9B" },
+    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 128_000 },
+    { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", contextWindow: 32_768 },
+    { id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: 8_192 },
   ],
 };
 
 const CLOUD_PROVIDER_BASE_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com",
+  deepseek: "https://api.deepseek.com/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  ollama: "http://localhost:11434/v1",
+  lmstudio: "http://localhost:1234/v1",
   "opencode-go": "https://opencode.ai/zen/go/v1",
   groq: "https://api.groq.com/openai/v1",
 };
+
+const NO_KEY_PROVIDERS = new Set(["ollama", "lmstudio"]);
+
+/**
+ * Sentinel key used in the drafts map for the "no active conversation yet"
+ * state. Anything the user types or attaches before they've actually sent
+ * a message lives here so visiting an existing chat and coming back to
+ * "New chat" doesn't lose their work.
+ */
+export const NEW_CHAT_DRAFT_KEY = "__new_chat__";
+
+/**
+ * Local providers expose their model catalog over an OpenAI-compatible
+ * `/models` endpoint, so we discover what's installed instead of hardcoding
+ * a list. Without this, the picker shows phantom models the user doesn't
+ * actually have pulled.
+ */
+export const LOCAL_PROVIDERS = [
+  {
+    id: "ollama",
+    name: "Ollama",
+    defaultBaseUrl: "http://localhost:11434/v1",
+    docs: "ollama.com",
+  },
+  {
+    id: "lmstudio",
+    name: "LM Studio",
+    defaultBaseUrl: "http://localhost:1234/v1",
+    docs: "lmstudio.ai",
+  },
+] as const;
 
 export const useChatStore = create<ChatStore>()((set, get) => ({
       conversations: [],
       activeId: null,
       focusNonce: 0,
+      pendingDroppedFiles: [],
+      drafts: {},
       messages: {},
       selectedModelId: null,
       isStreaming: false,
@@ -303,28 +786,71 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       streamingAbortControllers: {},
       searchQuery: "",
       scrollPositions: {},
-      providerConfigs: {},
+      providerConfigs: loadProviderConfigs(),
+      modelOverrides: loadModelOverrides(),
+      discoveredModels: {},
+      discoveryStatus: {},
+      discoveryError: {},
       resendPayload: null,
       continueConversationId: null,
       artifacts: {},
       artifactPanelOpen: false,
       activeArtifactId: null,
+      _artifactStatePerConv: {},
+      activeAttachment: null,
+      attachmentPanelOpen: false,
       sidebarOpen: true,
       defaultSystemPrompt: "",
       workspacePath: null,
+      designWorkspacePath: null,
+      // Load design workspaces from localStorage on init.
+      designWorkspaces: (() => {
+        try {
+          const raw = localStorage.getItem("goatllm-design-workspaces");
+          return raw ? JSON.parse(raw) : [];
+        } catch {
+          return [];
+        }
+      })(),
       _hydrated: false,
       agentMode: false,
+      designMode: false,
+      pendingFormSubmission: null,
+      activeSkillId: null,
+      activeDesignSystemId: null,
+      activeDirectionId: null,
       autoApprove: false,
       permissionMode: "manual",
       providerHealth: {},
       messageSearchResults: [],
       messageSearchLoading: false,
       tavilyApiKey: "",
+      freeWebSearch: false,
+      chatCodeExec: false,
+      freeWebSearchToken: "",
+      autoArtifacts: true,
+      officeArtifacts: true,
+      // ── Skills ──
+      skillPaths: [] as string[],
+      disabledSkills: new Set<string>(),
+      discoveredSkills: [] as Skill[],
+      ollamaUrl: "http://localhost:11434",
+      embeddingModel: "nomic-embed-text",
+      researchMode: false,
+      planMode: false,
 
       createConversation: () => {
         const id = generateId();
         const now = Date.now();
         const defaultPrompt = get().defaultSystemPrompt;
+        // Only tag the conversation with a workspace when we're actually in
+        // agent mode. Otherwise plain-chat conversations would inherit the
+        // last-selected workspace path and start appearing under projects in
+        // AgentSidebar.
+        const isAgent = get().agentMode;
+        const isDesign = get().designMode;
+        const mode: Conversation["mode"] = isDesign ? "design" : isAgent ? "agent" : "chat";
+        const wsPath = isDesign ? get().designWorkspacePath : isAgent ? get().workspacePath : null;
         const conversation: Conversation = {
           id,
           title: "New Conversation",
@@ -333,28 +859,37 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           createdAt: now,
           modelId: get().selectedModelId,
           systemPrompt: defaultPrompt,
+          mode,
+          workspacePath: wsPath,
         };
         set((state) => ({
           conversations: [conversation, ...state.conversations],
           activeId: id,
           messages: { ...state.messages, [id]: [] },
         }));
-        // Await so the conversation row exists before any message INSERT hits FK constraint
-        persistConversation(conversation).catch((e) => console.error("[store] createConversation persist failed:", e));
+        // Journal write happens synchronously inside persistConversation;
+        // SQLite mirror is queued. The conversation row is durable before
+        // this call returns.
+        persistConversation(conversation);
         return id;
       },
 
       deleteConversation: (id: string) => {
-        const { conversations, activeId, messages } = get();
+        const { conversations, activeId, messages, drafts } = get();
         const remaining = conversations.filter((c) => c.id !== id);
         const newMessages = { ...messages };
         delete newMessages[id];
+        const newDrafts = { ...drafts };
+        delete newDrafts[id];
         let newActiveId = activeId;
         if (activeId === id) {
           newActiveId = remaining.length > 0 ? remaining[0].id : null;
         }
-        set({ conversations: remaining, activeId: newActiveId, messages: newMessages });
+        set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts });
         deleteConversationFromDb(id);
+        // Drop the in-memory attachment text cache for this conversation.
+        import("../lib/attachment-cache").then((m) => m.clearConversation(id)).catch(() => {});
+        import("../lib/url-fetch").then((m) => m.clearUrlFetchCache(id)).catch(() => {});
       },
 
       renameConversation: (id: string, title: string) => {
@@ -367,6 +902,43 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                   isGeneratingTitle: false,
                 }
               : c
+          );
+          const changed = updated.find((c) => c.id === id);
+          if (changed) persistConversation(changed);
+          return { conversations: updated };
+        });
+      },
+
+      setConversationArchived: (id: string, archived: boolean) => {
+        set((state) => {
+          const updated = state.conversations.map((c) =>
+            c.id === id ? { ...c, archived: archived || undefined } : c,
+          );
+          const changed = updated.find((c) => c.id === id);
+          if (changed) persistConversation(changed);
+          return { conversations: updated };
+        });
+      },
+
+      setConversationTags: (id: string, tags: string[]) => {
+        // Normalize: lowercase, dedupe, drop empty.
+        const cleaned = Array.from(
+          new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean)),
+        );
+        set((state) => {
+          const updated = state.conversations.map((c) =>
+            c.id === id ? { ...c, tags: cleaned.length > 0 ? cleaned : undefined } : c,
+          );
+          const changed = updated.find((c) => c.id === id);
+          if (changed) persistConversation(changed);
+          return { conversations: updated };
+        });
+      },
+
+      moveConversationToWorkspace: (id: string, workspacePath: string | null) => {
+        set((state) => {
+          const updated = state.conversations.map((c) =>
+            c.id === id ? { ...c, workspacePath } : c,
           );
           const changed = updated.find((c) => c.id === id);
           if (changed) persistConversation(changed);
@@ -393,16 +965,82 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      setConversationSkill: (id: string, skillName: string | null) => {
+        set((state) => {
+          const updated = state.conversations.map((c) =>
+            c.id === id ? { ...c, activeSkillName: skillName } : c
+          );
+          const changed = updated.find((c) => c.id === id);
+          if (changed) persistConversation(changed);
+          return { conversations: updated };
+        });
+      },
+
       setActiveConversation: (id: string | null) => {
-        // Bump focusNonce every call so InputBar re-runs its focus effect even when
-        // the user re-selects the conversation that's already active (e.g. clicks
-        // New chat twice while sitting on the empty new-chat state).
-        set((state) => ({ activeId: id, focusNonce: state.focusNonce + 1 }));
+        // Save outgoing conversation's artifact panel state so we can restore it
+        // when the user navigates back.
+        const prev = get();
+        const outgoing = prev.activeId;
+        let nextArtifactState = prev._artifactStatePerConv;
+        if (outgoing) {
+          nextArtifactState = {
+            ...nextArtifactState,
+            [outgoing]: { panelOpen: prev.artifactPanelOpen, activeId: prev.activeArtifactId },
+          };
+        }
+
+        // Restore incoming conversation's artifact state (default: closed)
+        const restored = id ? nextArtifactState[id] : undefined;
+
+        set((state) => ({
+          activeId: id,
+          focusNonce: state.focusNonce + 1,
+          artifactPanelOpen: restored?.panelOpen ?? false,
+          activeArtifactId: restored?.activeId ?? null,
+          _artifactStatePerConv: nextArtifactState,
+          // Attachment viewer is conversation-scoped — don't carry it across
+          // chat switches or it lingers on top of the new conversation.
+          activeAttachment: null,
+          attachmentPanelOpen: false,
+          // Design selections are conversation-scoped: navigating to a new
+          // chat (id === null) wipes surface / system / direction back to
+          // "none picked". When jumping to an existing conversation we
+          // also reset — the per-conversation design state will be
+          // re-bound when project-scoped state lands; for now picking a
+          // surface is per-session.
+          activeSkillId: id === null ? null : state.activeSkillId,
+          activeDesignSystemId: id === null ? null : state.activeDesignSystemId,
+          activeDirectionId: id === null ? null : state.activeDirectionId,
+        }));
         try { localStorage.setItem("goatllm-active-conversation", id ?? ""); } catch {}
+
+        // Safety net: if the in-memory store has no messages for this
+        // conversation, hit the DB. Hydration can miss messages if it raced
+        // with a streaming write, and we never want "click old chat → blank"
+        // when the data is actually safe on disk.
+        if (id) {
+          const cached = get().messages[id];
+          const isStreamingNow = id in get().streamingAbortControllers;
+          // Don't clobber an in-flight stream's in-memory message buffer with
+          // whatever's on disk — disk lags during streaming by design.
+          if (!isStreamingNow && (!cached || cached.length === 0)) {
+            loadMessagesForConversation(id)
+              .then((msgs) => {
+                if (msgs.length === 0) return;
+                const stillActive = get().activeId === id;
+                const stillEmpty = (get().messages[id] ?? []).length === 0;
+                if (!stillActive || !stillEmpty) return;
+                set((state) => ({
+                  messages: { ...state.messages, [id]: msgs },
+                }));
+              })
+              .catch((e) => console.warn("[store] on-demand message load failed:", e));
+          }
+        }
       },
 
       addMessage: (messageData: Omit<Message, "id" | "createdAt">) => {
-        const message: Message = { ...messageData, id: generateId(), createdAt: Date.now() };
+        const message: Message = { ...messageData, id: generateId(), createdAt: nextCreatedAt() };
         set((state) => {
           const convMessages = state.messages[message.conversationId] ?? [];
           const updatedMessages = [...convMessages, message];
@@ -418,15 +1056,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                 }
               : c
           );
-          // Persist conversation first (ensures FK target exists), then message
+          // Both writes go into the same FIFO queue — conversation row
+          // lands first, message row second, FK satisfied.
           const updatedConv = updatedConversations.find((c) => c.id === message.conversationId);
-          if (updatedConv) {
-            persistConversation(updatedConv)
-              .then(() => persistMessage(message))
-              .catch((e) => console.error("[store] addMessage persist failed:", e));
-          } else {
-            persistMessage(message).catch((e) => console.error("[store] addMessage persist failed:", e));
-          }
+          if (updatedConv) persistConversation(updatedConv);
+          persistMessage(message);
           return {
             messages: { ...state.messages, [message.conversationId]: updatedMessages },
             conversations: updatedConversations,
@@ -450,7 +1084,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       appendToMessage: (conversationId, messageId, chunk) => {
-        // No DB write during streaming — finalizeStreamingMessage handles it
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
           const updatedMessages = convMessages.map((m) =>
@@ -467,9 +1100,20 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             ),
           };
         });
+        // Throttled persistence: flush partial content every ~750ms so a
+        // mid-stream crash, force-quit, or provider error after partial output
+        // doesn't leave the message empty on disk forever.
+        const now = Date.now();
+        const last = streamingPersistTimestamps.get(messageId) ?? 0;
+        if (now - last > 750) {
+          streamingPersistTimestamps.set(messageId, now);
+          const msg = get().messages[conversationId]?.find((m) => m.id === messageId);
+          if (msg) persistMessage(msg);
+        }
       },
 
       finalizeStreamingMessage: (conversationId, messageId) => {
+        streamingPersistTimestamps.delete(messageId);
         const { messages } = get();
         const convMessages = messages[conversationId] ?? [];
         const msg = convMessages.find((m) => m.id === messageId);
@@ -503,6 +1147,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             messages: { ...state.messages, [conversationId]: trimmed },
           };
         });
+      },
+
+      deleteMessage: (conversationId, messageId) => {
+        streamingPersistTimestamps.delete(messageId);
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          const filtered = convMessages.filter((m) => m.id !== messageId);
+          if (filtered.length === convMessages.length) return state;
+          return {
+            messages: { ...state.messages, [conversationId]: filtered },
+          };
+        });
+        deleteMessageFromDb(messageId);
       },
 
       addToolCallToMessage: (conversationId, messageId, tc) => {
@@ -567,6 +1224,30 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      finalizeStuckToolCalls: (conversationId, messageId) => {
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          let touched = false;
+          const updated = convMessages.map((m) => {
+            if (m.id !== messageId || !m.toolCalls?.length) return m;
+            const toolCalls = m.toolCalls.map((tc) => {
+              if (tc.state === "running" || tc.state === "pending_approval") {
+                touched = true;
+                return { ...tc, state: "done" as const };
+              }
+              return tc;
+            });
+            return touched ? { ...m, toolCalls } : m;
+          });
+          if (!touched) return {};
+          const changed = updated.find((m) => m.id === messageId);
+          if (changed) persistMessage(changed);
+          return {
+            messages: { ...state.messages, [conversationId]: updated },
+          };
+        });
+      },
+
       triggerResend: (conversationId, content, attachments) => {
         set({ resendPayload: { conversationId, content, attachments } });
       },
@@ -579,47 +1260,460 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ continueConversationId: id });
       },
 
+      addPendingDroppedFiles: (files) => {
+        set((state) => ({ pendingDroppedFiles: [...state.pendingDroppedFiles, ...files] }));
+      },
+
+      clearPendingDroppedFiles: () => {
+        set({ pendingDroppedFiles: [] });
+      },
+
+      setDraftContent: (key, content) => {
+        set((state) => {
+          const prev = state.drafts[key] ?? { content: "", attachments: [] };
+          // Drop the entry entirely once the user has emptied it back out so
+          // the drafts map stays small.
+          if (!content && prev.attachments.length === 0) {
+            if (!(key in state.drafts)) return state;
+            const next = { ...state.drafts };
+            delete next[key];
+            return { drafts: next };
+          }
+          return { drafts: { ...state.drafts, [key]: { ...prev, content } } };
+        });
+      },
+
+      setDraftAttachments: (key, attachments) => {
+        set((state) => {
+          const prev = state.drafts[key] ?? { content: "", attachments: [] };
+          if (attachments.length === 0 && !prev.content) {
+            if (!(key in state.drafts)) return state;
+            const next = { ...state.drafts };
+            delete next[key];
+            return { drafts: next };
+          }
+          return { drafts: { ...state.drafts, [key]: { ...prev, attachments } } };
+        });
+      },
+
+      appendDraftAttachments: (key, attachments) => {
+        if (attachments.length === 0) return;
+        set((state) => {
+          const prev = state.drafts[key] ?? { content: "", attachments: [] };
+          return {
+            drafts: {
+              ...state.drafts,
+              [key]: { ...prev, attachments: [...prev.attachments, ...attachments] },
+            },
+          };
+        });
+      },
+
+      clearDraft: (key) => {
+        set((state) => {
+          if (!(key in state.drafts)) return state;
+          const next = { ...state.drafts };
+          delete next[key];
+          return { drafts: next };
+        });
+      },
+      focusInput: () => {
+        set((state) => ({ focusNonce: state.focusNonce + 1 }));
+      },
+
       setArtifactPanelOpen: (open) => {
         set({ artifactPanelOpen: open });
       },
 
       setActiveArtifact: (id) => {
-        set({ activeArtifactId: id, artifactPanelOpen: !!id, sidebarOpen: id ? false : get().sidebarOpen });
+        set({
+          activeArtifactId: id,
+          artifactPanelOpen: !!id,
+          // Opening an artifact closes the attachment viewer (one side panel slot).
+          activeAttachment: id ? null : get().activeAttachment,
+          attachmentPanelOpen: id ? false : get().attachmentPanelOpen,
+          sidebarOpen: id ? false : get().sidebarOpen,
+        });
+      },
+
+      setActiveAttachment: (a) => {
+        set({
+          activeAttachment: a,
+          attachmentPanelOpen: !!a,
+          // Mutual exclusion with the artifact panel.
+          activeArtifactId: a ? null : get().activeArtifactId,
+          artifactPanelOpen: a ? false : get().artifactPanelOpen,
+          sidebarOpen: a ? false : get().sidebarOpen,
+        });
+      },
+
+      updateArtifact: (conversationId, artifactId, code) => {
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          const next = list.map((a) => {
+            if (a.id !== artifactId) return a;
+            if (a.code === code) return a;
+
+            const versions = a.versions ?? [];
+            const idx = a.activeVersionIndex ?? versions.length - 1;
+            // Branching-undo semantics: editing while mid-history drops the
+            // "future" tail. Same model as VS Code, Figma, browsers.
+            const trimmed = idx < versions.length - 1 ? versions.slice(0, idx + 1) : versions;
+
+            const COALESCE_MS = 2000;
+            const last = trimmed[trimmed.length - 1];
+            if (last && last.source === "user" && Date.now() - last.createdAt < COALESCE_MS) {
+              // Merge a stream of keystrokes into a single history entry so
+              // typing 50 chars produces 1 version, not 50.
+              const merged = { ...last, code, createdAt: Date.now() };
+              const newVersions = [...trimmed.slice(0, -1), merged];
+              return {
+                ...a,
+                code,
+                versions: newVersions,
+                activeVersionIndex: newVersions.length - 1,
+              };
+            }
+
+            const newVersion: ArtifactVersion = {
+              code,
+              title: a.title,
+              createdAt: Date.now(),
+              source: "user",
+            };
+            const newVersions = [...trimmed, newVersion];
+            return {
+              ...a,
+              code,
+              versions: newVersions,
+              activeVersionIndex: newVersions.length - 1,
+            };
+          });
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
+      },
+
+      undoArtifact: (conversationId, artifactId) => {
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          const next = list.map((a) => {
+            if (a.id !== artifactId) return a;
+            const idx = a.activeVersionIndex ?? (a.versions?.length ?? 1) - 1;
+            if (idx <= 0) return a;
+            const v = a.versions[idx - 1];
+            return { ...a, code: v.code, title: v.title, activeVersionIndex: idx - 1 };
+          });
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
+      },
+
+      redoArtifact: (conversationId, artifactId) => {
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          const next = list.map((a) => {
+            if (a.id !== artifactId) return a;
+            const versions = a.versions ?? [];
+            const idx = a.activeVersionIndex ?? versions.length - 1;
+            if (idx >= versions.length - 1) return a;
+            const v = versions[idx + 1];
+            return { ...a, code: v.code, title: v.title, activeVersionIndex: idx + 1 };
+          });
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
+      },
+
+      restoreArtifactVersion: (conversationId, artifactId, versionIndex) => {
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          const next = list.map((a) => {
+            if (a.id !== artifactId) return a;
+            const v = a.versions?.[versionIndex];
+            if (!v) return a;
+            return {
+              ...a,
+              code: v.code,
+              title: v.title,
+              activeVersionIndex: versionIndex,
+            };
+          });
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
       },
 
       detectArtifacts: (conversationId, messageId, content) => {
-        const artifacts: Artifact[] = [];
-        const langMap: Record<string, ArtifactKind> = { html: "html", latex: "latex", tex: "latex", python: "python" };
-        const titleMap: Record<ArtifactKind, string> = { html: "HTML", latex: "LaTeX", python: "Python" };
+        const flags = get();
+        // When the user has turned auto-artifacts off, leave the chat
+        // bubble's code intact and never push anything into the canvas.
+        if (!flags.autoArtifacts) return;
+        const enabledKinds = new Set<ArtifactKind>(["html", "latex", "python"]);
+        if (flags.officeArtifacts) {
+          enabledKinds.add("docx");
+          enabledKinds.add("pptx");
+          enabledKinds.add("xlsx");
+        }
+        const blocks = extractArtifactBlocks(content, { enabledKinds });
+        if (blocks.length === 0) return;
 
-        // Extract fenced code blocks: ```lang\ncode\n```
-        const fenceRe = /```(\w+)\n([\s\S]*?)```/g;
-        let match;
-        while ((match = fenceRe.exec(content)) !== null) {
-          const lang = match[1].toLowerCase();
-          const code = match[2].trim();
-          const kind = langMap[lang];
-          if (kind && code.length > 0) {
-            const id = `${messageId}-${artifacts.length}`;
-            const firstLine = code.split("\n")[0].slice(0, 60);
-            artifacts.push({
+        set((state) => {
+          const existing = state.artifacts[conversationId] ?? [];
+          const next = [...existing];
+          const updatedIds = new Set<string>();
+          let activeId: string | null = null;
+
+          for (let i = 0; i < blocks.length; i++) {
+            const { kind, code, title } = blocks[i];
+
+            const targetIdx = (() => {
+              const want = normalizeTitle(title);
+              for (let j = next.length - 1; j >= 0; j--) {
+                if (
+                  next[j].kind === kind &&
+                  normalizeTitle(next[j].title) === want &&
+                  !updatedIds.has(next[j].id)
+                ) {
+                  return j;
+                }
+              }
+              return -1;
+            })();
+
+            const now = Date.now();
+
+            if (targetIdx >= 0) {
+              const target = next[targetIdx];
+              const versions = target.versions ?? [];
+              const activeIdx = target.activeVersionIndex ?? versions.length - 1;
+              const last = versions[activeIdx];
+              // If the live streaming version already corresponds to this
+              // (messageId, fenceIndex), promote it in place — no new
+              // version, no version-history spam.
+              if (
+                last &&
+                last.streaming &&
+                last.messageId === messageId &&
+                last.fenceIndex === i
+              ) {
+                const promoted: ArtifactVersion = {
+                  ...last,
+                  code,
+                  title,
+                  createdAt: now,
+                  streaming: false,
+                };
+                const newVersions = [...versions.slice(0, activeIdx), promoted, ...versions.slice(activeIdx + 1)];
+                next[targetIdx] = {
+                  ...target,
+                  code,
+                  title,
+                  messageId,
+                  createdAt: now,
+                  versions: newVersions,
+                  activeVersionIndex: activeIdx,
+                };
+              } else {
+                // Standard path — append a fresh agent version.
+                // Branching rule: agent edits after a user undo drop the
+                // future. The user undid for a reason; the agent's new
+                // version is the new "tip".
+                const trimmed = activeIdx < versions.length - 1 ? versions.slice(0, activeIdx + 1) : versions;
+                const newVersion: ArtifactVersion = {
+                  code,
+                  title,
+                  createdAt: now,
+                  source: "agent",
+                  messageId,
+                  fenceIndex: i,
+                };
+                const newVersions = [...trimmed, newVersion];
+                next[targetIdx] = {
+                  ...target,
+                  code,
+                  title,
+                  messageId,
+                  createdAt: now,
+                  versions: newVersions,
+                  activeVersionIndex: newVersions.length - 1,
+                };
+              }
+              updatedIds.add(target.id);
+              if (activeId === null) activeId = target.id;
+            } else {
+              const id = `${messageId}-${i}`;
+              const newVersion: ArtifactVersion = {
+                code,
+                title,
+                createdAt: now,
+                source: "agent",
+                messageId,
+                fenceIndex: i,
+              };
+              next.push({
+                id,
+                kind,
+                title,
+                code,
+                messageId,
+                createdAt: now,
+                versions: [newVersion],
+                activeVersionIndex: 0,
+              });
+              if (activeId === null) activeId = id;
+            }
+          }
+
+          return {
+            artifacts: { ...state.artifacts, [conversationId]: next },
+            artifactPanelOpen: true,
+            activeArtifactId: activeId ?? state.activeArtifactId,
+            sidebarOpen: false,
+          };
+        });
+      },
+
+      streamArtifactDelta: (conversationId, messageId, kind, title, fenceIndex, code) => {
+        const flags = get();
+        if (!flags.autoArtifacts) return;
+        if (!flags.officeArtifacts && (kind === "docx" || kind === "pptx" || kind === "xlsx")) return;
+        set((state) => {
+          const existing = state.artifacts[conversationId] ?? [];
+          const next = [...existing];
+          let activeId: string | null = state.activeArtifactId;
+
+          // 1. Look for an existing streaming version keyed on
+          //    (messageId, fenceIndex). That's the strongest match because
+          //    titles can shift mid-stream.
+          let targetIdx = -1;
+          for (let j = next.length - 1; j >= 0; j--) {
+            const versions = next[j].versions ?? [];
+            const activeIdx = next[j].activeVersionIndex ?? versions.length - 1;
+            const last = versions[activeIdx];
+            if (
+              last &&
+              last.streaming &&
+              last.messageId === messageId &&
+              last.fenceIndex === fenceIndex
+            ) {
+              targetIdx = j;
+              break;
+            }
+          }
+
+          if (targetIdx >= 0) {
+            const target = next[targetIdx];
+            const versions = target.versions ?? [];
+            const activeIdx = target.activeVersionIndex ?? versions.length - 1;
+            const last = versions[activeIdx];
+            // Skip the update entirely when nothing has changed —
+            // saves a re-render per token for runs of un-buffered whitespace.
+            if (last && last.code === code && last.title === title) return state;
+            const merged: ArtifactVersion = {
+              ...last,
+              code,
+              title: title || last.title,
+              createdAt: Date.now(),
+            };
+            const newVersions = [...versions.slice(0, activeIdx), merged, ...versions.slice(activeIdx + 1)];
+            next[targetIdx] = {
+              ...target,
+              code,
+              title: title || target.title,
+              versions: newVersions,
+              activeVersionIndex: activeIdx,
+            };
+            return { artifacts: { ...state.artifacts, [conversationId]: next } };
+          }
+
+          // 2. No streaming version yet — try to attach to an
+          //    existing artifact by (kind, normalized title) so an
+          //    edit-in-place flows into the same canvas tab.
+          const want = normalizeTitle(title);
+          if (want) {
+            for (let j = next.length - 1; j >= 0; j--) {
+              if (next[j].kind === kind && normalizeTitle(next[j].title) === want) {
+                targetIdx = j;
+                break;
+              }
+            }
+          }
+
+          const now = Date.now();
+          const streamingVersion: ArtifactVersion = {
+            code,
+            title,
+            createdAt: now,
+            source: "agent",
+            messageId,
+            fenceIndex,
+            streaming: true,
+          };
+
+          if (targetIdx >= 0) {
+            const target = next[targetIdx];
+            const versions = target.versions ?? [];
+            const activeIdx = target.activeVersionIndex ?? versions.length - 1;
+            const trimmed = activeIdx < versions.length - 1 ? versions.slice(0, activeIdx + 1) : versions;
+            const newVersions = [...trimmed, streamingVersion];
+            next[targetIdx] = {
+              ...target,
+              code,
+              title: title || target.title,
+              messageId,
+              createdAt: now,
+              versions: newVersions,
+              activeVersionIndex: newVersions.length - 1,
+            };
+            activeId = target.id;
+          } else {
+            const id = `${messageId}-${fenceIndex}`;
+            next.push({
               id,
               kind,
-              title: firstLine || titleMap[kind],
+              title,
               code,
               messageId,
-              createdAt: Date.now(),
+              createdAt: now,
+              versions: [streamingVersion],
+              activeVersionIndex: 0,
             });
+            activeId = id;
           }
-        }
 
-        if (artifacts.length > 0) {
-          set((state) => ({
-            artifacts: { ...state.artifacts, [conversationId]: [...(state.artifacts[conversationId] ?? []), ...artifacts] },
-            artifactPanelOpen: true,
-            activeArtifactId: artifacts[0].id,
-          }));
-        }
+          // Auto-open the canvas on the first delta so the user sees the
+          // code being typed without having to click anything. Only flip
+          // when nothing else is currently focused (don't yank an artifact
+          // the user is already reading).
+          const shouldFocus = state.activeArtifactId === null || state.activeArtifactId === activeId;
+          return {
+            artifacts: { ...state.artifacts, [conversationId]: next },
+            artifactPanelOpen: shouldFocus ? true : state.artifactPanelOpen,
+            activeArtifactId: shouldFocus ? activeId : state.activeArtifactId,
+            sidebarOpen: shouldFocus ? false : state.sidebarOpen,
+          };
+        });
+      },
+
+      finalizeStreamingArtifacts: (conversationId, messageId) => {
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          let touched = false;
+          const next = list.map((a) => {
+            const versions = a.versions ?? [];
+            const activeIdx = a.activeVersionIndex ?? versions.length - 1;
+            const last = versions[activeIdx];
+            if (!last || !last.streaming || last.messageId !== messageId) return a;
+            touched = true;
+            const cleared: ArtifactVersion = { ...last, streaming: false };
+            const newVersions = [...versions.slice(0, activeIdx), cleared, ...versions.slice(activeIdx + 1)];
+            return { ...a, versions: newVersions };
+          });
+          if (!touched) return {};
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
       },
 
       clearArtifacts: (conversationId) => {
@@ -648,13 +1742,124 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-workspace-path", path ?? ""); } catch {}
       },
 
+      setDesignWorkspace: (path) => {
+        set({ designWorkspacePath: path });
+        try { localStorage.setItem("goatllm-design-workspace-path", path ?? ""); } catch {}
+      },
+
+      addDesignWorkspace: (path) => {
+        set((s) => {
+          if (s.designWorkspaces.includes(path)) return {};
+          const next = [...s.designWorkspaces, path];
+          try { localStorage.setItem("goatllm-design-workspaces", JSON.stringify(next)); } catch {}
+          return { designWorkspaces: next };
+        });
+      },
+
+      removeDesignWorkspace: (path) => {
+        set((s) => {
+          const next = s.designWorkspaces.filter((w) => w !== path);
+          try { localStorage.setItem("goatllm-design-workspaces", JSON.stringify(next)); } catch {}
+          return {
+            designWorkspaces: next,
+            designWorkspacePath: s.designWorkspacePath === path ? null : s.designWorkspacePath,
+          };
+        });
+      },
+
       setAgentMode: (enabled) => {
         set({ agentMode: enabled });
         try { localStorage.setItem("goatllm-agent-mode", String(enabled)); } catch {}
+        // Plan mode is agent-only — leaving agent mode resets it.
+        if (!enabled && get().planMode) {
+          set({ planMode: false });
+          try { localStorage.setItem("goatllm-plan-mode", "false"); } catch {}
+        }
+        // Mutual exclusion with design mode.
+        if (enabled && get().designMode) {
+          set({ designMode: false });
+          try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
+        }
       },
 
       toggleAgentMode: () => {
         set((state) => ({ agentMode: !state.agentMode }));
+        // Same guarantee as setAgentMode.
+        if (!get().agentMode && get().planMode) {
+          set({ planMode: false });
+          try { localStorage.setItem("goatllm-plan-mode", "false"); } catch {}
+        }
+        if (get().agentMode && get().designMode) {
+          set({ designMode: false });
+          try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
+        }
+      },
+
+      setDesignMode: (enabled) => {
+        set({ designMode: enabled });
+        try { localStorage.setItem("goatllm-design-mode", String(enabled)); } catch {}
+        // Mutual exclusion with agent mode (and therefore plan mode).
+        if (enabled && get().agentMode) {
+          set({ agentMode: false, planMode: false });
+          try {
+            localStorage.setItem("goatllm-agent-mode", "false");
+            localStorage.setItem("goatllm-plan-mode", "false");
+          } catch {}
+        }
+      },
+
+      toggleDesignMode: () => {
+        const next = !get().designMode;
+        set({ designMode: next });
+        try { localStorage.setItem("goatllm-design-mode", String(next)); } catch {}
+        if (next && get().agentMode) {
+          set({ agentMode: false, planMode: false });
+          try {
+            localStorage.setItem("goatllm-agent-mode", "false");
+            localStorage.setItem("goatllm-plan-mode", "false");
+          } catch {}
+        }
+      },
+
+      setPendingFormSubmission: (payload) => set({ pendingFormSubmission: payload }),
+
+      setActiveSkill: (id) => {
+        set({ activeSkillId: id });
+        try { localStorage.setItem("goatllm-active-skill", id ?? ""); } catch {}
+      },
+      setActiveDesignSystem: (id) => {
+        set({ activeDesignSystemId: id });
+        try { localStorage.setItem("goatllm-active-design-system", id ?? ""); } catch {}
+      },
+      setActiveDirection: (id) => {
+        set({ activeDirectionId: id });
+        try { localStorage.setItem("goatllm-active-direction", id ?? ""); } catch {}
+      },
+
+      setResearchMode: (enabled) => {
+        set({ researchMode: enabled });
+        try { localStorage.setItem("goatllm-research-mode", String(enabled)); } catch {}
+      },
+
+      toggleResearchMode: () => {
+        set((state) => {
+          const next = !state.researchMode;
+          try { localStorage.setItem("goatllm-research-mode", String(next)); } catch {}
+          return { researchMode: next };
+        });
+      },
+
+      setPlanMode: (enabled) => {
+        set({ planMode: enabled });
+        try { localStorage.setItem("goatllm-plan-mode", String(enabled)); } catch {}
+      },
+
+      togglePlanMode: () => {
+        set((state) => {
+          const next = !state.planMode;
+          try { localStorage.setItem("goatllm-plan-mode", String(next)); } catch {}
+          return { planMode: next };
+        });
       },
 
       setAutoApprove: (enabled) => {
@@ -739,6 +1944,71 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-tavily-key", key); } catch {}
       },
 
+      setFreeWebSearch: (enabled) => {
+        set({ freeWebSearch: enabled });
+        try { localStorage.setItem("goatllm-free-web-search", enabled ? "true" : "false"); } catch {}
+      },
+      setChatCodeExec: (enabled) => {
+        set({ chatCodeExec: enabled });
+        try { localStorage.setItem("goatllm-chat-code-exec", enabled ? "true" : "false"); } catch {}
+      },
+
+      setAutoArtifacts: (enabled) => {
+        set({ autoArtifacts: enabled });
+        try { localStorage.setItem("goatllm-auto-artifacts", enabled ? "true" : "false"); } catch {}
+      },
+
+      setOfficeArtifacts: (enabled) => {
+        set({ officeArtifacts: enabled });
+        try { localStorage.setItem("goatllm-office-artifacts", enabled ? "true" : "false"); } catch {}
+      },
+
+      // ── Skills ──
+      setSkillPaths: (paths) => {
+        set({ skillPaths: paths });
+        try { localStorage.setItem("goatllm-skill-paths", JSON.stringify(paths)); } catch {}
+      },
+      addSkillPath: (path) => {
+        set((state) => {
+          if (state.skillPaths.includes(path)) return state;
+          const next = [...state.skillPaths, path];
+          try { localStorage.setItem("goatllm-skill-paths", JSON.stringify(next)); } catch {}
+          return { skillPaths: next };
+        });
+      },
+      removeSkillPath: (path) => {
+        set((state) => {
+          const next = state.skillPaths.filter((p) => p !== path);
+          try { localStorage.setItem("goatllm-skill-paths", JSON.stringify(next)); } catch {}
+          return { skillPaths: next };
+        });
+      },
+      setSkillEnabled: (name, enabled) => {
+        set((state) => {
+          const next = new Set(state.disabledSkills);
+          if (enabled) {
+            next.delete(name);
+          } else {
+            next.add(name);
+          }
+          try { localStorage.setItem("goatllm-disabled-skills", JSON.stringify([...next])); } catch {}
+          return { disabledSkills: next };
+        });
+      },
+      setDiscoveredSkills: (skills) => {
+        set({ discoveredSkills: skills });
+      },
+
+      setOllamaUrl: (url) => {
+        set({ ollamaUrl: url });
+        try { localStorage.setItem("goatllm-ollama-url", url); } catch {}
+      },
+
+      setEmbeddingModel: (model) => {
+        set({ embeddingModel: model });
+        try { localStorage.setItem("goatllm-embedding-model", model); } catch {}
+      },
+
       configureProvider: (providerId, config) => {
         set((state) => {
           const newConfigs = { ...state.providerConfigs, [providerId]: config };
@@ -769,9 +2039,163 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      discoverLocalModels: async (providerId: string) => {
+        const local = LOCAL_PROVIDERS.find((p) => p.id === providerId);
+        if (!local) return;
+        const cfg = get().providerConfigs[providerId];
+        const baseUrl = cfg?.baseUrl?.trim() || local.defaultBaseUrl;
+
+        set((state) => ({
+          discoveryStatus: { ...state.discoveryStatus, [providerId]: "loading" },
+          discoveryError: { ...state.discoveryError, [providerId]: null },
+        }));
+
+        try {
+          const { initFetch } = await import("../lib/fetch-adapter");
+          const customFetch = await initFetch();
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 4000);
+          const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+          const res = await customFetch(url, {
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+          });
+          clearTimeout(timeout);
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const body = await res.json();
+          // OpenAI-compatible: { data: [{ id }, ...] }. Ollama also exposes
+          // /api/tags but its /v1/models matches the OpenAI shape.
+          const items: Array<{
+            id?: string;
+            name?: string;
+            // LM Studio surfaces these directly on /v1/models entries
+            max_context_length?: number;
+            loaded_context_length?: number;
+            context_length?: number;
+          }> = Array.isArray(body?.data)
+            ? body.data
+            : Array.isArray(body?.models)
+              ? body.models
+              : [];
+          const baseList = items
+            .map((m) => {
+              const id = String(m.id ?? m.name ?? "").trim();
+              // LM Studio: pull whichever field the server provides.
+              const lmCtx =
+                typeof m.max_context_length === "number"
+                  ? m.max_context_length
+                  : typeof m.loaded_context_length === "number"
+                    ? m.loaded_context_length
+                    : typeof m.context_length === "number"
+                      ? m.context_length
+                      : undefined;
+              return { id, name: id, contextWindow: lmCtx };
+            })
+            .filter((m) => m.id.length > 0);
+
+          // Ollama doesn't include context_length on /v1/models. Fan out to
+          // /api/show for each discovered tag and pull the real architecture
+          // metadata. We do these in parallel and tolerate partial failures —
+          // a missing field falls back to 0 ("unknown") rather than a
+          // misleading default.
+          let discovered = baseList;
+          if (providerId === "ollama") {
+            // The native Ollama API lives at the root, not under /v1.
+            const apiRoot = baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+            const enriched = await Promise.all(
+              baseList.map(async (m) => {
+                if (typeof m.contextWindow === "number") return m;
+                try {
+                  const ctl = new AbortController();
+                  const t = setTimeout(() => ctl.abort(), 3000);
+                  const r = await customFetch(`${apiRoot}/api/show`, {
+                    method: "POST",
+                    signal: ctl.signal,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ model: m.id }),
+                  });
+                  clearTimeout(t);
+                  if (!r.ok) return m;
+                  const showBody = await r.json();
+                  // model_info is a flat dict keyed by `<arch>.context_length`
+                  // (e.g. "llama.context_length"). Walk the keys instead of
+                  // hardcoding an architecture.
+                  const info = showBody?.model_info ?? {};
+                  let ctx: number | undefined;
+                  for (const k of Object.keys(info)) {
+                    if (k.endsWith(".context_length")) {
+                      const v = Number(info[k]);
+                      if (Number.isFinite(v) && v > 0) {
+                        ctx = v;
+                        break;
+                      }
+                    }
+                  }
+                  // Older Ollama versions surface a top-level
+                  // `parameters` string with `num_ctx` lines. Fall back
+                  // to that before giving up.
+                  if (ctx === undefined && typeof showBody?.parameters === "string") {
+                    const match = showBody.parameters.match(/num_ctx\s+(\d+)/);
+                    if (match) {
+                      const v = Number(match[1]);
+                      if (Number.isFinite(v) && v > 0) ctx = v;
+                    }
+                  }
+                  return ctx ? { ...m, contextWindow: ctx } : m;
+                } catch {
+                  return m;
+                }
+              }),
+            );
+            discovered = enriched;
+          }
+
+          set((state) => ({
+            discoveredModels: { ...state.discoveredModels, [providerId]: discovered },
+            discoveryStatus: { ...state.discoveryStatus, [providerId]: "ok" },
+            discoveryError: { ...state.discoveryError, [providerId]: null },
+          }));
+        } catch (e) {
+          const reason =
+            e instanceof DOMException && e.name === "AbortError"
+              ? `Couldn't reach ${baseUrl} (timed out). Is ${local.name} running?`
+              : `Couldn't reach ${baseUrl}. Is ${local.name} running?`;
+          set((state) => ({
+            discoveredModels: { ...state.discoveredModels, [providerId]: [] },
+            discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
+            discoveryError: { ...state.discoveryError, [providerId]: reason },
+          }));
+        }
+      },
+
+      discoverAllLocalModels: async () => {
+        const { providerConfigs, discoverLocalModels } = get();
+        const targets = LOCAL_PROVIDERS.filter((p) => providerConfigs[p.id] !== undefined);
+        await Promise.allSettled(targets.map((p) => discoverLocalModels(p.id)));
+      },
+
       setSelectedModel: (modelId) => {
         set({ selectedModelId: modelId });
         try { localStorage.setItem("goatllm-selected-model", modelId ?? ""); } catch {}
+      },
+
+      setModelOverride: (modelId, override) => {
+        set((state) => {
+          const current = state.modelOverrides[modelId] ?? {};
+          const merged: ModelOverride = { ...current };
+          if (override.contextWindow !== undefined) merged.contextWindow = override.contextWindow;
+          else if ("contextWindow" in override) delete merged.contextWindow;
+          if (override.maxResponseTokens !== undefined) merged.maxResponseTokens = override.maxResponseTokens;
+          else if ("maxResponseTokens" in override) delete merged.maxResponseTokens;
+          if (override.reasoningEffort !== undefined) merged.reasoningEffort = override.reasoningEffort;
+          else if ("reasoningEffort" in override) delete merged.reasoningEffort;
+          const next = { ...state.modelOverrides };
+          if (Object.keys(merged).length > 0) next[modelId] = merged;
+          else delete next[modelId];
+          saveModelOverrides(next);
+          return { modelOverrides: next };
+        });
       },
 
       setSearchQuery: (query) => {
@@ -830,7 +2254,15 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       getProviders: () => {
         const { providerConfigs, providerHealth } = get();
-        const providers: Provider[] = BUILTIN_PROVIDERS.map((bp) => {
+        // If the user has configured their own OpenCode Go key, that
+        // supersedes the bundled free tier — we hide our built-in entry so
+        // the picker shows their full paid catalog instead of two competing
+        // OpenCode entries.
+        const userHasOwnZenKey = !!providerConfigs["opencode-go"]?.apiKey;
+        const visibleBuiltins = BUILTIN_PROVIDERS.filter(
+          (bp) => !(bp.id === ZEN_FREE_PROVIDER_ID && userHasOwnZenKey),
+        );
+        const providers: Provider[] = visibleBuiltins.map((bp) => {
           const health = providerHealth[bp.id];
           const checked = health !== undefined;
           return {
@@ -846,12 +2278,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // Add user-configured cloud providers
         const knownNames: Record<string, string> = {
           openai: "OpenAI",
+          anthropic: "Anthropic",
+          deepseek: "DeepSeek",
+          openrouter: "OpenRouter",
+          ollama: "Ollama",
           "opencode-go": "OpenCode Go",
           groq: "Groq",
         };
         for (const [id, config] of Object.entries(providerConfigs)) {
           if (!BUILTIN_PROVIDERS.find((bp) => bp.id === id)) {
-            const hasKey = !!config.apiKey;
+            const hasKey = !!config.apiKey || NO_KEY_PROVIDERS.has(id);
             providers.push({
               id,
               name: knownNames[id] ?? id.charAt(0).toUpperCase() + id.slice(1),
@@ -866,48 +2302,106 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       getModels: () => {
-        const { providerConfigs, providerHealth } = get();
+        const { providerConfigs, providerHealth, discoveredModels, modelOverrides } = get();
         const models: Model[] = [];
+        const userHasOwnZenKey = !!providerConfigs["opencode-go"]?.apiKey;
+        // Helper: apply user overrides to a model's contextWindow.
+        const applyOverride = (modelId: string, ctx: number): number => {
+          const ov = modelOverrides[modelId];
+          if (ov?.contextWindow !== undefined) return ov.contextWindow;
+          return ctx;
+        };
         // Built-in models
         for (const bp of BUILTIN_PROVIDERS) {
+          // Hide the bundled free tier when the user has configured their
+          // own OpenCode Go key — their key supersedes the free credential.
+          if (bp.id === ZEN_FREE_PROVIDER_ID && userHasOwnZenKey) continue;
           const health = providerHealth[bp.id];
           // Optimistic: assume online until first check fails
           const providerOnline = health ? health.online : true;
           for (const m of bp.models) {
+            const combinedId = `${bp.id}:${m.id}`;
             models.push({
-              id: `${bp.id}:${m.id}`,
+              id: combinedId,
               name: m.name,
               providerId: bp.id,
               isAvailable: providerOnline,
+              contextWindow: applyOverride(combinedId, m.contextWindow),
+              vision: m.vision,
             });
           }
         }
-        // Cloud provider models from user config
+        // Cloud + local provider models from user config
         for (const [providerId, config] of Object.entries(providerConfigs)) {
-          if (!BUILTIN_PROVIDERS.find((bp) => bp.id === providerId)) {
-            const cloudModels = CLOUD_PROVIDER_MODELS[providerId] ?? [];
-            const allowlist = config.enabledModels;
-            for (const m of cloudModels) {
-              if (allowlist && !allowlist.includes(m.id)) continue;
-              models.push({
-                id: `${providerId}:${m.id}`,
-                name: m.name,
-                providerId,
-                isAvailable: !!config.apiKey,
-              });
-            }
+          if (BUILTIN_PROVIDERS.find((bp) => bp.id === providerId)) continue;
+          const isLocal = NO_KEY_PROVIDERS.has(providerId);
+          // Local providers expose a real catalog at runtime; cloud providers
+          // ship a curated static list. Don't mix them — a local server with
+          // zero models pulled should show zero models in the picker.
+          const sourceModels = isLocal
+            ? (discoveredModels[providerId] ?? [])
+            : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
+          const allowlist = config.enabledModels;
+          for (const m of sourceModels) {
+            if (allowlist && !allowlist.includes(m.id)) continue;
+            const ctx =
+              "contextWindow" in m && typeof m.contextWindow === "number"
+                ? m.contextWindow
+                : // Local models without a discovered context length: leave
+                  // the meter to fall back to its heuristic. 0 is a sentinel
+                  // the ContextMeter treats as "unknown".
+                  0;
+            const vision =
+              "vision" in m && typeof (m as { vision?: boolean }).vision === "boolean"
+                ? (m as { vision?: boolean }).vision
+                : undefined;
+            const combinedId = `${providerId}:${m.id}`;
+            models.push({
+              id: combinedId,
+              name: m.name,
+              providerId,
+              isAvailable: !!config.apiKey || NO_KEY_PROVIDERS.has(providerId),
+              contextWindow: applyOverride(combinedId, ctx),
+              vision,
+            });
           }
         }
         return models;
       },
 
       getFilteredConversations: () => {
-        const { conversations, searchQuery } = get();
+        const { conversations, searchQuery, messages } = get();
         if (!searchQuery.trim()) return conversations;
         const q = searchQuery.toLowerCase();
-        return conversations.filter(
-          (c) => c.title.toLowerCase().includes(q) || c.lastMessagePreview.toLowerCase().includes(q)
-        );
+        // Search across title, preview, and full message content. We score
+        // each conversation as the count of matching messages so the
+        // sidebar can show "matches in N messages" — cheap because the
+        // messages map is already in-memory.
+        const matched: Array<{ conv: Conversation; score: number; bodyMatches: number }> = [];
+        for (const c of conversations) {
+          let score = 0;
+          let bodyMatches = 0;
+          if (c.title.toLowerCase().includes(q)) score += 100;
+          if (c.lastMessagePreview.toLowerCase().includes(q)) score += 10;
+          const msgs = messages[c.id] ?? [];
+          for (const m of msgs) {
+            if (m.content && m.content.toLowerCase().includes(q)) {
+              score += 1;
+              bodyMatches += 1;
+            }
+          }
+          if (score > 0) matched.push({ conv: c, score, bodyMatches });
+        }
+        // Stash body-match counts on the conversation objects via WeakMap so
+        // the sidebar can render the subtitle without re-running the search.
+        const counts = bodyMatchCounts;
+        counts.clear();
+        for (const m of matched) counts.set(m.conv.id, m.bodyMatches);
+        // Preserve original order (lastMessageAt desc) by sorting by score
+        // descending then by original index.
+        return matched
+          .sort((a, b) => b.score - a.score || b.conv.lastMessageAt - a.conv.lastMessageAt)
+          .map((m) => m.conv);
       },
 
       getActiveConversation: () => {
@@ -928,45 +2422,153 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const savedModeRaw = localStorage.getItem("goatllm-permission-mode");
         const savedMode: "manual" | "auto" | "yolo" =
           savedModeRaw === "auto" || savedModeRaw === "yolo" ? savedModeRaw : "manual";
+        // Artifact toggles: default on. Only an explicit "false" disables them.
+        const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
+        const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
         try {
           const data = await loadAllFromDb();
           const providerConfigs = loadProviderConfigs();
-          const savedModel = localStorage.getItem("goatllm-selected-model") || null;
+          // Default new installs onto the bundled free tier so the first
+          // chat just works — no Settings detour required.
+          const savedModel =
+            localStorage.getItem("goatllm-selected-model") ||
+            `${ZEN_FREE_PROVIDER_ID}:deepseek-v4-flash-free`;
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
-          // Re-detect artifacts from loaded messages so they survive restarts
-          const restoredArtifacts: Record<string, Artifact[]> = {};
-          for (const [convId, msgs] of Object.entries(data.messages)) {
-            for (const msg of msgs) {
-              if (msg.role !== "assistant" || !msg.content) continue;
-              const langMap: Record<string, ArtifactKind> = { html: "html", latex: "latex", tex: "latex", python: "python" };
-              const fenceRe = /```(\w+)\n([\s\S]*?)```/g;
-              let match;
-              while ((match = fenceRe.exec(msg.content)) !== null) {
-                const lang = match[1].toLowerCase();
-                const code = match[2].trim();
-                const kind = langMap[lang];
-                if (kind && code.length > 0) {
-                  const count = restoredArtifacts[convId]?.length ?? 0;
-                  const id = `${msg.id}-${count}`;
-                  if (!restoredArtifacts[convId]) restoredArtifacts[convId] = [];
-                  restoredArtifacts[convId].push({
-                    id, kind,
-                    title: code.split("\n")[0].slice(0, 60) || kind,
-                    code,
-                    messageId: msg.id,
-                    createdAt: msg.createdAt,
-                  });
-                }
+          const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
+          const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
+          let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          if (!freeWebSearchToken) {
+            try {
+              freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+              localStorage.setItem("goatllm-free-web-search-token", freeWebSearchToken);
+            } catch { /* ignore */ }
+          }
+          // Re-detect artifacts from loaded messages so they survive restarts.
+          // Also clear any orphaned isStreaming flags: if the app closed mid-
+          // stream, the assistant message is still marked isStreaming on disk
+          // but no abort controller exists for it. Mark these `interrupted`
+          // so the UI can show a Continue button instead of a stuck spinner.
+          // Similarly, clear isGeneratingTitle flags where the title model
+          // never returned — an app close/crash during the ~2s title call
+          // would leave the sidebar shimmering forever on reopen. We
+          // generate a cheap heuristic title so the conversation doesn't
+          // stay "New Conversation" permanently.
+          for (const msgs of Object.values(data.messages)) {
+            for (const m of msgs) {
+              if (m.isStreaming) {
+                m.isStreaming = false;
+                (m as Message & { interrupted?: boolean }).interrupted = true;
               }
             }
           }
+          // Fix conversations whose title generation never completed.
+          for (const conv of data.conversations) {
+            if (conv.isGeneratingTitle && conv.title === "New Conversation") {
+              conv.isGeneratingTitle = false;
+              const firstUser = (data.messages[conv.id] ?? []).find((m) => m.role === "user");
+              if (firstUser) {
+                conv.title = heuristicTitle(firstUser.content);
+              }
+            }
+          }
+          // Match by (kind, normalized title) so renamed/multi artifacts of
+          // the same kind stay distinct, and same-name updates collapse to a
+          // single entry at the latest version.
+          const restoredArtifacts: Record<string, Artifact[]> = {};
+          for (const [convId, msgs] of Object.entries(data.messages)) {
+            // Process in chronological order so later same-name blocks
+            // overwrite earlier ones.
+            const sorted = [...msgs].sort((a, b) => a.createdAt - b.createdAt);
+            const list: Artifact[] = [];
+            for (const msg of sorted) {
+              if (msg.role !== "assistant" || !msg.content) continue;
+              const blocks = extractArtifactBlocks(msg.content);
+              const updatedThisMsg = new Set<string>();
+              let blockIdx = 0;
+              for (const { kind, title, code } of blocks) {
+                const want = normalizeTitle(title);
+                let target = -1;
+                for (let j = list.length - 1; j >= 0; j--) {
+                  if (
+                    list[j].kind === kind &&
+                    normalizeTitle(list[j].title) === want &&
+                    !updatedThisMsg.has(list[j].id)
+                  ) {
+                    target = j;
+                    break;
+                  }
+                }
+                if (target >= 0) {
+                  const t = list[target];
+                  const versions = t.versions ?? [];
+                  const newVersion: ArtifactVersion = {
+                    code,
+                    title,
+                    createdAt: msg.createdAt,
+                    source: "agent",
+                    messageId: msg.id,
+                  };
+                  const newVersions = [...versions, newVersion];
+                  list[target] = {
+                    ...t,
+                    code,
+                    title,
+                    messageId: msg.id,
+                    createdAt: msg.createdAt,
+                    versions: newVersions,
+                    activeVersionIndex: newVersions.length - 1,
+                  };
+                  updatedThisMsg.add(t.id);
+                } else {
+                  const initialVersion: ArtifactVersion = {
+                    code,
+                    title,
+                    createdAt: msg.createdAt,
+                    source: "agent",
+                    messageId: msg.id,
+                  };
+                  list.push({
+                    id: `${msg.id}-${blockIdx}`,
+                    kind,
+                    title,
+                    code,
+                    messageId: msg.id,
+                    createdAt: msg.createdAt,
+                    versions: [initialVersion],
+                    activeVersionIndex: 0,
+                  });
+                }
+                blockIdx++;
+              }
+            }
+            if (list.length > 0) restoredArtifacts[convId] = list;
+          }
 
           const agentMode = localStorage.getItem("goatllm-agent-mode") === "true";
+          const designMode = !agentMode && localStorage.getItem("goatllm-design-mode") === "true";
+          const activeSkillId = localStorage.getItem("goatllm-active-skill") || null;
+          const activeDesignSystemId = localStorage.getItem("goatllm-active-design-system") || null;
+          const activeDirectionId = localStorage.getItem("goatllm-active-direction") || null;
           const workspacePath = localStorage.getItem("goatllm-workspace-path") || null;
+          const designWorkspacePath = localStorage.getItem("goatllm-design-workspace-path") || null;
           const defaultSystemPrompt = localStorage.getItem("goatllm-default-system-prompt") || "";
+          const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
+          const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
+          const researchMode = localStorage.getItem("goatllm-research-mode") === "true";
+          const planMode = agentMode && localStorage.getItem("goatllm-plan-mode") === "true";
           const activeId = localStorage.getItem("goatllm-active-conversation") || null;
           // Only restore activeId if that conversation actually exists in loaded data
           const validActiveId = activeId && data.conversations.some((c) => c.id === activeId) ? activeId : null;
+
+          // Load skill state from localStorage
+          let skillPaths: string[] = [];
+          let disabledSkills: Set<string> = new Set();
+          try {
+            const savedSkillPaths = localStorage.getItem("goatllm-skill-paths");
+            if (savedSkillPaths) skillPaths = JSON.parse(savedSkillPaths);
+            const savedDisabled = localStorage.getItem("goatllm-disabled-skills");
+            if (savedDisabled) disabledSkills = new Set(JSON.parse(savedDisabled));
+          } catch { /* ignore malformed JSON */ }
 
           set({
             conversations: data.conversations,
@@ -974,12 +2576,28 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             providerConfigs,
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
+            freeWebSearch,
+            chatCodeExec,
+            freeWebSearchToken,
+            autoArtifacts,
+            officeArtifacts,
             permissionMode: savedMode,
             autoApprove: savedMode === "yolo",
             artifacts: restoredArtifacts,
             agentMode,
+            designMode,
+            activeSkillId,
+            activeDesignSystemId,
+            activeDirectionId,
             workspacePath,
+            designWorkspacePath,
             defaultSystemPrompt,
+            ollamaUrl,
+            embeddingModel,
+            researchMode,
+            planMode,
+            skillPaths,
+            disabledSkills,
             activeId: validActiveId,
             _hydrated: true,
           });
@@ -988,17 +2606,49 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const providerConfigs = loadProviderConfigs();
           const savedModel = localStorage.getItem("goatllm-selected-model") || null;
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
+          const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
+          const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
+          let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          if (!freeWebSearchToken) {
+            try {
+              freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+              localStorage.setItem("goatllm-free-web-search-token", freeWebSearchToken);
+            } catch { /* ignore */ }
+          }
           const agentMode = localStorage.getItem("goatllm-agent-mode") === "true";
+          const designMode = !agentMode && localStorage.getItem("goatllm-design-mode") === "true";
+          const activeSkillId = localStorage.getItem("goatllm-active-skill") || null;
+          const activeDesignSystemId = localStorage.getItem("goatllm-active-design-system") || null;
+          const activeDirectionId = localStorage.getItem("goatllm-active-direction") || null;
           const workspacePath = localStorage.getItem("goatllm-workspace-path") || null;
+          const designWorkspacePath = localStorage.getItem("goatllm-design-workspace-path") || null;
           const defaultSystemPrompt = localStorage.getItem("goatllm-default-system-prompt") || "";
+          const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
+          const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
+          const researchMode = localStorage.getItem("goatllm-research-mode") === "true";
+          const planMode = agentMode && localStorage.getItem("goatllm-plan-mode") === "true";
           set({
             providerConfigs,
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
+            freeWebSearch,
+            chatCodeExec,
+            freeWebSearchToken,
+            autoArtifacts,
+            officeArtifacts,
             permissionMode: savedMode,
             agentMode,
+            designMode,
+            activeSkillId,
+            activeDesignSystemId,
+            activeDirectionId,
             workspacePath,
+            designWorkspacePath,
             defaultSystemPrompt,
+            ollamaUrl,
+            embeddingModel,
+            researchMode,
+            planMode,
             autoApprove: savedMode === "yolo",
             _hydrated: true,
           });
@@ -1008,20 +2658,31 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       // ── Derived ──
 
       getActiveLlmConfig: (): LlmConfig | null => {
-        const { selectedModelId, providerConfigs } = get();
+        const { selectedModelId, providerConfigs, modelOverrides } = get();
         if (!selectedModelId) return null;
 
         const [providerId, ...modelIdParts] = selectedModelId.split(":");
         const modelId = modelIdParts.join(":"); // handles model IDs with colons
 
-        // Built-in local provider
+        // Grab per-model overrides the user may have set via the gear icon.
+        const overrides = modelOverrides[selectedModelId];
+
+        // Built-in provider (e.g. OpenCode Go Free).
+        // We resolve the bundled credential lazily so the decoded value
+        // doesn't sit in module scope, and we treat the built-in as
+        // OpenAI-compatible so it goes through the same streaming path as
+        // user-configured opencode-go.
         const builtin = BUILTIN_PROVIDERS.find((bp) => bp.id === providerId);
         if (builtin) {
+          const apiKey =
+            providerId === ZEN_FREE_PROVIDER_ID ? getZenCredential() : null;
           return {
             provider: providerId as LlmConfig["provider"],
             modelId,
-            apiKey: null,
+            apiKey,
             baseUrl: builtin.baseUrl,
+            maxResponseTokens: overrides?.maxResponseTokens,
+            reasoningEffort: overrides?.reasoningEffort,
           };
         }
 
@@ -1037,6 +2698,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             modelId,
             apiKey: config.apiKey,
             baseUrl,
+            maxResponseTokens: overrides?.maxResponseTokens,
+            reasoningEffort: overrides?.reasoningEffort,
           };
         }
 

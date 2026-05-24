@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useChatStore } from "../stores/chat";
-import { PanelLeft, SquarePen, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { SquarePen, MoreHorizontal, Pencil, Trash2, FileCode, FileText, Image, Paperclip, Code } from "lucide-react";
+import { WorkspaceFileTree } from "./WorkspaceFileTree";
+import { ContextMeter } from "./ContextMeter";
 
 export function TopBar() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
-  const toggleSidebar = useChatStore((s) => s.toggleSidebar);
   const activeId = useChatStore((s) => s.activeId);
   const conversations = useChatStore((s) => s.conversations);
-  const createConversation = useChatStore((s) => s.createConversation);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
@@ -42,8 +42,11 @@ export function TopBar() {
   }, [renaming]);
 
   const handleNewChat = () => {
-    const id = createConversation();
-    setActiveConversation(id);
+    // Match the sidebar's behavior — just navigate to the empty new-chat
+    // state. The actual conversation row is created on first message send.
+    // Creating it eagerly here was producing stray "New Conversation" rows
+    // every time the user clicked the top-bar plus.
+    setActiveConversation(null);
   };
 
   const handleRename = () => {
@@ -67,19 +70,9 @@ export function TopBar() {
   return (
     <div
       className="h-[38px] shrink-0 flex items-center gap-1.5 relative z-10"
-      style={{ paddingLeft: sidebarOpen ? 8 : 78 }}
+      style={{ paddingLeft: sidebarOpen ? 8 : 110, paddingRight: 12 }}
       data-tauri-drag-region
     >
-      {/* Sidebar toggle — always right after traffic lights */}
-      <button
-        onClick={toggleSidebar}
-        className="p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
-        aria-label={sidebarOpen ? "Hide sidebar" : "Expand sidebar"}
-        title={sidebarOpen ? "Hide sidebar" : "Expand sidebar"}
-      >
-        <PanelLeft size={16} strokeWidth={1.75} />
-      </button>
-
       {/* New chat + title + menu — only when sidebar is collapsed */}
       {!sidebarOpen && (
         <>
@@ -165,6 +158,159 @@ export function TopBar() {
       )}
 
       <div className="flex-1" data-tauri-drag-region />
+
+      {/* Context window meter — click for usage breakdown */}
+      {activeId && <ContextMeter />}
+
+      {/* Right-side assets menu (artifacts + uploaded files) */}
+      {activeId && <ChatAssetsMenu />}
+    </div>
+  );
+}
+
+// ── 3-dot assets menu (top-right) ──
+
+function ChatAssetsMenu() {
+  const activeId = useChatStore((s) => s.activeId);
+  const artifacts = useChatStore((s) => (activeId ? s.artifacts[activeId] : undefined));
+  const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
+  const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
+  const setActiveAttachment = useChatStore((s) => s.setActiveAttachment);
+  const agentMode = useChatStore((s) => s.agentMode);
+  const workspacePath = useChatStore((s) => s.workspacePath);
+
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Gather all attachments from user messages in this chat
+  const attachments = useMemo(() => {
+    if (!messages) return [];
+    const result: { filename: string; mimeType: string; dataUrl: string; messageId: string }[] = [];
+    for (const msg of messages) {
+      if (msg.attachments) {
+        for (const att of msg.attachments) {
+          result.push({ ...att, messageId: msg.id });
+        }
+      }
+    }
+    return result;
+  }, [messages]);
+
+  const hasContent = (artifacts && artifacts.length > 0) || attachments.length > 0 || (agentMode && !!workspacePath);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`relative p-1.5 mt-[3px] rounded-md transition-colors ${
+          hasContent
+            ? "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06]"
+            : "text-[#666] hover:text-[#a0a0a0] hover:bg-white/[0.04]"
+        }`}
+        aria-label="Chat assets"
+        title="Artifacts & files"
+      >
+        <MoreHorizontal size={16} strokeWidth={1.75} />
+        {hasContent && (
+          <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-[#f59e42]" />
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease]">
+          {/* Workspace file tree (agent mode only) — shows files the agent created/modified */}
+          {agentMode && (
+            <>
+              <WorkspaceFileTree onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }} />
+              {(artifacts && artifacts.length > 0 || attachments.length > 0) && (
+                <div className="h-px bg-white/5 mx-2" />
+              )}
+            </>
+          )}
+
+          {/* Artifacts section */}
+          {artifacts && artifacts.length > 0 && (
+            <div className="p-1.5">
+              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+                Artifacts
+              </div>
+              {artifacts.map((art) => {
+                const Icon = art.kind === "html" ? FileCode : art.kind === "python" ? Code : FileText;
+                return (
+                  <button
+                    key={art.id}
+                    onClick={() => { setActiveArtifact(art.id); setOpen(false); }}
+                    className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left hover:bg-white/[0.06] transition-colors"
+                  >
+                    <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
+                    <span className="text-[12.5px] text-[#d5d5d5] truncate flex-1">{art.title}</span>
+                    <span className="text-[10px] text-[#888] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+                      {art.kind === "html" ? "HTML" : art.kind === "python" ? "Python" : "LaTeX"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Divider */}
+          {artifacts && artifacts.length > 0 && attachments.length > 0 && (
+            <div className="h-px bg-white/5 mx-2" />
+          )}
+
+          {/* Files section (user-uploaded attachments) */}
+          {attachments.length > 0 && (
+            <div className="p-1.5">
+              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+                Attached files
+              </div>
+              {attachments.map((att, i) => {
+                const isImage = att.mimeType.startsWith("image/");
+                const Icon = isImage ? Image : Paperclip;
+                return (
+                  <div
+                    key={`${att.messageId}-${i}`}
+                    className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors"
+                  >
+                    {isImage ? (
+                      <img
+                        src={att.dataUrl}
+                        alt={att.filename}
+                        className="w-6 h-6 rounded object-cover shrink-0 border border-white/10"
+                      />
+                    ) : (
+                      <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
+                    )}
+                    <span className="text-[12.5px] text-[#d5d5d5] truncate flex-1">{att.filename}</span>
+                    <span className="text-[10px] text-[#888] shrink-0">
+                      {att.mimeType.split("/")[1]?.toUpperCase() ?? "FILE"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!hasContent && (
+            <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
+              <Paperclip size={16} strokeWidth={1.5} className="text-[#666]" />
+              <p className="text-[12px] text-[#888]">No artifacts or files in this chat yet.</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

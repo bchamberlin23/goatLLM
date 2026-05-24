@@ -5,7 +5,7 @@
  */
 
 import type { Message } from "../stores/chat";
-import type { LlmMessage } from "./llm";
+import type { LlmConfig, LlmMessage } from "./llm";
 
 // ── Token Estimation ──
 
@@ -64,6 +64,15 @@ export interface CompactionResult {
   truncatedCount: number;
   /** Number of tool calls inlined for non-tool model compat. */
   toolsInlinedCount: number;
+  /** Number of pinned messages forcibly de-pinned because pins exceeded the soft cap. */
+  pinnedDroppedCount: number;
+  /** The actual messages dropped from the conversation, for callers that
+   * want to run a higher-quality LLM summary asynchronously. */
+  droppedMessages?: Message[];
+  /** Index of the auto-generated summary in `messages`, or -1 when no
+   * summary was inserted. Lets callers patch the summary text in place
+   * once an async LLM-summary returns. */
+  summaryMessageIndex?: number;
 }
 
 /**
@@ -86,6 +95,7 @@ export function compactMessages(
   let summarizedCount = 0;
   let truncatedCount = 0;
   let toolsInlinedCount = 0;
+  let pinnedDroppedCount = 0;
 
   // Step 0: If stripping tools, inline tool-call results into message content
   const inlined = options.stripTools
@@ -107,7 +117,8 @@ export function compactMessages(
       })
     : messages;
 
-  // Step 1: Truncate oversized tool outputs
+  // Step 1: Truncate oversized tool outputs (applies to pinned messages too —
+  // pinning preserves intent, not the 50KB stack trace).
   const truncated = inlined.map((msg) => {
     if (!msg.toolCalls) return msg;
     let changed = false;
@@ -130,77 +141,145 @@ export function compactMessages(
     return msg;
   });
 
-  // Step 2: Count total tokens
+  // Step 1.5: Implicitly pin any message that carries attachments. PDFs,
+  // Word docs, slides, etc. expand to tens of thousands of characters — if
+  // compaction drops them, buildSummary keeps only the first 200 chars of
+  // user prose and the model is left blind. We mark them pinned here so the
+  // rest of the pipeline treats them like a user-pinned message. This
+  // catches existing conversations from before auto-pin-on-send shipped.
+  const attachmentPinned = truncated.map((m) => {
+    if (m.role === "user" && m.attachments && m.attachments.length > 0 && !m.pinned) {
+      compacted = true;
+      return { ...m, pinned: true, _attachmentPin: true } as Message & { _attachmentPin?: boolean };
+    }
+    return m as Message & { _attachmentPin?: boolean };
+  });
+
+  // Step 2: Soft cap on pinned messages. If pins alone exceed 50% of the
+  // budget we de-pin oldest first so recent context still has room. This is a
+  // last-resort defense against "I pinned everything" — the UI should warn
+  // before we ever hit this path. Attachment-pinned messages are excluded
+  // from this cap: the user explicitly attached the file expecting the model
+  // to read it; silently summarizing it away is the bug we're trying to fix.
+  const pinnedBudget = maxTokens * 0.5;
+  const partitioned = attachmentPinned.map((m) => ({ ...m }));
+  const pinnedIdxs = partitioned
+    .map((m, i) => ({ m, i }))
+    .filter((x) => x.m.role !== "system" && x.m.pinned && !x.m._attachmentPin)
+    .sort((a, b) => a.m.createdAt - b.m.createdAt); // oldest first
+
+  let pinnedTokens = pinnedIdxs.reduce(
+    (s, x) => s + estimateMessageTokens(x.m),
+    0,
+  );
+  for (const { i } of pinnedIdxs) {
+    if (pinnedTokens <= pinnedBudget) break;
+    const m = partitioned[i];
+    pinnedTokens -= estimateMessageTokens(m);
+    partitioned[i] = { ...m, pinned: false };
+    pinnedDroppedCount++;
+    compacted = true;
+  }
+
+  // Step 3: Total tokens.
   let totalTokens = 0;
-  for (const msg of truncated) {
+  for (const msg of partitioned) {
     totalTokens += estimateMessageTokens(msg);
   }
 
-  // Step 3: If over limit, summarize from the oldest messages forward
   if (totalTokens <= maxTokens) {
     return {
-      messages: messagesToLlm(truncated),
+      messages: messagesToLlm(partitioned),
       compacted,
       summarizedCount: 0,
       truncatedCount,
       toolsInlinedCount,
+      pinnedDroppedCount,
     };
   }
 
   compacted = true;
 
-  // Keep system messages + most recent messages intact.
-  // Summarize older user/assistant pairs into a single system message.
-  const systemMsgs = truncated.filter((m) => m.role === "system");
-  const nonSystem = truncated.filter((m) => m.role !== "system");
+  // Always include system messages and pinned messages. Run the recency
+  // budget loop on the remaining unpinned non-system messages only.
+  const systemMsgs = partitioned.filter((m) => m.role === "system");
+  const nonSystem = partitioned.filter((m) => m.role !== "system");
+  const pinnedMsgs = nonSystem.filter((m) => m.pinned);
+  const unpinned = nonSystem.filter((m) => !m.pinned);
 
-  // Work backwards: keep as many recent messages as fit
+  const fixedTokens =
+    systemMsgs.reduce((s, m) => s + estimateMessageTokens(m), 0) +
+    pinnedMsgs.reduce((s, m) => s + estimateMessageTokens(m), 0);
+  const recentBudget = Math.max(0, maxTokens * 0.7 - fixedTokens);
+
   const kept: Message[] = [];
   let keptTokens = 0;
-
-  for (let i = nonSystem.length - 1; i >= 0; i--) {
-    const msgTokens = estimateMessageTokens(nonSystem[i]);
-    if (keptTokens + msgTokens <= maxTokens * 0.7) {
-      // 70% for recent messages, 30% buffer for response
-      kept.unshift(nonSystem[i]);
+  // Always keep the most recent user/assistant turn intact — dropping the
+  // very message we're about to respond to (or the assistant reply that
+  // produced the latest output) leaves the model blind. Big single messages
+  // (a 50KB PDF extraction, say) get to override the recency budget; the
+  // earlier-message summary path absorbs the slack.
+  if (unpinned.length > 0) {
+    const last = unpinned[unpinned.length - 1];
+    kept.push(last);
+    keptTokens += estimateMessageTokens(last);
+  }
+  for (let i = unpinned.length - 2; i >= 0; i--) {
+    const msgTokens = estimateMessageTokens(unpinned[i]);
+    if (keptTokens + msgTokens <= recentBudget) {
+      kept.unshift(unpinned[i]);
       keptTokens += msgTokens;
     } else {
       break;
     }
   }
 
-  // Messages that didn't fit become a summary
-  const dropped = nonSystem.slice(0, nonSystem.length - kept.length);
+  const dropped = unpinned.slice(0, unpinned.length - kept.length);
+
+  // Reassemble in original order: system → summary (if any) → pinned + kept by createdAt
+  const tail = [...pinnedMsgs, ...kept].sort(compareByCreated);
+
   if (dropped.length > 0) {
     const summary = buildSummary(dropped);
     summarizedCount = dropped.length;
-
-    const result = [...systemMsgs, ...kept];
-    // Insert summary between system and recent messages
-    result.splice(systemMsgs.length, 0, {
+    const summaryEntry: Message = {
       id: "__summary__",
       conversationId: "",
       role: "system",
       content: summary,
       createdAt: 0,
-    } as Message);
-
+    } as Message;
+    const result: Message[] = [
+      ...systemMsgs,
+      summaryEntry,
+      ...tail,
+    ];
+    const llmMessages = messagesToLlm(result);
     return {
-      messages: messagesToLlm(result),
+      messages: llmMessages,
       compacted,
       summarizedCount,
       truncatedCount,
       toolsInlinedCount,
+      pinnedDroppedCount,
+      droppedMessages: dropped,
+      summaryMessageIndex: systemMsgs.length, // index of the summary in result
     };
   }
 
   return {
-    messages: messagesToLlm([...systemMsgs, ...kept]),
+    messages: messagesToLlm([...systemMsgs, ...tail]),
     compacted,
     summarizedCount,
     truncatedCount,
     toolsInlinedCount,
+    pinnedDroppedCount,
   };
+}
+
+function compareByCreated(a: Message, b: Message): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 /**
@@ -254,4 +333,129 @@ function messagesToLlm(messages: Message[]): LlmMessage[] {
  */
 export function estimateTotalTokens(messages: Message[]): number {
   return messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0);
+}
+
+// ── LLM-based summarization ──
+
+const LLM_SUMMARY_PROMPT = `You are a context-compaction assistant. The user is mid-conversation with another agent and needs an older slice of the conversation summarized so it fits in the LLM context window.
+
+Produce a structured summary that preserves enough state for the agent to resume seamlessly. Use this exact format:
+
+## Summary
+<2-4 sentences: what the user was trying to do, current status, and any decisions made>
+
+## Files touched
+<bulleted list of file paths read, written, or edited, each with a one-line note>
+
+## Tools used
+<bulleted list of tool names with a count and one-line note about why>
+
+## Open questions / next steps
+<bulleted list, or "None" if everything was resolved>
+
+Rules:
+- Stay under 500 words.
+- Quote exact identifiers (function names, file paths, error messages).
+- Do NOT speculate beyond what's in the transcript.
+- Do NOT include any preamble like "Here's the summary" — start with the ## Summary heading.`;
+
+/**
+ * Render a list of messages into a compact transcript suitable for feeding
+ * to a summarization LLM. Tool calls are inlined.
+ */
+function renderTranscript(messages: Message[]): string {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      parts.push(`[USER]\n${msg.content}`);
+    } else if (msg.role === "assistant") {
+      const body = [msg.content];
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        for (const tc of msg.toolCalls) {
+          const out =
+            typeof tc.output === "string"
+              ? tc.output.slice(0, 600)
+              : tc.output !== undefined
+                ? JSON.stringify(tc.output).slice(0, 600)
+                : "(no output)";
+          body.push(
+            `\n[TOOL ${tc.toolName}]\nInput: ${JSON.stringify(tc.input).slice(0, 300)}\nResult: ${out}`,
+          );
+        }
+      }
+      parts.push(`[ASSISTANT]\n${body.join("\n")}`);
+    } else if (msg.role === "system") {
+      parts.push(`[SYSTEM]\n${msg.content.slice(0, 400)}`);
+    }
+  }
+  return parts.join("\n\n---\n\n");
+}
+
+/**
+ * Generate a structured LLM summary of the given messages. Falls back to
+ * the extractive `buildSummary` if the LLM call fails or returns nothing
+ * usable. The returned string can be dropped straight into the system-role
+ * summary slot inserted by `compactMessages`.
+ */
+export async function summarizeWithLlm(
+  dropped: Message[],
+  config: LlmConfig,
+  signal?: AbortSignal,
+): Promise<string> {
+  if (dropped.length === 0) return "";
+  const transcript = renderTranscript(dropped);
+  // Cap transcript size sent to the summarizer so we don't blow its own
+  // context window. 24k chars ≈ 6k tokens — small enough to fit the smallest
+  // sane summarizer model with room for instructions and reply.
+  const trimmed =
+    transcript.length > 24_000
+      ? transcript.slice(0, 12_000) +
+        `\n\n…[middle ${transcript.length - 24_000} chars elided]…\n\n` +
+        transcript.slice(transcript.length - 12_000)
+      : transcript;
+  try {
+    const { generateText } = await import("ai");
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    const { initFetch, getFetch } = await import("./fetch-adapter");
+    await initFetch();
+    const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
+    let model: any;
+    if (config.provider === "anthropic") {
+      model = createAnthropic({ apiKey: config.apiKey ?? "", fetch: customFetch }).languageModel(
+        config.modelId,
+      );
+    } else if (
+      ["opencode-go", "opencode-go-free", "groq", "deepseek", "openrouter", "ollama", "lmstudio"].includes(config.provider)
+    ) {
+      model = createOpenAICompatible({
+        name: config.provider,
+        baseURL: config.baseUrl ?? "http://localhost:1234/v1",
+        apiKey: config.apiKey ?? "not-needed",
+        fetch: customFetch,
+      }).languageModel(config.modelId);
+    } else {
+      model = createOpenAI({ apiKey: config.apiKey ?? "", fetch: customFetch }).languageModel(
+        config.modelId,
+      );
+    }
+    const result = await generateText({
+      model,
+      system: LLM_SUMMARY_PROMPT,
+      prompt: `Summarize the following conversation slice:\n\n${trimmed}`,
+      maxOutputTokens: 800,
+      temperature: 0.2,
+      abortSignal: signal,
+    });
+    const text = result.text.trim();
+    if (text.length < 40) {
+      // Implausibly short — the model probably refused or stalled. Fall back.
+      return buildSummary(dropped);
+    }
+    return `[Earlier conversation summary — LLM generated]\n\n${text}`;
+  } catch {
+    // Network / auth / quota — graceful fallback to extractive summary.
+    return buildSummary(dropped);
+  }
 }

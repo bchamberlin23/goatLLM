@@ -31,6 +31,7 @@ export async function createModel(config: LlmConfig): Promise<LanguageModel> {
 
   if (
     config.provider === "opencode-go" ||
+    config.provider === "opencode-go-free" ||
     config.provider === "groq" ||
     config.provider === "deepseek" ||
     config.provider === "openrouter" ||

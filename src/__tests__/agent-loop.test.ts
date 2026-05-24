@@ -42,10 +42,29 @@ describe("agentLoop — provider serialization", () => {
     expect(out[0].role).toBe("user");
     expect(out[0].content).toHaveLength(2);
     expect(out[0].content[0]).toEqual({ type: "text", text: "look at this" });
-    expect(out[0].content[1]).toEqual({
+    expect((out[0].content as unknown[])[1]).toEqual({
       type: "image",
       image: "data:image/png;base64,AAAA",
       mimeType: "image/png",
+    });
+  });
+
+  it("maps file parts to provider shape with mediaType", () => {
+    const messages: LlmMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "summarize this paper" },
+          { type: "file", data: "data:application/pdf;base64,AAAA", mimeType: "application/pdf" },
+        ],
+      },
+    ];
+    const out = mapMessagesForProvider(messages) as Array<{ role: string; content: unknown[] }>;
+    expect(out[0].content[0]).toEqual({ type: "text", text: "summarize this paper" });
+    expect(out[0].content[1]).toEqual({
+      type: "file",
+      data: "data:application/pdf;base64,AAAA",
+      mediaType: "application/pdf",
     });
   });
 

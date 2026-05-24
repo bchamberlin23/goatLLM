@@ -1,27 +1,152 @@
-import { useState, useRef, useCallback, useEffect, KeyboardEvent } from "react";
-import { useChatStore, Attachment, type ToolCallEntry } from "../stores/chat";
+import { useState, useRef, useCallback, useEffect, KeyboardEvent, ClipboardEvent } from "react";
+import type { ToolSet } from "ai";
+import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type ToolCallEntry } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
-import { ALL_TOOLS, isWriteTool } from "../lib/tools";
+import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
 import { classifyCommand } from "../lib/command-safety";
-import { buildAgentSystemPrompt, buildChatSystemPrompt, getGoatLLMToolInfo } from "../lib/system-prompt";
+import { buildAgentSystemPrompt, buildChatSystemPrompt } from "../lib/system-prompt";
+import { buildDesignSystemPrompt } from "../lib/design/prompt";
+import { splitContentByArtifacts } from "../lib/artifact-segments";
+import { formatSkillsForPrompt } from "../lib/skills";
+import { loadProjectContext } from "../lib/project-context";
 import { logMessage, logToolCall, logToolResult, logError } from "../lib/event-log";
-import { compactMessages } from "../lib/context-manager";
+import { compactMessages, summarizeWithLlm } from "../lib/context-manager";
+import { extractAndAppend } from "../lib/attachment-extract";
+import { fetchNewUrlsFromProse } from "../lib/url-fetch";
+import { isLikelyScannedPdf } from "../lib/attachment-cache";
+import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
+import { readSkillFile } from "../lib/skills";
+
+/**
+ * Per-conversation cache of high-quality LLM-generated summaries. We swap
+ * the extractive summary for the LLM one once it lands. Lives in module
+ * scope so it survives re-renders without polluting the persisted store.
+ */
+const llmSummaryCache = new Map<string, string>();
+const llmSummaryInflight = new Set<string>();
+
+/**
+ * Per-workspace cache of slash-command prompt templates. Loaded once when
+ * the workspace is set and refreshed on send if the cache is empty. Avoids
+ * re-reading every message.
+ */
+const promptTemplateCache = new Map<string, PromptTemplate[]>();
+async function getPromptTemplates(workspace: string | null | undefined): Promise<PromptTemplate[]> {
+  if (!workspace) return [];
+  const cached = promptTemplateCache.get(workspace);
+  if (cached) return cached;
+  const fresh = await loadPromptTemplates(workspace).catch(() => [] as PromptTemplate[]);
+  promptTemplateCache.set(workspace, fresh);
+  return fresh;
+}
+
+/**
+ * Inline a skill's SKILL.md into the user message so the model has the full
+ * instructions even when it can't use tools (chat mode) or when the skill
+ * lives outside the workspace (which is always, since skills live in
+ * `~/.goat/agent/skills/`). Pi handles this by progressive disclosure via
+ * `read`; goatLLM does it by inlining at send time.
+ *
+ * Returns the expanded text, or empty string if the skill couldn't be found.
+ */
+/**
+ * Read a skill's SKILL.md so it can be injected into the conversation
+ * system prompt. Returns null if the skill isn't discovered or its file
+ * can't be read.
+ */
+async function getSkillBody(name: string): Promise<{ name: string; filePath: string; body: string } | null> {
+  const skill = useChatStore.getState().discoveredSkills.find((s) => s.name === name);
+  if (!skill) return null;
+  try {
+    const body = await readSkillFile(skill.filePath);
+    return { name: skill.name, filePath: skill.filePath, body };
+  } catch {
+    return null;
+  }
+}
 import { ModelPicker } from "./ModelPicker";
 import { AgentPill } from "./AgentPill";
+import { DesignPills } from "./design/DesignPills";
 import {
   Plus,
   Upload,
   FileText,
-  Link2,
-  Camera,
+  FileAudio,
   Mic,
   ArrowUp,
   StopCircle,
   Square,
+  Image as ImageIcon,
+  FileCode,
+  File,
+  FileSpreadsheet,
+  FileArchive,
+  X,
+  Wand2,
+  Sparkles,
+  ListChecks,
+  Telescope,
 } from "lucide-react";
 import { useSpeechToText } from "../lib/speech";
 
-export function InputBar() {
+// ── File type icon helper ──
+
+function getFileIcon(mimeType: string, filename = "") {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  if (mimeType.startsWith("image/")) return ImageIcon;
+  if (mimeType.startsWith("audio/") || /^(mp3|m4a|wav|flac|ogg|aac|webm)$/.test(ext)) return FileAudio;
+  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.endsWith("xml") || mimeType.endsWith("yaml") || mimeType === "application/javascript") return FileCode;
+  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return FileSpreadsheet;
+  if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("gzip") || mimeType.includes("rar") || mimeType.includes("7z")) return FileArchive;
+  if (
+    mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("word") || mimeType.includes("presentation") ||
+    ext === "pdf" || ext === "docx" || ext === "doc" || ext === "pptx" || ext === "ppt" || ext === "rtf" || ext === "ipynb"
+  ) return FileText;
+  return File;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileExtColor(mimeType: string, filename = ""): string {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  if (mimeType.startsWith("image/")) return "#a78bfa"; // purple
+  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.includes("javascript")) return "#60a5fa"; // blue
+  if (mimeType.includes("pdf") || ext === "pdf") return "#f87171"; // red
+  if (mimeType.includes("word") || ext === "docx" || ext === "doc") return "#3b82f6"; // blue
+  if (mimeType.includes("presentation") || ext === "pptx" || ext === "ppt") return "#fb923c"; // orange
+  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return "#34d399"; // green
+  if (ext === "ipynb") return "#f59e0b"; // jupyter amber
+  if (ext === "rtf") return "#94a3b8";
+  if (mimeType.includes("zip") || mimeType.includes("tar")) return "#fbbf24"; // yellow
+  return "#a0a0a0"; // gray
+}
+
+/** Convert a list of File objects to Attachment[] */
+async function filesToAttachments(fileList: File[]): Promise<Attachment[]> {
+  const MAX_FILE_SIZE = 50 * 1024 * 1024;
+  const results: Attachment[] = [];
+  for (const file of fileList) {
+    if (file.size > MAX_FILE_SIZE) continue;
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+    results.push({
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      dataUrl,
+      sizeBytes: file.size,
+    });
+  }
+  return results;
+}
+
+export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const activeId = useChatStore((s) => s.activeId);
   const focusNonce = useChatStore((s) => s.focusNonce);
   const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
@@ -29,8 +154,11 @@ export function InputBar() {
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const addToolCallToMessage = useChatStore((s) => s.addToolCallToMessage);
   const completeToolCall = useChatStore((s) => s.completeToolCall);
+  const updateToolCallState = useChatStore((s) => s.updateToolCallState);
+  const finalizeStuckToolCalls = useChatStore((s) => s.finalizeStuckToolCalls);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
+  const deleteMessage = useChatStore((s) => s.deleteMessage);
   const appendToMessage = useChatStore((s) => s.appendToMessage);
   const createConversation = useChatStore((s) => s.createConversation);
   const selectedModelId = useChatStore((s) => s.selectedModelId);
@@ -44,15 +172,120 @@ export function InputBar() {
   const setContinueConversation = useChatStore((s) => s.setContinueConversation);
   const continueConversationId = useChatStore((s) => s.continueConversationId);
   const detectArtifacts = useChatStore((s) => s.detectArtifacts);
+  const streamArtifactDelta = useChatStore((s) => s.streamArtifactDelta);
+  const finalizeStreamingArtifacts = useChatStore((s) => s.finalizeStreamingArtifacts);
   const resendPayload = useChatStore((s) => s.resendPayload);
   const clearResend = useChatStore((s) => s.clearResend);
+  // Reactive subscriptions for the skills picker so it updates when the
+  // skill list refreshes mid-session (e.g. after the seed completes or the
+  // user adds a custom skill path in Settings).
+  const discoveredSkills = useChatStore((s) => s.discoveredSkills);
+  const disabledSkills = useChatStore((s) => s.disabledSkills);
+  const setConversationSkill = useChatStore((s) => s.setConversationSkill);
+  // Pi/Claude skills assume tool access; gate them to agent mode. Skills
+  // marked `chat` or `both` show up in either mode.
+  const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
+  const skillsForCurrentMode = discoveredSkills.filter((s) => {
+    if (s.mode === "both") return true;
+    return agentMode ? s.mode === "agent" : s.mode === "chat";
+  });
+  // Per-conversation active skill: lives on the conversation row so it
+  // survives reloads and switches with the chat.
+  const activeSkill = useChatStore((s) =>
+    s.activeId ? (s.conversations.find((c) => c.id === s.activeId)?.activeSkillName ?? null) : null
+  );
 
-  const [value, setValue] = useState("");
+  // Plan mode — agent-only. When on, the agent runs read-only tools to
+  // produce a build plan. The MessageBubble surfaces a Build button when
+  // the plan finishes streaming so the user can flip into write mode.
+  const planMode = useChatStore((s) => s.planMode);
+  const setPlanMode = useChatStore((s) => s.setPlanMode);
+  // Research mode lives in the + menu now (used to be a top-bar toggle).
+  // It's one-shot — the toggle resets after the first send (see handleSend).
+  const researchMode = useChatStore((s) => s.researchMode);
+  const toggleResearchMode = useChatStore((s) => s.toggleResearchMode);
+  const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
+  const freeWebSearch = useChatStore((s) => s.freeWebSearch);
+
   const [error, setError] = useState<string | null>(null);
-  const [files, setFiles] = useState<Attachment[]>([]);
+  // Per-conversation draft (text + staged attachments). Keyed by activeId, or
+  // a sentinel for the "no active conversation" state so visiting an old
+  // chat and bouncing back to New chat doesn't blow away what the user was
+  // already composing.
+  const draftKey = activeId ?? NEW_CHAT_DRAFT_KEY;
+  const draft = useChatStore((s) => s.drafts[draftKey]);
+  const value = draft?.content ?? "";
+  const files = draft?.attachments ?? [];
+  const setDraftContent = useChatStore((s) => s.setDraftContent);
+  const setDraftAttachments = useChatStore((s) => s.setDraftAttachments);
+  const appendDraftAttachments = useChatStore((s) => s.appendDraftAttachments);
+  const clearDraft = useChatStore((s) => s.clearDraft);
+  const setValue = useCallback(
+    (next: string | ((cur: string) => string)) => {
+      const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
+      const cur = useChatStore.getState().drafts[k]?.content ?? "";
+      const resolved = typeof next === "function" ? next(cur) : next;
+      setDraftContent(k, resolved);
+    },
+    [setDraftContent],
+  );
+  const setFiles = useCallback(
+    (next: Attachment[] | ((cur: Attachment[]) => Attachment[])) => {
+      const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
+      const cur = useChatStore.getState().drafts[k]?.attachments ?? [];
+      const resolved = typeof next === "function" ? next(cur) : next;
+      setDraftAttachments(k, resolved);
+    },
+    [setDraftAttachments],
+  );
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Forward ref for handleSend so effects can call into it without
+  // breaking the dependency array. Assigned just below the callback def.
+  const handleSendRef = useRef<((overrides?: { content?: string; attachments?: Attachment[] }) => void) | null>(null);
+
+  // Auto-dismiss the error notice. Cancellations briefly flash then disappear;
+  // real errors stick around longer in case the user wants to read them.
+  useEffect(() => {
+    if (!error) return;
+    const isCancellation = /cancel|abort|stopped|interrupt/i.test(error);
+    const ms = isCancellation ? 1500 : 6000;
+    const t = setTimeout(() => setError(null), ms);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  // Consume files dropped anywhere on the window (via ChatView)
+  const pendingDroppedFiles = useChatStore((s) => s.pendingDroppedFiles);
+  const clearPendingDroppedFiles = useChatStore((s) => s.clearPendingDroppedFiles);
+
+  // Consume design-mode question-form submissions. The form lives inside
+  // the assistant message bubble; submitting it sets a pending payload
+  // that we read and dispatch as a regular send.
+  const pendingFormSubmission = useChatStore((s) => s.pendingFormSubmission);
+  const setPendingFormSubmission = useChatStore((s) => s.setPendingFormSubmission);
+
+  useEffect(() => {
+    if (!pendingFormSubmission) return;
+    if (pendingFormSubmission.conversationId !== activeId) return;
+    const text = pendingFormSubmission.text;
+    setPendingFormSubmission(null);
+    // Defer one tick so the state-clearing reaches the form before send.
+    setTimeout(() => {
+      handleSendRef.current?.({ content: text });
+    }, 0);
+  }, [pendingFormSubmission, activeId, setPendingFormSubmission]);
+
+  useEffect(() => {
+    if (pendingDroppedFiles.length > 0) {
+      const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
+      appendDraftAttachments(k, pendingDroppedFiles);
+      clearPendingDroppedFiles();
+      textareaRef.current?.focus();
+    }
+  }, [pendingDroppedFiles, clearPendingDroppedFiles, appendDraftAttachments]);
 
   const speech = useSpeechToText({
     onTranscription: (text) => {
@@ -92,24 +325,9 @@ export function InputBar() {
   const handleFilesChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
-    const MAX_FILE_SIZE = 50 * 1024 * 1024;
-    const newAttachments: Attachment[] = [];
-    for (const file of Array.from(selectedFiles)) {
-      if (file.size > MAX_FILE_SIZE) {
-        setError(`File "${file.name}" exceeds 50MB limit.`);
-        continue;
-      }
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
-      newAttachments.push({
-        filename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        dataUrl,
-        sizeBytes: file.size,
-      });
+    const newAttachments = await filesToAttachments(Array.from(selectedFiles));
+    if (newAttachments.length < (selectedFiles?.length ?? 0)) {
+      setError("One or more files exceeded the 50MB limit.");
     }
     setFiles((prev) => [...prev, ...newAttachments]);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -119,11 +337,37 @@ export function InputBar() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // ── Paste support ──
+
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const pastedFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) pastedFiles.push(file);
+      }
+    }
+
+    if (pastedFiles.length === 0) return;
+
+    // Prevent the default paste behavior for files (don't insert text)
+    e.preventDefault();
+
+    const newAttachments = await filesToAttachments(pastedFiles);
+    if (newAttachments.length < pastedFiles.length) {
+      setError("One or more pasted files exceeded the 50MB limit.");
+    }
+    setFiles((prev) => [...prev, ...newAttachments]);
+  }, []);
+
   const handleSend = useCallback(async (overrides?: { content?: string; attachments?: Attachment[] }) => {
-    const trimmed = (overrides?.content ?? value).trim();
+    const rawTrimmed = (overrides?.content ?? value).trim();
     const currentFiles = overrides?.attachments ?? files;
     const isResend = !!overrides;
-    if ((!trimmed && currentFiles.length === 0) || isStreaming) return;
+    if ((!rawTrimmed && currentFiles.length === 0) || isStreaming) return;
 
     const llmConfig = getActiveLlmConfig();
     if (!llmConfig) {
@@ -140,51 +384,253 @@ export function InputBar() {
 
     setError(null);
     let convId = activeId;
+    const startingDraftKey = convId ?? NEW_CHAT_DRAFT_KEY;
     if (!convId) convId = createConversation();
 
+    // Slash command: /skill:name [optional message].
+    // Switches the conversation's active skill (persists across sends) and
+    // strips the command prefix from the message. If only `/skill:name` is
+    // sent with no body, the next turn carries the skill instructions in
+    // the system prompt and a tiny note as the user message.
+    const ws = useChatStore.getState().workspacePath;
+    let trimmed = rawTrimmed;
+    const skillCmd = trimmed.match(/^\/skill:([a-z0-9][a-z0-9-]*)(?:\s+([\s\S]*))?$/);
+    if (skillCmd) {
+      const reqName = skillCmd[1];
+      const matched = useChatStore.getState().discoveredSkills.find((s) => s.name === reqName);
+      if (matched) {
+        const fits =
+          matched.mode === "both" ||
+          (useChatStore.getState().agentMode ? matched.mode === "agent" : matched.mode === "chat");
+        if (!fits) {
+          setError(
+            `Skill "${reqName}" is ${matched.mode}-mode only. ${
+              matched.mode === "agent" ? "Switch on Agent mode to use it." : "Switch off Agent mode to use it."
+            }`,
+          );
+          return;
+        }
+        setConversationSkill(convId!, reqName);
+        trimmed = (skillCmd[2] ?? "").trim();
+        if (!trimmed) trimmed = `Apply the "${reqName}" skill from now on.`;
+      }
+    }
+
+    // Prompt-template expansion (e.g. /review, /ship). Skipped when the
+    // line is a /skill: command — those are handled above.
+    if (trimmed.startsWith("/") && !trimmed.startsWith("/skill:") && ws) {
+      const tpls = await getPromptTemplates(ws);
+      if (tpls.length > 0) {
+        const expanded = expandPromptTemplate(trimmed, tpls);
+        if (expanded !== trimmed) trimmed = expanded;
+      }
+    }
+
     if (!isResend) {
-      setValue("");
-      setFiles([]);
+      clearDraft(startingDraftKey);
+      // If a brand-new conversation was just created from the "new chat"
+      // draft, also clear the conversation-keyed slot in case anything
+      // raced into it.
+      if (startingDraftKey !== convId) clearDraft(convId!);
       setContinueConversation(null);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     }
 
     let displayContent = trimmed;
-    const textFiles = currentFiles.filter((f) => f.mimeType.startsWith("text/") || f.mimeType === "application/json" || f.mimeType.endsWith("xml") || f.mimeType.endsWith("yaml") || f.mimeType === "application/javascript");
-    const imageFiles = currentFiles.filter((f) => f.mimeType.startsWith("image/"));
-    const otherFiles = currentFiles.filter((f) => !textFiles.includes(f) && !imageFiles.includes(f));
-
-    for (const tf of textFiles) {
+    // OCR fallback: when the active model isn't vision-capable, the AI SDK
+    // strips image parts on send (or providers reject them). Offer the user
+    // a way to read whiteboard photos / homework photos anyway by OCR-ing
+    // images server-side and inlining the text alongside the original
+    // attachment chips. Best-effort — if Tesseract isn't installed we keep
+    // the existing behavior and surface the install hint inline.
+    const activeModelObj = getModels().find((m) => m.id === selectedModelId);
+    const modelIsVision = !!activeModelObj?.vision;
+    const imageAttachments = currentFiles.filter((f) => f.mimeType.startsWith("image/"));
+    if (!modelIsVision && imageAttachments.length > 0) {
       try {
-        const resp = await fetch(tf.dataUrl);
-        const text = await resp.text();
-        displayContent += (displayContent ? "\n\n" : "") + `[File: ${tf.filename}]\n${text}`;
-      } catch { /* skip */ }
+        const { invoke } = await import("@tauri-apps/api/core");
+        const tesseractAvailable = await invoke<boolean>("ocr_available").catch(() => false);
+        if (tesseractAvailable) {
+          const { putAttachmentText } = await import("../lib/attachment-cache");
+          for (const img of imageAttachments) {
+            try {
+              const ocrText = await invoke<string>("ocr_image", { dataUrl: img.dataUrl });
+              if (ocrText.trim()) {
+                displayContent += (displayContent ? "\n\n" : "") +
+                  `[Image OCR: ${img.filename}]\n${ocrText.trim()}`;
+                if (convId) {
+                  putAttachmentText(convId, img.filename, "Image OCR", ocrText.trim());
+                }
+              }
+            } catch (e) {
+              const reason = e instanceof Error ? e.message : String(e);
+              displayContent += (displayContent ? "\n\n" : "") +
+                `[Image: ${img.filename}] (OCR failed: ${reason}; switch to a vision model to read this image directly.)`;
+            }
+          }
+        } else {
+          // No tesseract; surface a single hint rather than a per-image one
+          // so the chat doesn't spam the user.
+          displayContent += (displayContent ? "\n\n" : "") +
+            `[Heads up] You attached ${imageAttachments.length} image${imageAttachments.length === 1 ? "" : "s"} but "${activeModelObj?.name ?? selectedModelId}" is text-only. Switch to a vision model (e.g. Claude, GPT-4o, Gemini) to read images directly, or install Tesseract (\`brew install tesseract\`) to enable OCR.`;
+        }
+      } catch {
+        // Tauri bridge unavailable (browser-mode dev?) — ignore silently;
+        // the AI SDK will drop the image and the model will respond as best
+        // it can.
+      }
     }
-    for (const of of otherFiles) {
-      displayContent += (displayContent ? "\n" : "") + `[Attached: ${of.filename} (${(of.sizeBytes / 1024).toFixed(1)} KB)]`;
+    displayContent = await extractAndAppend(displayContent, currentFiles, convId);
+
+    // Auto-fetch URLs and YouTube links the user typed in their message.
+    // Each unique URL gets its readable text inlined as `[Web: ...]` or
+    // `[YouTube: ...]` and cached so subsequent turns can navigate it via
+    // read_attachment. Fetched once per conversation per URL.
+    if (convId) {
+      try {
+        const fetched = await fetchNewUrlsFromProse(trimmed, convId);
+        if (fetched.length > 0) {
+          const { putAttachmentText } = await import("../lib/attachment-cache");
+          for (const f of fetched) {
+            const cacheKey = f.label === "YouTube" ? `${f.title} (${f.url})` : f.url;
+            putAttachmentText(convId, cacheKey, f.label, f.body);
+            displayContent += (displayContent ? "\n\n" : "") +
+              `[${f.label}: ${f.title}]\n${f.url}\n\n${f.body}`;
+          }
+        }
+      } catch {
+        // URL auto-fetch is a nice-to-have; never block sending if it fails.
+      }
     }
 
     if (!isResend) {
-      addMessage({ conversationId: convId, role: "user", content: displayContent, attachments: currentFiles.length > 0 ? currentFiles : undefined });
+      // Auto-pin messages that carry non-trivial attachments. Without this,
+      // a 30KB PDF extraction can fall out of the recency budget on the next
+      // turn and the model loses the body — the summary only keeps the first
+      // 200 chars of the user prose. Pinning survives compaction.
+      const hasHeavyAttachment =
+        currentFiles.length > 0 &&
+        currentFiles.some((f) => f.sizeBytes > 4 * 1024 || /\.(pdf|docx|pptx|xlsx|ipynb|rtf)$/i.test(f.filename));
+      addMessage({
+        conversationId: convId,
+        role: "user",
+        content: displayContent,
+        attachments: currentFiles.length > 0 ? currentFiles : undefined,
+        pinned: hasHeavyAttachment || undefined,
+      });
       logMessage(convId!, "user", displayContent, "");
       // Mark the conversation as "title pending" the moment the user sends so
       // the sidebar can show a shimmer instead of the placeholder "New chat".
       const convForTitle = useChatStore.getState().conversations.find((c) => c.id === convId);
       if (convForTitle && convForTitle.title === "New Conversation") {
         setTitleGenerating(convId!, true);
+        // Kick off title generation in parallel with the LLM stream so the
+        // sidebar shows a real title within a second or two instead of waiting
+        // for the full assistant reply to finish.
+        const titleConfig = getActiveLlmConfig();
+        const userExcerpt = displayContent.slice(0, 600);
+        const applyEarlyTitle = (title: string) => {
+          // The user (or a later auto-title pass) may have already renamed
+          // this conversation while we were waiting on the title model — only
+          // overwrite if it's still the placeholder.
+          const latest = useChatStore.getState().conversations.find((c) => c.id === convId);
+          if (!latest || latest.title !== "New Conversation") {
+            setTitleGenerating(convId!, false);
+            return;
+          }
+          const safe = title.trim();
+          if (safe) renameConversation(convId!, safe);
+          else setTitleGenerating(convId!, false);
+        };
+        if (titleConfig) {
+          generateTitle(userExcerpt, titleConfig)
+            .then((title) => applyEarlyTitle(title || heuristicTitle(displayContent)))
+            .catch(() => applyEarlyTitle(heuristicTitle(displayContent)));
+        } else {
+          applyEarlyTitle(heuristicTitle(displayContent));
+        }
       }
     }
 
     const history = getActiveMessages();
     const currentWorkspace = useChatStore.getState().workspacePath;
     const isAgentMode = useChatStore.getState().agentMode;
-    const activeTools = isAgentMode && currentWorkspace ? ALL_TOOLS : undefined;
+    const isDesignMode = useChatStore.getState().designMode;
+    const isPlanMode = isAgentMode && useChatStore.getState().planMode;
+    // Research mode is one-shot: we snapshot the toggle at send time and
+    // immediately flip it off so the indicator resets in the UI. Anything
+    // downstream in this turn (tool selection, system prompt, max rounds)
+    // uses the captured value so the request the user just sent still
+    // gets the research treatment.
+    const isResearchMode = useChatStore.getState().researchMode;
+    if (isResearchMode) {
+      useChatStore.getState().setResearchMode(false);
+    }
+    const hasTavilyKey = !!useChatStore.getState().tavilyApiKey;
+    const hasFreeWebSearch = useChatStore.getState().freeWebSearch;
+    const hasWebSearch = hasTavilyKey || hasFreeWebSearch;
+    // Cached attachments unlock the read_attachment / search_attachment tools
+    // even in plain chat with no web backend, so the model can navigate a
+    // 600-page book the user uploaded.
+    const { hasAttachments } = await import("../lib/attachment-cache");
+    const hasAttachmentCache = !!convId && hasAttachments(convId);
+    const { ATTACHMENT_TOOLS, CODE_EXEC_TOOLS } = await import("../lib/tools");
+    const chatCodeExec = useChatStore.getState().chatCodeExec;
+    // Agent mode → full workspace tool set, OR read-only plan subset when
+    // plan mode is on. Chat + research → web tools (+ attachment tools).
+    // Plain chat with web backend → web_search + attachment tools.
+    // Plain chat without web → attachment tools only when there's something
+    // cached to navigate. Code-exec tools are mixed in for chat mode when the
+    // user has opted in via Settings (off by default).
+    let activeTools: ToolSet | undefined =
+      isAgentMode && currentWorkspace
+        ? (isPlanMode ? PLAN_TOOLS : ALL_TOOLS)
+        : isResearchMode
+          ? RESEARCH_TOOLS
+          : hasWebSearch
+            ? CHAT_TOOLS
+            : hasAttachmentCache
+              ? ATTACHMENT_TOOLS
+              : undefined;
+    if (!isAgentMode && chatCodeExec) {
+      activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
+    }
 
     // Apply context compaction for long conversations
-    const maxTokens = isAgentMode ? 8000 : 12000;
-    const { messages: compactedMessages, compacted, summarizedCount, truncatedCount, toolsInlinedCount } =
-      compactMessages(history, maxTokens, { stripTools: !activeTools });
+    // Budget: agent mode runs lots of tool turns so we keep it tighter.
+    // Chat mode often gets full PDFs / lecture decks pasted in via attachment
+    // extraction — give it room so a single paper doesn't trigger compaction
+    // and lose the body. Sized for the lowest model the user targets (200K
+    // context): 180K tokens leaves headroom for system prompt + reply.
+    const maxTokens = isAgentMode ? 8000 : 180_000;
+    const compaction = compactMessages(history, maxTokens, { stripTools: !activeTools });
+    const { compacted, summarizedCount, truncatedCount, toolsInlinedCount, droppedMessages } = compaction;
+
+    // Swap the extractive summary placeholder for a cached LLM summary if
+    // we have one for this conversation.
+    let compactedMessages = compaction.messages;
+    const cached = llmSummaryCache.get(convId!);
+    if (cached && compaction.summaryMessageIndex !== undefined && compaction.summaryMessageIndex >= 0) {
+      compactedMessages = compactedMessages.map((m, i) =>
+        i === compaction.summaryMessageIndex ? { ...m, content: cached } : m,
+      );
+    }
+
+    // Kick off an LLM summary in the background so the next turn picks it up.
+    if (
+      droppedMessages &&
+      droppedMessages.length >= 4 &&
+      !llmSummaryInflight.has(convId!) &&
+      llmConfig
+    ) {
+      llmSummaryInflight.add(convId!);
+      summarizeWithLlm(droppedMessages, llmConfig)
+        .then((summary) => {
+          if (summary && summary.length > 40) llmSummaryCache.set(convId!, summary);
+        })
+        .catch(() => { /* graceful fallback already applied inside summarizeWithLlm */ })
+        .finally(() => llmSummaryInflight.delete(convId!));
+    }
 
     if (compacted && (summarizedCount > 0 || truncatedCount > 0)) {
       if (summarizedCount > 0) {
@@ -200,12 +646,24 @@ export function InputBar() {
 
     const llmMessages = compactedMessages.map((m) => {
       if (m.role === "user" && typeof m.content === "string") {
-        // Re-attach images from the original message if present
+        // Re-attach native binary parts from the original message if present.
+        // - Images go through every vision-capable provider.
+        // - Scanned/empty-text PDFs go as native file parts to Anthropic
+        //   (server-side OCR + layout); on other providers they fall back
+        //   to the inlined `(no extractable text)` note plus a hint.
         const origMsg = history.find((h) => h.role === "user" && h.content === m.content);
         const imgs = origMsg?.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-        if (imgs.length > 0) {
+        const scannedPdfs =
+          llmConfig.provider === "anthropic"
+            ? (origMsg?.attachments?.filter((a) =>
+                (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
+                isLikelyScannedPdf(convId!, a.filename),
+              ) ?? [])
+            : [];
+        if (imgs.length > 0 || scannedPdfs.length > 0) {
           const parts: LlmContentPart[] = [];
           for (const img of imgs) parts.push({ type: "image", image: img.dataUrl, mimeType: img.mimeType });
+          for (const pdf of scannedPdfs) parts.push({ type: "file", data: pdf.dataUrl, mimeType: "application/pdf" });
           if (m.content.trim()) parts.unshift({ type: "text", text: m.content as string });
           return { role: "user" as const, content: parts };
         }
@@ -222,18 +680,101 @@ export function InputBar() {
     const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
     const userPrompt = conv?.systemPrompt || "";
 
-    const systemPrompt = isAgentMode
+    // Auto-load project-context files (GOAT.md / CLAUDE.md / AGENTS.md) so
+    // the agent picks up project conventions on every turn. Cheap because
+    // these are small and the read tool itself caches at the FS layer.
+    const projectContextFiles = isAgentMode && currentWorkspace
+      ? await loadProjectContext(currentWorkspace).catch(() => [])
+      : [];
+
+    // If a skill is bound to this conversation, fetch its SKILL.md so it
+    // can be injected into the system prompt for this turn (and every turn
+    // until the user toggles it off). This is the goatLLM equivalent of
+    // pi's progressive-disclosure /skill mechanism.
+    //
+    // Skip injection when the bound skill's mode doesn't match the current
+    // mode — e.g. an agent-only skill (filesystem editing) bound while in
+    // chat mode silently drops out instead of giving the model bad advice.
+    const activeSkillForConv = useChatStore.getState().conversations.find((c) => c.id === convId)?.activeSkillName ?? null;
+    const activeSkillObj = activeSkillForConv
+      ? useChatStore.getState().discoveredSkills.find((s) => s.name === activeSkillForConv) ?? null
+      : null;
+    const skillModeMatches = activeSkillObj
+      ? activeSkillObj.mode === "both" ||
+        (isAgentMode ? activeSkillObj.mode === "agent" : activeSkillObj.mode === "chat")
+      : false;
+    const activeSkillData =
+      activeSkillForConv && skillModeMatches ? await getSkillBody(activeSkillForConv) : null;
+    const activeSkillBlock = activeSkillData
+      ? `\n<active_skill name="${activeSkillData.name}" location="${activeSkillData.filePath}">\nThis skill is active for the rest of this conversation. Apply its instructions to every reply.\n\n${activeSkillData.body}\n</active_skill>\n`
+      : "";
+
+    const systemPrompt = isDesignMode
       ? (() => {
-          const dynamicPrompt = buildAgentSystemPrompt({ tools: getGoatLLMToolInfo(), workspacePath: currentWorkspace });
-          return userPrompt ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>` : dynamicPrompt;
+          const s = useChatStore.getState();
+          // First turn = the assistant message we just appended is the
+          // first assistant turn for this conversation. Anything after the
+          // discovery form coming back counts as a follow-up.
+          const turns = (s.messages[convId!] ?? []).filter((m) => m.role === "user").length;
+          return buildDesignSystemPrompt({
+            skillId: s.activeSkillId,
+            systemId: s.activeDesignSystemId,
+            directionId: s.activeDirectionId,
+            isFirstTurn: turns <= 1,
+            userPrompt,
+          });
         })()
-      : buildChatSystemPrompt(userPrompt);
+      : isAgentMode
+      ? (() => {
+          // Only include enabled skills that apply to agent mode
+          const allSkills = useChatStore.getState().discoveredSkills;
+          const disabled = useChatStore.getState().disabledSkills;
+          const enabledSkills = allSkills.filter(
+            (s) => !disabled.has(s.name) && (s.mode === "agent" || s.mode === "both"),
+          );
+          const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
+
+          const dynamicPrompt = buildAgentSystemPrompt({
+            tools: activeTools ?? {},
+            workspacePath: currentWorkspace,
+            researchMode: isResearchMode,
+            planMode: useChatStore.getState().planMode,
+            projectContextFiles,
+          });
+          const prefix = userPrompt ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>` : dynamicPrompt;
+          let out = prefix;
+          if (skillsBlock) out += `\n${skillsBlock}`;
+          if (activeSkillBlock) out += activeSkillBlock;
+          return out;
+        })()
+      : (() => {
+          // Chat mode: only chat-compatible skills, drop agent-only ones.
+          const allSkills = useChatStore.getState().discoveredSkills;
+          const disabled = useChatStore.getState().disabledSkills;
+          const enabledSkills = allSkills.filter(
+            (s) => !disabled.has(s.name) && (s.mode === "chat" || s.mode === "both"),
+          );
+          const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
+          const autoArtifacts = useChatStore.getState().autoArtifacts;
+          const officeArtifacts = useChatStore.getState().officeArtifacts;
+          const base = buildChatSystemPrompt(userPrompt, isResearchMode, hasWebSearch && !isResearchMode, {
+            autoArtifacts,
+            officeArtifacts,
+          });
+          let out = base;
+          if (skillsBlock) out += `\n${skillsBlock}`;
+          if (activeSkillBlock) out += activeSkillBlock;
+          return out;
+        })();
 
     const handleToolCall = (tc: ToolCallInfo) => {
       const writeTool = isWriteTool(tc.toolName);
+      // Capture how much text content exists at this point for chronological interleaving
+      const currentContent = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)?.content || "";
       const entry: ToolCallEntry = {
         toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input,
         state: writeTool ? "pending_approval" : "running",
+        contentAtInvocation: currentContent.length,
       };
       if (tc.toolName === "exec_command" || tc.toolName === "bash") {
         const input = tc.input as { command?: string } | undefined;
@@ -255,58 +796,126 @@ export function InputBar() {
     };
 
     await streamChat(llmMessages, systemPrompt, llmConfig, {
-      onToken: (chunk) => appendToMessage(convId!, assistantMsg.id, chunk),
+      onToken: (chunk) => {
+        appendToMessage(convId!, assistantMsg.id, chunk);
+        // Pipe any partial artifact bodies straight into the canvas so the
+        // user sees the code being typed in Monaco. We run the parser on
+        // the full message content so the streaming version always reflects
+        // the latest fence state (heading + body).
+        const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+        const content = live?.content || "";
+        if (content.length === 0) return;
+        const segments = splitContentByArtifacts(content);
+        let fenceIndex = 0;
+        for (const seg of segments) {
+          if (seg.type !== "artifact") continue;
+          // Only stream while the body has at least one line — keeps the
+          // canvas tab from popping open at the moment the fence opens but
+          // before any code has been emitted, which would flash an empty
+          // editor.
+          if (seg.code.length > 0) {
+            streamArtifactDelta(
+              convId!,
+              assistantMsg.id,
+              seg.kind,
+              seg.title,
+              fenceIndex,
+              seg.code,
+            );
+          }
+          fenceIndex++;
+        }
+      },
       onToolCall: handleToolCall,
       onToolResult: handleToolResult,
       onDone: (fullText) => {
-        const currentContent = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)?.content || "";
-        updateMessage(convId!, assistantMsg.id, { content: fullText || currentContent, isStreaming: false });
+        // Any tool call still flagged "running" never got its result chunk
+        // (stream ended early, abort, partial response, etc.) — flip it to
+        // done so the UI stops shimmering "Reading…" forever.
+        finalizeStuckToolCalls(convId!, assistantMsg.id);
+        const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+        const currentContent = currentMsg?.content || "";
+        const finalContent = fullText || currentContent;
+        const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
+
+        // Stopped before the model produced anything — drop the empty bubble
+        // entirely so the chat looks like the turn never started.
+        if (!finalContent.trim() && !hasToolActivity) {
+          deleteMessage(convId!, assistantMsg.id);
+          stopStreaming(convId!);
+          return;
+        }
+
+        updateMessage(convId!, assistantMsg.id, { content: finalContent, isStreaming: false });
         stopStreaming(convId!);
         // If stream was interrupted with partial content, show Continue button
         if (!fullText && currentContent.trim()) {
           setContinueConversation(convId!);
         }
         // Auto-detect artifacts in completed messages
-        const finalContent = fullText || currentContent;
         if (finalContent.trim()) {
           detectArtifacts(convId!, assistantMsg.id, finalContent);
         }
-        // Always read the latest conversation from the store — the closure-
-        // captured `conversations` array can be stale by the time onDone fires.
+        // Any remaining streaming flags from this message clear here so
+        // the canvas auto-flips from code to preview view.
+        finalizeStreamingArtifacts(convId!, assistantMsg.id);
+        // Title generation is kicked off when the user sends (see above), so
+        // by the time we get here the conversation has usually been renamed
+        // already. We just clear the shimmer flag if it somehow lingered.
         const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
-        if (latestConv && latestConv.title === "New Conversation") {
-          const config = getActiveLlmConfig();
-          const reply = (fullText || currentContent || "").trim();
-          const userExcerpt = displayContent.slice(0, 600);
-
-          const applyTitle = (title: string) => {
-            const safe = title.trim();
-            if (safe) renameConversation(convId!, safe);
-            else setTitleGenerating(convId!, false);
-          };
-
-          if (config) {
-            generateTitle(userExcerpt, config, reply)
-              .then((title) => applyTitle(title || heuristicTitle(displayContent)))
-              .catch(() => applyTitle(heuristicTitle(displayContent)));
-          } else {
-            // No model configured — still don't leave it as "New Conversation".
-            applyTitle(heuristicTitle(displayContent));
-          }
+        if (latestConv && latestConv.isGeneratingTitle && latestConv.title !== "New Conversation") {
+          setTitleGenerating(convId!, false);
         }
       },
       onError: (err) => {
-        updateMessage(convId!, assistantMsg.id, { content: `Error: ${err.message}`, isStreaming: false });
+        // If the user aborted, don't surface an error — onDone has already
+        // handled cleanup (or we'll do it here as a safety net).
+        if (ac.signal.aborted) {
+          finalizeStuckToolCalls(convId!, assistantMsg.id);
+          finalizeStreamingArtifacts(convId!, assistantMsg.id);
+          const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+          const currentContent = currentMsg?.content || "";
+          const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
+          if (!currentContent.trim() && !hasToolActivity) {
+            deleteMessage(convId!, assistantMsg.id);
+          } else {
+            updateMessage(convId!, assistantMsg.id, { content: currentContent, isStreaming: false });
+          }
+          stopStreaming(convId!);
+          return;
+        }
+        finalizeStuckToolCalls(convId!, assistantMsg.id);
+        finalizeStreamingArtifacts(convId!, assistantMsg.id);
+        // Context-overflow gets dedicated UX: instead of a raw error string,
+        // we surface a friendly banner with quick-action buttons. The model
+        // dropdown still shows everything, but we steer the user toward
+        // longer-context options and one-click history trimming.
+        const isOverflow =
+          (err as Error & { code?: string }).code === "context_overflow";
+        if (isOverflow) {
+          updateMessage(convId!, assistantMsg.id, {
+            content: `⚠ Context overflow\n\nThis turn exceeded "${selectedModel?.name ?? selectedModelId}"'s context window. Try switching to a longer-context model from the picker, or trim earlier messages by deleting older turns.\n\n${err.message.split("\n")[0]}`,
+            isStreaming: false,
+          });
+        } else {
+          updateMessage(convId!, assistantMsg.id, { content: `Error: ${err.message}`, isStreaming: false });
+        }
         stopStreaming(convId!);
         logError(convId!, err.message, "streaming");
-        setError(err.message);
+        setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
       },
-    }, { abortSignal: ac.signal, tools: activeTools });
+    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : undefined });
   }, [value, files, isStreaming, activeId, selectedModelId,
     addMessage, startStreaming, stopStreaming, appendToMessage, updateMessage,
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,
     renameConversation, setTitleGenerating, conversations,
-    addToolCallToMessage, completeToolCall]);
+    addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
+    detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts]);
+
+  // Keep the ref pointed at the latest handleSend so the question-form
+  // effect (which fires from outside this component) doesn't see a stale
+  // closure.
+  handleSendRef.current = handleSend;
 
   useEffect(() => {
     if (!resendPayload) return;
@@ -340,12 +949,15 @@ export function InputBar() {
 
   return (
     <div className="w-full max-w-[720px]">
-      <div className="relative w-full rounded-[24px] bg-[#2d2d2d] border border-white/5 p-5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] transition-all duration-200 focus-within:border-white/15 focus-within:shadow-[0_18px_50px_-14px_rgba(0,0,0,0.7),0_0_0_4px_rgba(245,158,66,0.06)] focus-within:-translate-y-px">
+      <div
+        className="relative w-full rounded-[24px] bg-[#2d2d2d] border border-white/5 p-5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] transition-all duration-200 focus-within:border-white/15 focus-within:shadow-[0_18px_50px_-14px_rgba(0,0,0,0.7),0_0_0_4px_rgba(245,158,66,0.06)] focus-within:-translate-y-px"
+      >
         {error && (
-          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[13px] text-[#f87171]">
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="p-1 rounded hover:bg-red-500/10" aria-label="Dismiss error">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[12.5px] text-[#a0a0a0] animate-[fadeIn_180ms_ease]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#a0a0a0]/60 shrink-0" aria-hidden="true" />
+            <span className="flex-1 leading-relaxed">{error}</span>
+            <button onClick={() => setError(null)} className="p-1 rounded text-[#888] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors" aria-label="Dismiss">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <line x1="1" y1="1" x2="11" y2="11" /><line x1="11" y1="1" x2="1" y2="11" />
               </svg>
             </button>
@@ -353,17 +965,71 @@ export function InputBar() {
         )}
 
         {files.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {files.map((f, i) => (
-              <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 border border-white/5 rounded-md text-[12px] text-[#b4b4b4] max-w-[240px]">
-                <span className="truncate">{f.filename}</span>
-                <button onClick={() => handleRemoveFile(i)} className="p-0.5 rounded hover:text-[#f87171] text-[#a0a0a0]" aria-label={`Remove ${f.filename}`}>
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                    <line x1="1" y1="1" x2="11" y2="11" /><line x1="11" y1="1" x2="1" y2="11" />
-                  </svg>
-                </button>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {files.map((f, i) => {
+              const isImage = f.mimeType.startsWith("image/");
+              const Icon = getFileIcon(f.mimeType, f.filename);
+              const color = getFileExtColor(f.mimeType, f.filename);
+
+              return (
+                <div
+                  key={i}
+                  className="group/file relative flex items-center gap-2.5 px-3 py-2 bg-white/[0.04] border border-white/[0.06] rounded-xl hover:bg-white/[0.07] hover:border-white/[0.1] transition-all max-w-[220px]"
+                >
+                  {/* Thumbnail or icon */}
+                  {isImage ? (
+                    <img
+                      src={f.dataUrl}
+                      alt={f.filename}
+                      className="w-9 h-9 rounded-lg object-cover shrink-0 border border-white/10"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${color}12`, border: `1px solid ${color}25` }}
+                    >
+                      <Icon size={16} strokeWidth={1.75} style={{ color }} />
+                    </div>
+                  )}
+
+                  {/* File info */}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[12px] font-medium text-[#d5d5d5] truncate leading-tight">
+                      {f.filename}
+                    </span>
+                    <span className="text-[10.5px] text-[#888] leading-tight mt-0.5">
+                      {formatFileSize(f.sizeBytes)}
+                    </span>
+                  </div>
+
+                  {/* Remove button */}
+                  <button
+                    onClick={() => handleRemoveFile(i)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#3a3a3c] border border-white/10 flex items-center justify-center text-[#a0a0a0] hover:text-[#f87171] hover:bg-[#4a2020] hover:border-red-500/30 opacity-0 group-hover/file:opacity-100 transition-all shadow-sm"
+                    aria-label={`Remove ${f.filename}`}
+                  >
+                    <X size={10} strokeWidth={2.5} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Active skill indicator */}
+        {activeSkill && (
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[12px] text-[#f59e42] border border-[#f59e42]/20">
+              <Sparkles size={11} strokeWidth={2} />
+              {activeSkill}
+              <button
+                onClick={() => activeId && setConversationSkill(activeId, null)}
+                className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
+                aria-label="Remove skill"
+              >
+                <X size={10} strokeWidth={2} />
+              </button>
+            </span>
           </div>
         )}
 
@@ -372,17 +1038,18 @@ export function InputBar() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           rows={1}
           aria-label="Message input"
-          placeholder={speech.listening ? "Listening…" : isStreaming ? "Type your next message…" : noModelsAvailable ? "Add a provider in Settings to begin" : "Do anything"}
+          placeholder={speech.listening ? "Listening…" : isStreaming ? "Type your next message…" : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
           className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
         />
 
         {showContinue && (
-          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-2 mt-3 animate-[fadeIn_180ms_ease-out]">
             <button
               onClick={handleContinue}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#f59e42]/10 border border-[#f59e42]/20 text-[#f59e42] text-[12.5px] font-medium hover:bg-[#f59e42]/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#f59e42]/10 border border-[#f59e42]/20 text-[#f59e42] text-[12.5px] font-medium hover:bg-[#f59e42]/20 hover:-translate-y-px active:translate-y-0 transition-[colors,transform] duration-[140ms]"
             >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="4,2 14,8 4,14" />
@@ -407,22 +1074,126 @@ export function InputBar() {
               {showPlusMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowPlusMenu(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 w-52 bg-[#2a2a2a] border border-white/10 rounded-xl p-1.5 shadow-xl z-20">
+                  <div className="absolute bottom-full left-0 mb-2 w-52 bg-[#2a2a2a] border border-white/10 rounded-xl p-1.5 shadow-xl z-20 origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                     {[
                       { icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } },
-                      { icon: FileText, label: "Paste from clipboard", onClick: () => setShowPlusMenu(false) },
-                      { icon: Link2, label: "Add URL", onClick: () => setShowPlusMenu(false) },
-                      { icon: Camera, label: "Screenshot", onClick: () => setShowPlusMenu(false) },
+                      ...(agentMode
+                        ? [{
+                            icon: ListChecks,
+                            label: planMode ? "Plan mode — on" : "Plan mode",
+                            description: planMode
+                              ? "Read-only investigation. Toggle off to write."
+                              : "Read-only investigation, then a Build button.",
+                            active: planMode,
+                            onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
+                          }]
+                        : []),
+                      // Research mode — sits right above Skills so the
+                      // “modes” cluster together. One-shot in chat mode (the
+                      // toggle resets on send); persistent until off in
+                      // agent mode. Hidden when there's no search backend
+                      // available in chat mode so we don't show a dead
+                      // option.
+                      ...((agentMode || tavilyApiKey || freeWebSearch)
+                        ? [{
+                            icon: Telescope,
+                            label: researchMode ? "Research — on" : "Research",
+                            description: researchMode
+                              ? "Applies to your next message, then resets."
+                              : agentMode
+                                ? "Multi-step web research with citations."
+                                : "Web-augmented answer with citations.",
+                            active: researchMode,
+                            onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
+                          }]
+                        : []),
+                      ...(skillsForCurrentMode.length > 0
+                        ? [{ icon: Wand2, label: "Choose skill", onClick: () => { setShowPlusMenu(false); setShowSkillPicker((s) => !s); } }]
+                        : []),
                     ].map((opt) => (
                       <button
                         key={opt.label}
                         onClick={opt.onClick}
-                        className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] text-[#d5d5d5] hover:bg-white/5"
+                        className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
+                          ("active" in opt && opt.active)
+                            ? "bg-[#f59e42]/10 text-[#f59e42]"
+                            : "text-[#d5d5d5] hover:bg-white/5"
+                        }`}
                       >
-                        <opt.icon size={14} strokeWidth={1.75} className="text-[#c9c9c9]" />
-                        {opt.label}
+                        <opt.icon
+                          size={14}
+                          strokeWidth={1.75}
+                          className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-[#f59e42]" : "text-[#c9c9c9]"}`}
+                        />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="truncate">{opt.label}</span>
+                          {"description" in opt && opt.description && (
+                            <span className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
+                              {opt.description}
+                            </span>
+                          )}
+                        </div>
+                        {("active" in opt && opt.active) && (
+                          <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e42]" />
+                        )}
                       </button>
                     ))}
+                  </div>
+                </>
+              )}
+
+              {/* Skill picker popover */}
+              {showSkillPicker && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowSkillPicker(false)}
+                  />
+                  <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#2a2a2a] border border-white/10 rounded-xl p-1.5 shadow-xl z-20 origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
+                    <div className="px-2.5 py-1.5 text-[11px] font-semibold tracking-wider uppercase text-[#888888]">
+                      Choose a skill
+                    </div>
+                    {skillsForCurrentMode
+                      .filter((s) => !disabledSkills.has(s.name))
+                      .map((skill) => (
+                        <button
+                          key={skill.name}
+                          onClick={() => {
+                            if (!activeId) {
+                              // No conversation yet — create one and bind the skill to it.
+                              const newId = createConversation();
+                              setConversationSkill(newId, skill.name);
+                            } else {
+                              setConversationSkill(activeId, skill.name === activeSkill ? null : skill.name);
+                            }
+                            setShowSkillPicker(false);
+                          }}
+                          className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
+                            skill.name === activeSkill
+                              ? "bg-[#f59e42]/10 text-[#f59e42]"
+                              : "text-[#d5d5d5] hover:bg-white/5"
+                          }`}
+                        >
+                          <Sparkles
+                            size={14}
+                            strokeWidth={1.75}
+                            className={skill.name === activeSkill ? "text-[#f59e42]" : "text-[#c9c9c9]"}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate">{skill.name}</div>
+                            <div className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
+                              {skill.description.slice(0, 80)}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    {skillsForCurrentMode.length === 0 && (
+                      <div className="px-2.5 py-3 text-[13px] text-[#a0a0a0]">
+                        {discoveredSkills.length > 0
+                          ? `No skills available in ${agentMode ? "agent" : "chat"} mode. Switch modes to see other skills.`
+                          : "No skills discovered. Add skills in Settings."}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -458,11 +1229,22 @@ export function InputBar() {
             </button>
             )}
 
-            <AgentPill />
+            {designMode ? <DesignPills /> : <AgentPill />}
+            {agentMode && planMode && (
+              <button
+                type="button"
+                onClick={() => setPlanMode(false)}
+                title="Plan mode — read-only investigation. Click to turn off."
+                className="flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#f59e42]/10 hover:bg-[#f59e42]/15 border border-[#f59e42]/30 text-[12px] font-medium text-[#f59e42] transition-colors shrink-0"
+              >
+                <ListChecks size={12} strokeWidth={2} aria-hidden="true" />
+                <span>Plan</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1 text-[13px]">
-            <ModelPicker />
+            <ModelPicker onOpenSettings={onOpenSettings} />
 
             <button
               onClick={isStreaming ? cancelStreaming : () => handleSend()}

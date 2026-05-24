@@ -27,4 +27,6 @@ export {
   RESEARCH_TOOLS,
   PLAN_TOOLS,
   CHAT_TOOLS,
+  ATTACHMENT_TOOLS,
+  CODE_EXEC_TOOLS,
 } from "./tools/registry";

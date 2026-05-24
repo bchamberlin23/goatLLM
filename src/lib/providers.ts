@@ -20,9 +20,37 @@ export interface ModelConfig {
   id: string;
   name: string;
   contextWindow: number;
+  /** Whether this model can read images natively (vision/multimodal).
+   *  Used by the send pipeline to warn when the user attaches an image
+   *  to a text-only model and offer OCR fallback. */
+  vision?: boolean;
 }
 
-/** No-op for legacy callers. The store owns built-in providers now. */
+/**
+ * Built-in providers shipped with the app. These show up in the picker
+ * automatically — no Settings round-trip required — and are typically
+ * authenticated with a bundled credential resolved at call time (see
+ * src/stores/chat.ts → getActiveLlmConfig).
+ *
+ * Currently this seeds the OpenCode Go Free tier so a user can chat
+ * immediately after install. The credential itself lives in
+ * src/lib/zen-credentials.ts (XOR-folded, not in plain text).
+ */
 export function getBuiltInProviders(): ProviderConfig[] {
-  return [];
+  return [
+    {
+      id: "opencode-go-free",
+      name: "Free Models",
+      // Free endpoint: drop the `/go` segment used by the paid catalog.
+      baseUrl: "https://opencode.ai/zen/v1",
+      apiKey: null,
+      models: [
+        {
+          id: "deepseek-v4-flash-free",
+          name: "DeepSeek V4 Flash (Free)",
+          contextWindow: 200_000,
+        },
+      ],
+    },
+  ];
 }

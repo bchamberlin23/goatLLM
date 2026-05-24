@@ -60,6 +60,8 @@ export const RESEARCH_TOOLS = {
   web_search: READ_ONLY_TOOLS.web_search,
   browser_fetch: WRITE_TOOLS.browser_fetch,
   browser_extract: WRITE_TOOLS.browser_extract,
+  read_attachment: READ_ONLY_TOOLS.read_attachment,
+  search_attachment: READ_ONLY_TOOLS.search_attachment,
 };
 
 /**
@@ -73,11 +75,36 @@ export const PLAN_TOOLS = {
 };
 
 /**
- * Lightweight chat-mode tool set: just web_search. Lets the model
- * opportunistically check the web (current events, fresh facts) without
- * the heavy research preamble or 30-round budget that RESEARCH_TOOLS implies.
- * Only attached when the user has a Tavily key configured.
+ * Lightweight chat-mode tool set: web_search plus attachment navigation.
+ * Lets the model opportunistically check the web (current events, fresh
+ * facts) without the heavy research preamble or 30-round budget that
+ * RESEARCH_TOOLS implies. Web search only attaches when a backend is
+ * configured; the attachment tools are always available so a user who
+ * uploads a 600-page book can have the model navigate it.
  */
 export const CHAT_TOOLS = {
   web_search: READ_ONLY_TOOLS.web_search,
+  read_attachment: READ_ONLY_TOOLS.read_attachment,
+  search_attachment: READ_ONLY_TOOLS.search_attachment,
+};
+
+/**
+ * Attachment-navigation tools available to chat mode even when the user
+ * has no web-search backend configured. Used so a model can always pull
+ * sections from an uploaded book/paper without needing Tavily.
+ */
+export const ATTACHMENT_TOOLS = {
+  read_attachment: READ_ONLY_TOOLS.read_attachment,
+  search_attachment: READ_ONLY_TOOLS.search_attachment,
+};
+
+/**
+ * Code-execution tools surfaced in chat mode behind an explicit Settings
+ * toggle. `run_python` shells to python3 (user must have it installed);
+ * `run_javascript` runs in a sandboxed Function. Both gate on
+ * withApproval so the user has to confirm each call.
+ */
+export const CODE_EXEC_TOOLS = {
+  run_python: WRITE_TOOLS.run_python,
+  run_javascript: WRITE_TOOLS.run_javascript,
 };

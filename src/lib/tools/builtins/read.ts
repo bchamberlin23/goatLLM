@@ -14,6 +14,13 @@ import { z } from "zod";
 import { useChatStore } from "../../../stores/chat";
 import { searchSemantic, indexCount } from "../../semantic-index";
 import { truncateHead, truncationFooter } from "../../truncate";
+import {
+  getAttachmentText,
+  listAttachments,
+  readSlice,
+  searchAttachment as searchAttachmentText,
+  snipForResult,
+} from "../../attachment-cache";
 import { getWorkspace, normalizePath, invoke } from "../_helpers";
 
 export const READ_ONLY_TOOLS = {
@@ -221,6 +228,66 @@ export const READ_ONLY_TOOLS = {
       } catch (e) {
         return `read_pdf failed: ${e instanceof Error ? e.message : String(e)}`;
       }
+    },
+  }),
+
+  read_attachment: tool({
+    description:
+      "Read a slice of a user-uploaded chat attachment (PDF, Word, Slides, Excel, notebook, RTF, or text file) by line offset and limit. Use this when an attachment was inlined as a preview because it was too large to include in full — the preview shows an outline plus head and tail; this tool fetches any line range you need. Pass `filename` exactly as it appears in the attachment header. Default limit is 200 lines, max 2000.",
+    inputSchema: z.object({
+      filename: z.string().describe("Attachment filename, exactly as shown in the [Kind: filename] header"),
+      offset: z.number().optional().describe("1-indexed line number to start reading from (default 1)"),
+      limit: z.number().optional().describe("Max lines to return (default 200, max 2000)"),
+    }),
+    execute: async ({ filename, offset, limit }) => {
+      const convId = useChatStore.getState().activeId;
+      if (!convId) return "read_attachment failed: no active conversation";
+      const entry = getAttachmentText(convId, filename);
+      if (!entry) {
+        const available = listAttachments(convId).map((a) => a.filename);
+        return available.length === 0
+          ? `No attachments cached for this conversation.`
+          : `Attachment "${filename}" not found. Available: ${available.join(", ")}`;
+      }
+      const slice = readSlice(entry, offset ?? 1, limit ?? 200);
+      const footer = slice.truncated
+        ? `\n\n——\n[Showed lines ${slice.startLine}–${slice.endLine} of ${entry.totalLines}. Call read_attachment again with offset: ${slice.endLine + 1} to continue.]`
+        : `\n\n——\n[Showed lines ${slice.startLine}–${slice.endLine} of ${entry.totalLines} (end of document).]`;
+      return `[${entry.kindLabel}: ${entry.filename}]\n${slice.content}${footer}`;
+    },
+  }),
+
+  search_attachment: tool({
+    description:
+      "Search inside a user-uploaded chat attachment for a substring or regex (use `/pattern/flags` form for regex). Returns matching lines with surrounding context, plus the line number you can pass to read_attachment to read more around the hit. Use this to locate a specific topic, term, or definition inside a long document like a textbook or paper.",
+    inputSchema: z.object({
+      filename: z.string().describe("Attachment filename, exactly as shown in the [Kind: filename] header"),
+      query: z.string().describe("Substring (case-insensitive) or `/regex/flags` pattern"),
+      max_results: z.number().optional().describe("Max matches to return (1-50, default 10)"),
+      context_lines: z.number().optional().describe("Lines of context around each match (0-5, default 2)"),
+    }),
+    execute: async ({ filename, query, max_results, context_lines }) => {
+      const convId = useChatStore.getState().activeId;
+      if (!convId) return "search_attachment failed: no active conversation";
+      const entry = getAttachmentText(convId, filename);
+      if (!entry) {
+        const available = listAttachments(convId).map((a) => a.filename);
+        return available.length === 0
+          ? `No attachments cached for this conversation.`
+          : `Attachment "${filename}" not found. Available: ${available.join(", ")}`;
+      }
+      const hits = searchAttachmentText(entry, query, {
+        maxResults: max_results,
+        contextLines: context_lines,
+      });
+      if (hits.length === 0) {
+        return `No matches for "${query}" in "${filename}". The document has ${entry.totalLines} lines; try a different term or use read_attachment to scan a specific section.`;
+      }
+      const blocks = hits.map((h) => {
+        const ctx = h.context.join("\n");
+        return `Line ${h.line}:\n${snipForResult(ctx, 600)}`;
+      });
+      return `Found ${hits.length} match${hits.length === 1 ? "" : "es"} in "${filename}":\n\n${blocks.join("\n\n---\n\n")}`;
     },
   }),
 

@@ -40,6 +40,7 @@ export function exportAsJson(conv: Conversation, messages: Message[]): string {
         role: m.role,
         content: m.content,
         createdAt: new Date(m.createdAt).toISOString(),
+        ...(m.pinned ? { pinned: true } : {}),
         ...(m.attachments ? { attachments: m.attachments } : {}),
       })),
     },

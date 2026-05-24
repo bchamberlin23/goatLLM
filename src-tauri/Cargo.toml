@@ -18,6 +18,11 @@ regex = "1"
 glob = "0.3"
 tempfile = "3"
 base64 = "0.22"
+pdf-extract = "0.7"
+zip = "0.6"
+calamine = "0.24"
+quick-xml = "0.31"
+dirs = "5"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

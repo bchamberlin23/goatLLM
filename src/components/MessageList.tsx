@@ -2,6 +2,11 @@ import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import { useChatStore } from "../stores/chat";
 import { MessageBubble } from "./MessageBubble";
 import { ChevronDown } from "lucide-react";
+import { formatDateSeparator, formatLongDateTime, sameDay } from "../lib/datetime";
+
+function isToday(ts: number): boolean {
+  return sameDay(ts, Date.now());
+}
 
 export function MessageList() {
   const activeId = useChatStore((s) => s.activeId);
@@ -12,84 +17,122 @@ export function MessageList() {
   const messages = activeId ? (msgMap[activeId] ?? []) : [];
 
   const listRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const stickToBottomRef = useRef(true);
-  const userScrollingRef = useRef(false);
-  const userScrollTimerRef = useRef<number | null>(null);
+
+  // Sticky = "follow the bottom". Toggled off by user scrolling up,
+  // re-enabled by sending a message or pressing the down-arrow button.
+  const stickyRef = useRef(true);
+  const programmaticScrollRef = useRef(false);
   const activeIdRef = useRef(activeId);
 
-  // Single number that grows whenever the active conversation gets new content
-  // (new message, streamed token, tool call update). Effect dep without re-creating arrays.
+  // Count of user messages and total content length — primitive deps that grow
+  // monotonically as the conversation evolves.
+  const userMsgCount = useMemo(
+    () => messages.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0),
+    [messages],
+  );
   const contentSignal = useMemo(() => {
     let n = messages.length * 4096;
     for (const m of messages) {
       n += m.content.length;
-      if (m.toolCalls) n += m.toolCalls.length * 31 + (m.toolCalls.reduce((a, t) => a + (t.state === "done" ? 1 : 0), 0));
+      if (m.toolCalls) n += m.toolCalls.length;
     }
     return n;
   }, [messages]);
 
-  const updateBottomState = useCallback(() => {
+  // The actual scroll action — same code path the down-arrow button uses.
+  const doScrollToBottom = useCallback(() => {
+    programmaticScrollRef.current = true;
     const el = listRef.current;
-    if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = distFromBottom < 80;
-    stickToBottomRef.current = nearBottom;
-    setShowScrollBtn(!nearBottom && el.scrollHeight > el.clientHeight + 200);
+    const sentinel = bottomRef.current;
+    if (sentinel) sentinel.scrollIntoView({ block: "end", behavior: "auto" });
+    if (el) el.scrollTop = el.scrollHeight;
+    // Reset the programmatic flag on the next frame after the scroll event
+    // has had a chance to fire.
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
   }, []);
 
-  // Active conversation switch — restore saved position or jump to bottom.
+  // ── Send: when the user message count grows, that's a fresh send. Pin. ──
+  const lastUserCountRef = useRef(userMsgCount);
+  useEffect(() => {
+    if (userMsgCount > lastUserCountRef.current) {
+      stickyRef.current = true;
+      doScrollToBottom();
+      setShowScrollBtn(false);
+    }
+    lastUserCountRef.current = userMsgCount;
+  }, [userMsgCount, doScrollToBottom]);
+
+  // ── Stream: while sticky, keep snapping to bottom on every content tick. ──
+  useEffect(() => {
+    if (!stickyRef.current) return;
+    doScrollToBottom();
+  }, [contentSignal, doScrollToBottom]);
+
+  // ── Layout shifts (artifact / attachment panel toggle, window resize). ──
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (!stickyRef.current) return;
+      doScrollToBottom();
+    });
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [doScrollToBottom]);
+
+  // ── Conversation switch: restore saved position or jump to bottom. ──
   useEffect(() => {
     const prev = activeIdRef.current;
     if (prev === activeId) return;
     if (prev && listRef.current) saveScrollPosition(prev, listRef.current.scrollTop);
     activeIdRef.current = activeId;
+    // Reset send tracker so the first observed user message in the new chat
+    // doesn't trigger a phantom snap.
+    lastUserCountRef.current = userMsgCount;
     requestAnimationFrame(() => {
       const el = listRef.current;
       if (!el || !activeId) return;
       const savedPos = scrollPositions[activeId];
-      el.scrollTop = savedPos !== undefined ? savedPos : el.scrollHeight;
-      stickToBottomRef.current = savedPos === undefined;
-      updateBottomState();
+      if (savedPos !== undefined) {
+        programmaticScrollRef.current = true;
+        el.scrollTop = savedPos;
+        const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+        stickyRef.current = distFromBottom < 80;
+        requestAnimationFrame(() => { programmaticScrollRef.current = false; });
+      } else {
+        stickyRef.current = true;
+        doScrollToBottom();
+      }
     });
-  }, [activeId, saveScrollPosition, scrollPositions, updateBottomState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
 
-  // Stick to bottom while streaming: cheap, jank-free, runs only on actual content growth.
-  useEffect(() => {
+  // ── User scroll: break or restore stickiness based on position. ──
+  const handleScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
-    if (!stickToBottomRef.current) return;
-    if (userScrollingRef.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [contentSignal]);
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distFromBottom < 80;
 
-  const handleScroll = useCallback(() => {
-    updateBottomState();
+    // Only update stickiness on user-driven scrolls. Programmatic scrolls
+    // (from doScrollToBottom) shouldn't influence user intent.
+    if (!programmaticScrollRef.current) {
+      stickyRef.current = nearBottom;
+    }
+    setShowScrollBtn(!nearBottom && el.scrollHeight > el.clientHeight + 200);
     const id = activeIdRef.current;
-    if (id && listRef.current) saveScrollPosition(id, listRef.current.scrollTop);
-  }, [saveScrollPosition, updateBottomState]);
-
-  // Mark "user is actively scrolling" briefly so the auto-stick effect yields. Lets the
-  // user scroll up mid-stream without the page yanking them back.
-  const handleWheelOrTouch = useCallback(() => {
-    userScrollingRef.current = true;
-    if (userScrollTimerRef.current) window.clearTimeout(userScrollTimerRef.current);
-    userScrollTimerRef.current = window.setTimeout(() => {
-      userScrollingRef.current = false;
-    }, 350);
-  }, []);
-
-  useEffect(() => () => {
-    if (userScrollTimerRef.current) window.clearTimeout(userScrollTimerRef.current);
-  }, []);
+    if (id) saveScrollPosition(id, el.scrollTop);
+  }, [saveScrollPosition]);
 
   const scrollToBottom = useCallback(() => {
-    const el = listRef.current;
-    if (!el) return;
-    stickToBottomRef.current = true;
-    userScrollingRef.current = false;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, []);
+    stickyRef.current = true;
+    doScrollToBottom();
+    setShowScrollBtn(false);
+  }, [doScrollToBottom]);
 
   if (messages.length === 0) return null;
 
@@ -100,22 +143,24 @@ export function MessageList() {
         className="h-full overflow-y-auto"
         style={{ overscrollBehavior: "contain", scrollbarGutter: "stable" }}
         onScroll={handleScroll}
-        onWheel={handleWheelOrTouch}
-        onTouchMove={handleWheelOrTouch}
-        onKeyDown={(e) => {
-          if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(e.key)) {
-            handleWheelOrTouch();
-          }
-        }}
         role="log"
         aria-label="Conversation messages"
         aria-live="polite"
       >
-        <div className="h-9" />
-        {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
-        ))}
-        <div className="h-6" />
+        <div className="h-4" />
+        {messages.map((message, i) => {
+          const prev = i > 0 ? messages[i - 1] : null;
+          const isDayChange = !prev || !sameDay(prev.createdAt, message.createdAt);
+          const showSeparator = isDayChange && !(prev === null && isToday(message.createdAt));
+          return (
+            <div key={message.id}>
+              {showSeparator && <DateSeparator ts={message.createdAt} />}
+              <MessageBubble message={message} />
+            </div>
+          );
+        })}
+        <div className="h-3" />
+        <div ref={bottomRef} aria-hidden="true" />
       </div>
       {showScrollBtn && (
         <button
@@ -127,6 +172,30 @@ export function MessageList() {
           {isStreaming && <span className="text-[11px] font-medium">New messages</span>}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Quiet day divider rendered between messages whose calendar dates differ.
+ */
+function DateSeparator({ ts }: { ts: number }) {
+  return (
+    <div
+      className="flex items-center gap-3 px-6 py-2 select-none"
+      role="separator"
+      aria-label={formatLongDateTime(ts)}
+    >
+      <div className="flex items-center gap-3 w-full max-w-[720px] mx-auto">
+        <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
+        <span
+          className="shrink-0 px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.05] text-[10.5px] font-medium uppercase tracking-wider text-[#a0a0a0] tabular-nums"
+          title={formatLongDateTime(ts)}
+        >
+          {formatDateSeparator(ts)}
+        </span>
+        <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
+      </div>
     </div>
   );
 }

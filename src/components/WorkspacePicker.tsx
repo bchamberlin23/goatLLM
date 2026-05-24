@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useChatStore } from "../stores/chat";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Folder, ChevronDown, Check, Plus } from "lucide-react";
+import { Folder, ChevronDown, Check, Plus, X } from "lucide-react";
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
@@ -65,6 +65,17 @@ export function WorkspacePicker() {
     setOpen_(false);
   }, [refresh, setWorkspace]);
 
+  const handleRemove = useCallback(async (path: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await invoke("remove_workspace", { path });
+      if (workspacePath === path) setWorkspace(null);
+      refresh();
+    } catch (err) {
+      console.warn("Failed to remove workspace:", err);
+    }
+  }, [workspacePath, setWorkspace, refresh]);
+
   const displayName = workspacePath
     ? workspacePath.split("/").pop() || workspacePath
     : null;
@@ -105,21 +116,33 @@ export function WorkspacePicker() {
               </div>
             )}
             {workspaces.map((ws) => (
-              <button
+              <div
                 key={ws}
-                className={`flex items-center justify-between w-full px-2.5 py-2 rounded-md text-[13px] transition-colors text-left ${
+                className={`flex items-center justify-between w-full px-2.5 py-2 rounded-md text-[13px] transition-colors text-left group/ws ${
                   ws === workspacePath
                     ? "text-[#ececec] bg-white/5"
                     : "text-[#d5d5d5] hover:bg-white/5 hover:text-[#ececec]"
                 }`}
-                onClick={() => handleSelect(ws)}
               >
-                <div className="flex flex-col gap-0.5 min-w-0">
+                <button
+                  className="flex flex-col gap-0.5 min-w-0 flex-1 text-left"
+                  onClick={() => handleSelect(ws)}
+                >
                   <span className="truncate">{ws.split("/").pop()}</span>
                   <span className="text-[11px] text-[#a0a0a0] font-mono truncate">{ws}</span>
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {ws === workspacePath && <Check size={13} className="text-[#f59e42]" />}
+                  <button
+                    className="w-5 h-5 flex items-center justify-center rounded text-[#666] hover:text-[#f87171] hover:bg-red-500/10 opacity-0 group-hover/ws:opacity-100 transition-all"
+                    onClick={(e) => handleRemove(ws, e)}
+                    aria-label={`Remove ${ws.split("/").pop()}`}
+                    title="Remove workspace"
+                  >
+                    <X size={11} strokeWidth={2} />
+                  </button>
                 </div>
-                {ws === workspacePath && <Check size={13} className="text-[#f59e42] shrink-0" />}
-              </button>
+              </div>
             ))}
             <div className="h-px bg-white/5 mx-1 my-1" />
             <button

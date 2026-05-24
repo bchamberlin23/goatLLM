@@ -447,4 +447,53 @@ export const WRITE_TOOLS = {
       });
     },
   }),
+
+  run_python: tool({
+    description:
+      "Execute a short Python 3 snippet and return stdout. Useful in chat for math, plotting (returns figure size info), data parsing, and quick scratch computation. Requires Python 3 on PATH. ~30s timeout. ⚠️ Requires user approval.",
+    inputSchema: z.object({
+      code: z.string().describe("Python 3 source. Use `print()` for output."),
+    }),
+    execute: async ({ code }, { toolCallId }) => {
+      return withApproval(toolCallId, async () => {
+        try {
+          return await invoke<string>("run_python", { code });
+        } catch (e) {
+          return `run_python failed: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      });
+    },
+  }),
+
+  run_javascript: tool({
+    description:
+      "Evaluate a short JavaScript expression in a sandbox and return the result as JSON. Use for arithmetic, string/array manipulation, JSON parsing/transformation. No network, no DOM, no Node APIs — just plain JS. Globals available: Math, Date, JSON, Array, Object, Number, String, Map, Set, Intl. ⚠️ Requires user approval.",
+    inputSchema: z.object({
+      expression: z.string().describe("A JavaScript expression OR a series of statements ending in `return <value>`."),
+    }),
+    execute: async ({ expression }, { toolCallId }) => {
+      return withApproval(toolCallId, async () => {
+        try {
+          // Wrap so users can either pass an expression or a multi-statement
+          // body with a `return`. Empty/undefined results render as "undefined".
+          const body = /\breturn\b/.test(expression) ? expression : `return (${expression});`;
+          // eslint-disable-next-line no-new-func
+          const fn = new Function(
+            "Math", "Date", "JSON", "Array", "Object", "Number", "String", "Map", "Set", "Intl",
+            `"use strict"; ${body}`,
+          );
+          const out = fn(Math, Date, JSON, Array, Object, Number, String, Map, Set, Intl);
+          if (out === undefined) return "undefined";
+          if (typeof out === "string") return out;
+          try {
+            return JSON.stringify(out, null, 2);
+          } catch {
+            return String(out);
+          }
+        } catch (e) {
+          return `run_javascript failed: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      });
+    },
+  }),
 };

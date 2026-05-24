@@ -1,25 +1,47 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useChatStore, Model, Provider } from "../stores/chat";
-import { Check, ChevronDown, Search, Cloud, HardDrive, AlertCircle } from "lucide-react";
+import { useChatStore, type Model, type Provider, type ModelOverride } from "../stores/chat";
+import { getContextWindow } from "../lib/context-window";
+import {
+  Check,
+  ChevronDown,
+  Search,
+  Cloud,
+  HardDrive,
+  AlertCircle,
+  Settings as SettingsIcon,
+  ArrowRight,
+  X,
+} from "lucide-react";
 
 interface GroupedModels { provider: Provider; models: Model[]; }
 
-function ProviderIcon({ provider, size = 12 }: { provider: Provider; size?: number }) {
-  if (provider.isBuiltIn) return <HardDrive size={size} strokeWidth={1.75} className="text-[#9aa0a6]" />;
-  return <Cloud size={size} strokeWidth={1.75} className="text-[#9aa0a6]" />;
+interface ModelPickerProps {
+  /**
+   * Lets the zero-models empty state surface a 'Open Settings' CTA so the
+   * dropdown matches the hero affordance instead of being a dead-end.
+   */
+  onOpenSettings?: () => void;
 }
 
-export function ModelPicker() {
+function ProviderIcon({ provider, size = 12 }: { provider: Provider; size?: number }) {
+  if (provider.isBuiltIn) return <HardDrive size={size} strokeWidth={1.75} className="text-text-3" />;
+  return <Cloud size={size} strokeWidth={1.75} className="text-text-3" />;
+}
+
+export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
   const getProviders = useChatStore((s) => s.getProviders);
   const getModels = useChatStore((s) => s.getModels);
   const selectedModelId = useChatStore((s) => s.selectedModelId);
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
+  const modelOverrides = useChatStore((s) => s.modelOverrides);
+  const setModelOverride = useChatStore((s) => s.setModelOverride);
   const getActiveMessages = useChatStore((s) => s.getActiveMessages);
 
   const [isOpen, setIsOpen] = useState(false);
   const [pendingModelId, setPendingModelId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [settingsModelId, setSettingsModelId] = useState<string | null>(null);
   const [listMaxHeight, setListMaxHeight] = useState<number>(380);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -65,9 +87,11 @@ export function ModelPicker() {
     if (isOpen) {
       setQuery("");
       setHighlightedId(selectedModelId ?? flatVisibleModels[0]?.id ?? null);
+      setSettingsModelId(null);
       requestAnimationFrame(() => searchInputRef.current?.focus());
     } else {
       setPendingModelId(null);
+      setSettingsModelId(null);
     }
   }, [isOpen]);
 
@@ -174,28 +198,51 @@ export function ModelPicker() {
   const totalAvailable = models.filter((m) => m.isAvailable).length;
   const providerOffline = selectedProvider?.healthChecked && !selectedProvider.isOnline;
 
+  // Build a thorough aria-label that surfaces the offline state to screen
+  // readers, not just the visual red dot. The trigger doubles as a status
+  // indicator mid-session when a local provider drops, so the assistive
+  // description has to keep up.
+  const ariaLabel = (() => {
+    if (!selectedModel) return "Select model";
+    const base = `Model: ${selectedModel.name}.`;
+    if (providerOffline && selectedProvider) {
+      return `${base} ${selectedProvider.name} is offline. Click to change.`;
+    }
+    return `${base} Click to change.`;
+  })();
+  const triggerTitle = providerOffline && selectedProvider
+    ? `${selectedProvider.name} · ${triggerLabel} (offline)`
+    : selectedProvider
+      ? `${selectedProvider.name} · ${triggerLabel}`
+      : triggerLabel;
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         ref={triggerRef}
         onClick={() => setIsOpen((o) => !o)}
-        aria-label={selectedModel ? `Model: ${selectedModel.name}. Click to change.` : "Select model"}
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white/[0.06] active:bg-white/[0.09] text-[13px] transition-colors max-w-[220px] ${
           isOpen ? "bg-white/[0.06]" : ""
-        } ${selectedModel ? "text-[#ececec]" : "text-[#a0a0a0]"}`}
-        title={selectedProvider ? `${selectedProvider.name} · ${triggerLabel}` : triggerLabel}
+        } ${selectedModel ? "text-text-1" : "text-text-3"}`}
+        title={triggerTitle}
       >
         {selectedProvider && <ProviderIcon provider={selectedProvider} size={11} />}
         <span className="truncate">{triggerLabel}</span>
         {providerOffline && (
-          <span className="w-1.5 h-1.5 rounded-full bg-[#f87171] shrink-0" title="Provider offline" />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-error shrink-0 animate-[dot-pulse_1.5s_ease-in-out_infinite]"
+            role="status"
+            aria-label={`${selectedProvider?.name ?? "Provider"} offline`}
+            title={`${selectedProvider?.name ?? "Provider"} is offline`}
+          />
         )}
         <ChevronDown
           size={11}
           strokeWidth={2}
-          className={`shrink-0 text-[#a0a0a0] transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`shrink-0 text-text-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -227,6 +274,17 @@ export function ModelPicker() {
                 </button>
               </div>
             </div>
+          ) : settingsModelId ? (
+            <ModelSettingsPanel
+              modelId={settingsModelId}
+              models={models}
+              overrides={modelOverrides[settingsModelId] ?? {}}
+              onSave={(override) => {
+                setModelOverride(settingsModelId, override);
+                setSettingsModelId(null);
+              }}
+              onClose={() => setSettingsModelId(null)}
+            />
           ) : (
             <>
               {/* Search */}
@@ -260,16 +318,35 @@ export function ModelPicker() {
                   <div className="flex flex-col items-center gap-2 py-8 px-4 text-center">
                     {query ? (
                       <>
-                        <Search size={18} className="text-[#4a4a4a]" />
-                        <p className="text-[12.5px] text-[#8e8e8e]">No models match "{query}"</p>
+                        <Search size={18} className="text-text-4" aria-hidden="true" />
+                        <p className="text-[12.5px] text-text-3">No models match "{query}"</p>
                       </>
                     ) : (
                       <>
-                        <AlertCircle size={18} className="text-[#4a4a4a]" />
-                        <p className="text-[12.5px] text-[#8e8e8e]">No models available</p>
-                        <p className="text-[11.5px] text-[#a0a0a0] leading-relaxed">
+                        <AlertCircle size={18} className="text-text-4" aria-hidden="true" />
+                        <p className="text-[12.5px] text-text-2">No models configured yet.</p>
+                        <p className="text-[11.5px] text-text-3 leading-relaxed max-w-[240px]">
                           Add an API key in Settings to start chatting.
                         </p>
+                        {onOpenSettings && (
+                          <button
+                            onClick={() => {
+                              setIsOpen(false);
+                              onOpenSettings();
+                            }}
+                            className="group mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/25 text-accent text-[12.5px] font-medium hover:bg-accent/20 hover:border-accent/40 transition-colors"
+                            aria-label="Open Settings to add a provider"
+                          >
+                            <SettingsIcon size={13} strokeWidth={2} aria-hidden="true" />
+                            Open Settings
+                            <ArrowRight
+                              size={13}
+                              strokeWidth={2}
+                              className="transition-transform group-hover:translate-x-0.5"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -329,11 +406,24 @@ export function ModelPicker() {
                             disabled={!model.isAvailable}
                           >
                             <span className="truncate flex-1">{model.name}</span>
-                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
                               {!model.isAvailable && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-[#f87171] rounded font-semibold">
                                   Offline
                                 </span>
+                              )}
+                              {model.isAvailable && (
+                                <button
+                                  className="p-0.5 rounded hover:bg-white/[0.08] text-text-3 hover:text-text-2 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSettingsModelId(model.id);
+                                  }}
+                                  title="Model settings"
+                                  aria-label={`Settings for ${model.name}`}
+                                >
+                                  <SettingsIcon size={12} strokeWidth={1.5} />
+                                </button>
                               )}
                               {isSelected && <Check size={13} className="text-[#f59e42]" />}
                             </div>
@@ -364,6 +454,155 @@ export function ModelPicker() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Inline model-settings panel (shown when the gear icon is clicked) ──
+
+interface ModelSettingsPanelProps {
+  modelId: string;
+  models: Model[];
+  overrides: ModelOverride;
+  onSave: (override: Partial<ModelOverride>) => void;
+  onClose: () => void;
+}
+
+function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: ModelSettingsPanelProps) {
+  const model = models.find((m) => m.id === modelId);
+  const [ctx, setCtx] = useState(overrides.contextWindow?.toString() ?? "");
+  const [maxResp, setMaxResp] = useState(overrides.maxResponseTokens?.toString() ?? "");
+  const [reasoning, setReasoning] = useState(overrides.reasoningEffort ?? "");
+
+  // Resolve the true auto-detected context window (without user overrides).
+  const autoDetectedCtx = useMemo(() => {
+    if (!model) return 0;
+    const [providerId, plainModelId] = (() => {
+      const idx = model.id.indexOf(":");
+      return idx < 0
+        ? [model.providerId, model.id]
+        : [model.id.slice(0, idx), model.id.slice(idx + 1)];
+    })();
+    return getContextWindow(providerId, plainModelId);
+  }, [model]);
+
+  const hasAnyOverride =
+    ("contextWindow" in overrides && overrides.contextWindow !== undefined) ||
+    (overrides.maxResponseTokens && overrides.maxResponseTokens > 0) ||
+    !!overrides.reasoningEffort;
+
+  const handleSave = () => {
+    const patch: Partial<ModelOverride> = {};
+    const parsedCtx = parseInt(ctx, 10);
+    if (ctx.trim() !== "") patch.contextWindow = isNaN(parsedCtx) ? undefined : parsedCtx;
+    else patch.contextWindow = undefined;
+    const parsedMax = parseInt(maxResp, 10);
+    if (maxResp.trim() !== "") patch.maxResponseTokens = isNaN(parsedMax) ? undefined : parsedMax;
+    else patch.maxResponseTokens = undefined;
+    if (reasoning) patch.reasoningEffort = reasoning;
+    else patch.reasoningEffort = undefined;
+    onSave(patch);
+  };
+
+  const handleClear = () => {
+    onSave({ contextWindow: undefined, maxResponseTokens: undefined, reasoningEffort: undefined });
+  };
+
+  if (!model) return null;
+
+  return (
+    <div className="p-4 flex flex-col gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <p className="text-[13px] font-medium text-[#ececec] truncate">
+            Settings: {model.name}
+          </p>
+          <p className="text-[11px] text-[#9a9a9a]">
+            Override auto-detected values for this model
+          </p>
+        </div>
+        <button
+          className="p-1 rounded-md text-text-3 hover:text-text-2 hover:bg-white/[0.06] transition-colors shrink-0"
+          onClick={onClose}
+          aria-label="Close settings"
+        >
+          <X size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+
+      {/* Context Window */}
+      <label className="flex flex-col gap-1">
+        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Context Window (tokens)</span>
+        <input
+          type="number"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          placeholder={
+            autoDetectedCtx > 0
+              ? `Auto-detected: ${autoDetectedCtx.toLocaleString()}`
+              : model.contextWindow > 0
+                ? `From provider: ${model.contextWindow.toLocaleString()}`
+                : "Unknown"
+          }
+          value={ctx}
+          onChange={(e) => setCtx(e.target.value)}
+        />
+        <span className="text-[10px] text-[#9a9a9a]">
+          {autoDetectedCtx > 0
+            ? `Auto-detected: ${autoDetectedCtx.toLocaleString()} tokens`
+            : model.contextWindow > 0
+              ? `Provider default: ${model.contextWindow.toLocaleString()} tokens`
+              : "No auto-detected size available — set one manually"}
+        </span>
+      </label>
+
+      {/* Max Response Tokens */}
+      <label className="flex flex-col gap-1">
+        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Max Response Tokens</span>
+        <input
+          type="number"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          placeholder="Provider default"
+          value={maxResp}
+          onChange={(e) => setMaxResp(e.target.value)}
+        />
+      </label>
+
+      {/* Reasoning Level */}
+      <label className="flex flex-col gap-1">
+        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Reasoning Level</span>
+        <select
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors appearance-none"
+          value={reasoning}
+          onChange={(e) => setReasoning(e.target.value)}
+        >
+          <option value="">Provider default</option>
+          <option value="off">Off</option>
+          <option value="minimal">Minimal</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">X-High</option>
+        </select>
+      </label>
+
+      {/* Actions */}
+      <div className="flex gap-2 mt-1">
+        {hasAnyOverride && (
+          <button
+            className="flex-1 py-1.5 rounded-md text-[12px] text-[#f87171] hover:bg-red-500/10 hover:text-[#fca5a5] transition-colors"
+            onClick={handleClear}
+          >
+            Clear overrides
+          </button>
+        )}
+        <button
+          className="flex-1 py-1.5 rounded-md text-[13px] font-medium bg-[#ececec] text-black hover:bg-white transition-colors"
+          onClick={handleSave}
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }

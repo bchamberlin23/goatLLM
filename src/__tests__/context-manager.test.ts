@@ -102,6 +102,48 @@ describe("compactMessages", () => {
     expect(systemMsgs.length).toBeGreaterThanOrEqual(1);
     expect(typeof systemMsgs[0].content === "string" && systemMsgs[0].content).toBe("be helpful");
   });
+
+  it("preserves pinned messages across compaction", () => {
+    const big = "x".repeat(2000); // ~500 tokens each
+    const messages: Message[] = [];
+    let t = 1;
+    // The pinned message is added very early so the recency loop would
+    // normally drop it. Pin it and it must survive.
+    messages.push(msg("user", `IMPORTANT_CONSTRAINT ${big}`, { createdAt: t++, pinned: true }));
+    for (let i = 0; i < 30; i++) {
+      messages.push(msg("user", `msg ${i} ${big}`, { createdAt: t++ }));
+      messages.push(msg("assistant", `reply ${i} ${big}`, { createdAt: t++ }));
+    }
+    // maxTokens=4000 → pinned soft cap=2000. One ~501-token pin fits; the
+    // 30k+ token tail forces summarization of older unpinned messages.
+    const r = compactMessages(messages, 4000);
+    expect(r.compacted).toBe(true);
+    expect(r.pinnedDroppedCount).toBe(0);
+    expect(r.summarizedCount).toBeGreaterThan(0);
+    const found = r.messages.some(
+      (m) => typeof m.content === "string" && m.content.includes("IMPORTANT_CONSTRAINT"),
+    );
+    expect(found).toBe(true);
+  });
+
+  it("de-pins oldest first when pinned msgs exceed the soft cap", () => {
+    const huge = "x".repeat(8000); // each ~2000 tokens
+    const messages: Message[] = [
+      msg("user", `pin1 ${huge}`, { createdAt: 1, pinned: true }),
+      msg("user", `pin2 ${huge}`, { createdAt: 2, pinned: true }),
+      msg("user", `pin3 ${huge}`, { createdAt: 3, pinned: true }),
+      msg("user", "recent question", { createdAt: 4 }),
+    ];
+    // Soft cap is 50% of maxTokens. With maxTokens=2000, pinned budget is 1000;
+    // each pinned msg is ~2000 tokens, so all but at most one must be de-pinned.
+    const r = compactMessages(messages, 2000);
+    expect(r.pinnedDroppedCount).toBeGreaterThan(0);
+  });
+
+  it("returns pinnedDroppedCount=0 when no pins are set", () => {
+    const r = compactMessages([msg("user", "hi"), msg("assistant", "yo")], 10000);
+    expect(r.pinnedDroppedCount).toBe(0);
+  });
 });
 
 describe("estimateTotalTokens", () => {

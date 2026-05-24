@@ -1,10 +1,11 @@
 /**
  * Global keyboard shortcut handler. Wired into App.tsx so shortcuts
- * are available regardless of which component has focus (with sane
- * exceptions for typing in inputs/textareas).
+ * are available regardless of which component has focus — including
+ * when typing in the chat textarea.
  *
  * Shortcuts:
  *   ⌘N        — New chat
+ *   ⌘F        — Focus chat input
  *   ⌘B        — Toggle sidebar
  *   ⌘,        — Open settings
  *   ⌘1..9     — Switch to conversation N
@@ -19,22 +20,18 @@ interface Options {
   onOpenSettings: () => void;
   onCloseSettings: () => void;
   isSettingsOpen: boolean;
+  onFocusInput?: () => void;
 }
 
 export function useKeyboardShortcuts({
   onOpenSettings,
   onCloseSettings,
   isSettingsOpen,
+  onFocusInput,
 }: Options) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      const target = e.target as HTMLElement | null;
-      const isTyping =
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
 
       // Esc — closes settings if open. (Settings.tsx already binds this
       // when mounted; we keep it here as a backstop for safety.)
@@ -55,22 +52,29 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // ⌘N — new chat. Skip when typing so users can type lowercase n freely.
-      if (e.key === "n" && !e.shiftKey && !isTyping) {
+      // ⌘N — new chat. Works everywhere including while typing.
+      if (e.key === "n" && !e.shiftKey) {
         e.preventDefault();
         useChatStore.getState().setActiveConversation(null);
         return;
       }
 
-      // ⌘B — toggle sidebar. Works while typing too — common pattern.
+      // ⌘F — focus chat input. Always available.
+      if (e.key === "f" && !e.shiftKey) {
+        e.preventDefault();
+        onFocusInput?.();
+        return;
+      }
+
+      // ⌘B — toggle sidebar.
       if (e.key === "b" && !e.shiftKey) {
         e.preventDefault();
         useChatStore.getState().toggleSidebar();
         return;
       }
 
-      // ⌘\ — toggle agent mode. Skip when typing.
-      if (e.key === "\\" && !isTyping) {
+      // ⌘\ — toggle agent mode.
+      if (e.key === "\\") {
         e.preventDefault();
         useChatStore.getState().toggleAgentMode();
         return;
@@ -83,8 +87,8 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // ⌘1..9 — switch to conversation N. Skip when typing.
-      if (!isTyping && /^[1-9]$/.test(e.key)) {
+      // ⌘1..9 — switch to conversation N. Works everywhere.
+      if (/^[1-9]$/.test(e.key)) {
         e.preventDefault();
         const idx = parseInt(e.key, 10) - 1;
         const convs = useChatStore.getState().conversations;
@@ -97,5 +101,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onOpenSettings, onCloseSettings, isSettingsOpen]);
+  }, [onOpenSettings, onCloseSettings, isSettingsOpen, onFocusInput]);
 }

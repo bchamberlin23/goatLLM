@@ -83,6 +83,40 @@ html, body, #root {
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* ─── Selection ─── */
+/* Default everything (UI chrome — sidebar, top bar, buttons, chips, the input
+   shell, mode toggle, etc.) to non-selectable. Real content surfaces opt back
+   in with `.selectable` or via the explicit allowlist below. This stops the
+   "I clicked the chat box and the whole rounded rectangle highlighted blue"
+   behavior without breaking copy-paste of message text or code. */
+html, body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Anything the user should be able to select: message bubbles, markdown,
+   code blocks, inline code, math, terminal output, form fields, contenteditable
+   surfaces, and Monaco's own viewport. */
+.selectable,
+.selectable *,
+.markdown-body,
+.markdown-body *,
+.code-block,
+.code-block *,
+.inline-code,
+.katex,
+.katex *,
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable="true"] *,
+.monaco-editor,
+.monaco-editor * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 ::selection {
   background: rgba(255, 255, 255, 0.18);
   color: #ececec;
@@ -187,11 +221,11 @@ textarea:focus-visible,
 .markdown-body {
   color: #ececec;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.58;
   letter-spacing: -0.005em;
 }
 
-.markdown-body p { margin: 0 0 12px; }
+.markdown-body p { margin: 0 0 10px; }
 .markdown-body p:last-child { margin-bottom: 0; }
 
 .markdown-body h1, .markdown-body h2,
@@ -199,21 +233,21 @@ textarea:focus-visible,
   color: #ececec;
   font-weight: 600;
   line-height: 1.3;
-  margin: 22px 0 10px;
+  margin: 16px 0 8px;
   letter-spacing: -0.015em;
 }
 .markdown-body h1 { font-size: 1.4em; }
 .markdown-body h2 { font-size: 1.2em; }
 .markdown-body h3 { font-size: 1.05em; }
 
-.markdown-body ul, .markdown-body ol { margin: 0 0 12px 22px; }
-.markdown-body li { margin-bottom: 4px; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 10px 22px; }
+.markdown-body li { margin-bottom: 3px; }
 .markdown-body li:last-child { margin-bottom: 0; }
 
 .markdown-body hr {
   border: none;
   border-top: 1px solid rgba(255,255,255,0.06);
-  margin: 18px 0;
+  margin: 14px 0;
 }
 .markdown-body strong { font-weight: 600; color: #ececec; }
 .markdown-body em { font-style: italic; }
@@ -242,7 +276,7 @@ textarea:focus-visible,
 .md-blockquote {
   border-left: 2px solid #a0a0a0;
   padding: 4px 0 4px 14px;
-  margin: 12px 0;
+  margin: 10px 0;
   color: #b4b4b4;
 }
 
@@ -275,7 +309,7 @@ textarea:focus-visible,
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
   overflow: hidden;
-  margin: 12px 0;
+  margin: 10px 0;
   font-family: var(--font-mono);
 }
 .code-block__header {

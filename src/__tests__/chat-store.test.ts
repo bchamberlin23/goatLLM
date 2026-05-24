@@ -159,15 +159,16 @@ describe("ChatStore", () => {
   });
 
   describe("providers & models", () => {
-    it("returns no built-in providers (cloud-only)", () => {
+    it("includes the bundled free OpenCode Go provider by default", () => {
       const providers = useChatStore.getState().getProviders();
       const builtIn = providers.filter((p) => p.isBuiltIn);
-      expect(builtIn).toEqual([]);
+      expect(builtIn.map((p) => p.id)).toEqual(["opencode-go-free"]);
     });
 
-    it("returns no models until a cloud provider is configured", () => {
+    it("exposes the free DeepSeek model out of the box", () => {
       const models = useChatStore.getState().getModels();
-      expect(models).toEqual([]);
+      const ids = models.map((m) => m.id);
+      expect(ids).toContain("opencode-go-free:deepseek-v4-flash-free");
     });
 
     it("includes cloud provider models after config", () => {

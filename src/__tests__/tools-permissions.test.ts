@@ -10,13 +10,18 @@ describe("isWriteTool", () => {
     expect(isWriteTool("diff_file")).toBe(true);
     expect(isWriteTool("read_lints")).toBe(true);
     expect(isWriteTool("run_tests")).toBe(true);
+    expect(isWriteTool("browser_fetch")).toBe(true);
+    expect(isWriteTool("index_workspace")).toBe(true);
   });
 
   it("does not flag read-only tools", () => {
     expect(isWriteTool("read_file")).toBe(false);
     expect(isWriteTool("list_dir")).toBe(false);
     expect(isWriteTool("search_content")).toBe(false);
+    expect(isWriteTool("search_semantic")).toBe(false);
     expect(isWriteTool("git_status")).toBe(false);
+    expect(isWriteTool("git_log")).toBe(false);
+    expect(isWriteTool("git_blame")).toBe(false);
     expect(isWriteTool("web_search")).toBe(false);
     expect(isWriteTool("web_fetch")).toBe(false);
   });
@@ -54,6 +59,12 @@ describe("shouldAutoApprove", () => {
       // explicit user approval. Only YOLO mode does.
       expect(shouldAutoApprove("bash", "auto")).toBe(false);
       expect(shouldAutoApprove("exec_command", "auto")).toBe(false);
+    });
+
+    it("does NOT auto-approve browser_fetch — must show URL to user", () => {
+      // Same reason as bash: agent could exfiltrate data via crafted URL.
+      // User must see the URL before any HTTP request fires.
+      expect(shouldAutoApprove("browser_fetch", "auto")).toBe(false);
     });
   });
 

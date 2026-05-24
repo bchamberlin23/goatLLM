@@ -50,26 +50,88 @@ describe("artifact detection", () => {
     expect(artifacts[0].code).toBe("print('hi')");
   });
 
-  it("extracts a LaTeX artifact via 'latex' or 'tex' lang tag", () => {
+  it("updates an existing artifact in place when the heading matches across messages", () => {
+    // Contract: a markdown heading on the line above the fence names the
+    // artifact. Reusing the same heading + same kind in a later message
+    // updates that artifact in place (id preserved, code replaced).
     const store = useChatStore.getState();
     const convId = store.createConversation();
     const msg1 = store.addMessage({
       conversationId: convId,
       role: "assistant",
-      content: "```latex\n\\section{Intro}\n```",
+      content: "### Resume\n```latex\n\\section{Intro}\n```",
+    });
+    store.detectArtifacts(convId, msg1.id, msg1.content);
+    const firstId = useChatStore.getState().artifacts[convId][0].id;
+
+    const msg2 = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "### Resume\n```latex\n\\section{Updated}\n```",
+    });
+    store.detectArtifacts(convId, msg2.id, msg2.content);
+
+    const artifacts = useChatStore.getState().artifacts[convId];
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].id).toBe(firstId);
+    expect(artifacts[0].code).toBe("\\section{Updated}");
+    expect(artifacts[0].messageId).toBe(msg2.id);
+  });
+
+  it("creates separate artifacts when headings differ, even for the same kind", () => {
+    // Two named HTML pages should coexist. The agent can address each by
+    // re-using its specific heading.
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content:
+        "### Landing Page\n```html\n<h1>landing</h1>\n```\n\n### Pricing Page\n```html\n<h1>pricing</h1>\n```",
+    });
+    store.detectArtifacts(convId, msg.id, msg.content);
+
+    const artifacts = useChatStore.getState().artifacts[convId];
+    expect(artifacts).toHaveLength(2);
+    expect(artifacts.map((a) => a.title.toLowerCase())).toEqual([
+      "landing page",
+      "pricing page",
+    ]);
+  });
+
+  it("falls back to first-line title when no heading precedes the fence", () => {
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "```python\nprint('hi')\n```",
+    });
+    store.detectArtifacts(convId, msg.id, msg.content);
+    const a = useChatStore.getState().artifacts[convId][0];
+    expect(a.title).toBe("print('hi')");
+  });
+
+  it("matches headings case- and whitespace-insensitively", () => {
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg1 = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "### Resume Page\n```html\n<p>v1</p>\n```",
     });
     store.detectArtifacts(convId, msg1.id, msg1.content);
 
     const msg2 = store.addMessage({
       conversationId: convId,
       role: "assistant",
-      content: "```tex\n\\title{T}\n```",
+      content: "###    resume   page   \n```html\n<p>v2</p>\n```",
     });
     store.detectArtifacts(convId, msg2.id, msg2.content);
 
     const artifacts = useChatStore.getState().artifacts[convId];
-    expect(artifacts).toHaveLength(2);
-    expect(artifacts.every((a) => a.kind === "latex")).toBe(true);
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].code).toBe("<p>v2</p>");
   });
 
   it("ignores unknown languages", () => {

@@ -1,56 +1,274 @@
-import { useChatStore } from "../stores/chat";
+import { useChatStore, type Attachment } from "../stores/chat";
 import { InputBar } from "./InputBar";
 import { MessageList } from "./MessageList";
 import { WorkspacePicker } from "./WorkspacePicker";
+import { DesignWorkspacePicker } from "./design/DesignWorkspacePicker";
 import { ModeToggle } from "./ModeToggle";
 import { ArtifactPanel } from "./ArtifactPanel";
+import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
-import { Settings as SettingsIcon, ArrowRight } from "lucide-react";
+import { Settings as SettingsIcon, ArrowRight, Upload, Folder } from "lucide-react";
+import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
+import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
+
+/** Files we never want to inline from a dropped folder — binary blobs that
+ *  add no signal, vendor directories, OS metadata. Mirrors what `search_content`
+ *  ignores so a student dropping their project folder gets the source code,
+ *  not 200MB of node_modules. */
+const FOLDER_SKIP_DIRS = new Set([
+  "node_modules", ".git", ".svn", "dist", "build", "out", "target",
+  ".next", ".nuxt", ".turbo", ".cache", ".idea", ".vscode", "__pycache__",
+  ".venv", "venv", "env", ".DS_Store",
+]);
+
+const FOLDER_SKIP_EXTS = new Set([
+  "exe", "dll", "so", "dylib", "a", "o", "obj", "class", "jar", "war",
+  "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
+  "jpg", "jpeg", "png", "gif", "webp", "ico", "bmp", "tiff", // images keep their own path
+  "woff", "woff2", "ttf", "otf", "eot",
+  "mp4", "mkv", "mov", "avi", "wmv",
+]);
+
+const FOLDER_DROP_MAX_FILES = 100;
+
+/** Recursively walk a webkit FileSystemEntry tree and collect File objects.
+ *  Skips vendor directories and binary file types so dropping a project
+ *  folder doesn't yield 5,000 useless attachments. Caps at 100 files; the
+ *  caller surfaces a notice if we hit the cap. */
+async function entryToFiles(
+  entry: any,
+  bucket: File[],
+  maxFiles: number,
+  pathPrefix = "",
+): Promise<{ truncated: boolean }> {
+  if (bucket.length >= maxFiles) return { truncated: true };
+  if (entry?.isFile) {
+    return new Promise<{ truncated: boolean }>((resolve) => {
+      entry.file((f: File) => {
+        if (bucket.length >= maxFiles) return resolve({ truncated: true });
+        const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+        if (FOLDER_SKIP_EXTS.has(ext) && !f.type.startsWith("image/")) {
+          return resolve({ truncated: false });
+        }
+        if (f.size > 5 * 1024 * 1024) {
+          // Cap dropped-folder files at 5MB each — anything bigger is almost
+          // certainly not the source you want to discuss in chat.
+          return resolve({ truncated: false });
+        }
+        // Stamp the relative path into the filename so the user sees folder
+        // structure in the chip strip.
+        const rel = pathPrefix ? `${pathPrefix}/${f.name}` : f.name;
+        const renamed = new File([f], rel, { type: f.type });
+        bucket.push(renamed);
+        resolve({ truncated: false });
+      }, () => resolve({ truncated: false }));
+    });
+  }
+  if (entry?.isDirectory) {
+    if (FOLDER_SKIP_DIRS.has(entry.name)) return { truncated: false };
+    const reader = entry.createReader();
+    let truncated = false;
+    // readEntries returns batches; loop until empty.
+    while (true) {
+      const batch: any[] = await new Promise((resolve) =>
+        reader.readEntries((entries: any[]) => resolve(entries), () => resolve([])),
+      );
+      if (!batch.length) break;
+      for (const child of batch) {
+        const sub = await entryToFiles(child, bucket, maxFiles, pathPrefix ? `${pathPrefix}/${entry.name}` : entry.name);
+        if (sub.truncated) truncated = true;
+        if (bucket.length >= maxFiles) return { truncated: true };
+      }
+    }
+    return { truncated };
+  }
+  return { truncated: false };
+}
+
+/** Convert a list of File objects to Attachment[] */
+async function filesToAttachments(fileList: File[]): Promise<Attachment[]> {
+  const MAX_FILE_SIZE = 50 * 1024 * 1024;
+  const results: Attachment[] = [];
+  for (const file of fileList) {
+    if (file.size > MAX_FILE_SIZE) continue;
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+    results.push({
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      dataUrl,
+      sizeBytes: file.size,
+    });
+  }
+  return results;
+}
 
 export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const rawMessages = useChatStore((s) =>
-    s.activeId ? s.messages[s.activeId] : undefined
-  );
-  const messages = rawMessages ?? [];
+  const activeId = useChatStore((s) => s.activeId);
   const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
+  const workspacePath = useChatStore((s) => s.workspacePath);
+  const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
+  const attachmentPanelOpen = useChatStore((s) => s.attachmentPanelOpen);
   const getModels = useChatStore((s) => s.getModels);
   const _hydrated = useChatStore((s) => s._hydrated);
-  const isEmpty = messages.length === 0;
+  const addPendingDroppedFiles = useChatStore((s) => s.addPendingDroppedFiles);
+
+  const [welcome, setWelcome] = useState<WelcomeMessageResult>(() => getWelcomeMessage());
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  // Refresh the welcome message on mount and every hour so it stays
+  // time-of-day-appropriate for long-lived sessions.
+  useEffect(() => {
+    // Re-pick immediately to account for any time-since-render drift
+    setWelcome(getWelcomeMessage());
+    const interval = setInterval(() => setWelcome(getWelcomeMessage()), 3_600_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Centered hero is reserved for the "no conversation selected" onboarding state.
+  const showHero = !activeId;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
 
+  // ── Window-level drag and drop ──
+
+  const handleDragEnter = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.types.includes("Files")) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    const items = e.dataTransfer?.items;
+    const droppedFiles = e.dataTransfer?.files;
+    if (!items?.length && !droppedFiles?.length) return;
+
+    // Walk DataTransferItems via webkitGetAsEntry when available so dropped
+    // folders get expanded recursively. Falls back to flat file list when
+    // the runtime lacks the entry API (older Edge / non-Webkit shells).
+    const collected: File[] = [];
+    let truncated = false;
+    if (items && items.length > 0 && "webkitGetAsEntry" in items[0]) {
+      const entries = Array.from(items)
+        .map((it) => (it as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry?.())
+        .filter(Boolean);
+      for (const entry of entries) {
+        const r = await entryToFiles(entry as any, collected, FOLDER_DROP_MAX_FILES);
+        if (r.truncated) truncated = true;
+        if (collected.length >= FOLDER_DROP_MAX_FILES) {
+          truncated = true;
+          break;
+        }
+      }
+    } else if (droppedFiles && droppedFiles.length > 0) {
+      collected.push(...Array.from(droppedFiles));
+    }
+
+    if (collected.length === 0) return;
+
+    const attachments = await filesToAttachments(collected);
+    if (attachments.length > 0) {
+      addPendingDroppedFiles(attachments);
+      if (truncated) {
+        // 100 chips in the input bar makes the truncation visually obvious;
+        // the console message helps anyone debugging "why didn't my whole
+        // folder come through".
+        console.info(
+          `[ChatView] Folder drop truncated to ${FOLDER_DROP_MAX_FILES} files; vendor dirs (node_modules, .git, etc.) and binary files were skipped.`,
+        );
+      }
+    }
+  }, [addPendingDroppedFiles]);
+
   return (
-    <div className="flex flex-col h-full">
-      <TopBar />
-      {!isEmpty && (
-        <div className="flex-1 min-h-0 flex overflow-hidden">
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden relative">
-            <MessageList />
+    <div
+      className="flex flex-col h-full relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Full-window drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#1a1a1c]/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed border-[#f59e42]/40 bg-[#2d2d2d]/80">
+            <div className="w-12 h-12 rounded-full bg-[#f59e42]/10 flex items-center justify-center">
+              <Upload size={22} strokeWidth={1.75} className="text-[#f59e42]" />
+            </div>
+            <span className="text-[15px] font-medium text-[#f59e42]">Drop files here</span>
+            <span className="text-[12px] text-[#a0a0a0]">Images, documents, code files…</span>
           </div>
-          {artifactPanelOpen && (
-            <div className="basis-[58%] grow-0 shrink-0 min-h-0 border-l border-white/5 flex flex-col overflow-hidden">
-              <ArtifactPanel />
+        </div>
+      )}
+      <TopBar />
+      {!showHero && (
+        <div className="flex-1 min-h-0 flex overflow-hidden">
+          <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${
+            artifactPanelOpen || attachmentPanelOpen ? "basis-[34%] grow-0 shrink-0" : "flex-1"
+          }`}>
+            <MessageList />
+            {/* Input + mode/workspace footer live inside the left column so
+                they squeeze with the chat when the artifact panel is open.
+                `mt-auto` keeps the bar pinned to the bottom even when
+                MessageList is briefly empty (e.g. between createConversation
+                and the awaited file-extraction step in handleSend). */}
+            <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
+              <InputBar onOpenSettings={onOpenSettings} />
+            </div>
+          </div>
+          {(artifactPanelOpen || attachmentPanelOpen) && (
+            <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
+              {attachmentPanelOpen ? <AttachmentPanel /> : <ArtifactPanel />}
             </div>
           )}
         </div>
       )}
 
-      <div
-        className={`shrink-0 flex flex-col items-center w-full ${
-          isEmpty ? "flex-1 justify-center px-6 pb-6 gap-3" : "pt-2 px-6 pb-6 gap-3"
-        }`}
-      >
-        {isEmpty && (
-          <div className="flex flex-col items-center text-center animate-[fadeIn_320ms_ease]">
-            <div className="mb-3 flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-[#f59e42]/15 to-[#f59e42]/5 border border-[#f59e42]/15 shadow-[0_8px_24px_-12px_rgba(245,158,66,0.4)]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e42" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-1.5L12 2z" />
-              </svg>
-            </div>
-            <h1 className="text-[28px] font-medium leading-tight tracking-[-0.02em] bg-gradient-to-b from-[#ffffff] to-[#b8b8b8] bg-clip-text text-transparent">
-              goatLLM
-            </h1>
+      {showHero && (
+        <div className="shrink-0 flex flex-col items-center w-full flex-1 justify-center px-6 pb-6 gap-3 relative">
+          {/* Workspace context badge — pinned near the top of the hero area,
+              above the welcome message, so the user always knows which
+              project folder they're working inside. */}
+          {((agentMode && workspacePath) || (designMode && designWorkspacePath)) && (
+            <span className="absolute top-14 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.06] text-[14px] text-[#c9c9c9] animate-[fadeIn_200ms_ease]">
+              <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" />
+              <span className="text-[#a0a0a0]">
+                {agentMode ? "Working on " : "Designing "}
+              </span>
+              <span className="font-medium text-[#ececec] truncate max-w-[220px]">
+                {((agentMode ? workspacePath : designWorkspacePath) ?? "").split("/").pop()}
+              </span>
+            </span>
+          )}
+          <div className="flex flex-col items-center text-center -mt-16 animate-[fadeIn_320ms_ease]">
             {needsSetup ? (
               <div className="mt-3 flex flex-col items-center gap-2 max-w-[480px]">
                 <p className="text-[13px] text-[#a0a0a0] leading-relaxed">
@@ -67,22 +285,31 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                 </button>
               </div>
             ) : (
-              <p className="mt-2 text-[13.5px] text-[#a0a0a0]">
-                Type below or use <kbd className="font-mono text-[11px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#b4b4b4] tabular-nums">⌘N</kbd> for a fresh chat.
-              </p>
+              <>
+                <p className={`mb-2 leading-snug tracking-[-0.01em] ${
+                  welcome.message.display
+                    ? "text-[26px] font-medium bg-gradient-to-b from-[#ffffff] to-[#c8c8c8] bg-clip-text text-transparent"
+                    : "text-[20px] text-[#c8c8c8]"
+                }`}>
+                  {welcome.message.emoji && (
+                    <span className="mr-2" aria-hidden="true">{welcome.message.emoji}</span>
+                  )}
+                  {welcome.message.text}
+                </p>
+                <p className="mt-6 text-[13px] text-[#a0a0a0]">
+                  Type below or use <kbd className="font-mono text-[11px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#b4b4b4] tabular-nums">⌘N</kbd> for a fresh chat.
+                </p>
+              </>
             )}
           </div>
-        )}
-
-        <InputBar />
-
-        {(isEmpty || agentMode) && (
+          <InputBar onOpenSettings={onOpenSettings} />
           <div className="flex items-center flex-wrap gap-1.5 w-full max-w-[720px] px-1">
-            {isEmpty && <ModeToggle />}
+            <ModeToggle />
             {agentMode && <WorkspacePicker />}
+            {designMode && <DesignWorkspacePicker />}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

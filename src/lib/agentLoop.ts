@@ -90,6 +90,8 @@ export function mapMessagesForProvider(messages: LlmMessage[]): unknown[] {
       role,
       content: m.content.map((part) => {
         if (part.type === "text") return { type: "text" as const, text: part.text };
+        if (part.type === "file")
+          return { type: "file" as const, data: part.data, mediaType: part.mimeType };
         return { type: "image" as const, image: part.image, mimeType: part.mimeType };
       }),
     };
@@ -112,6 +114,32 @@ export async function agentLoop(
   const model = await createModel(config);
   const effectiveSignal = combineSignals(options?.abortSignal, options?.parentSignal);
 
+  // Build provider-specific reasoning/thinking options from the user's
+  // reasoningEffort override (set via the gear icon in the model picker).
+  let providerOptions: Record<string, Record<string, unknown>> | undefined;
+  const effort = config.reasoningEffort;
+  if (effort && effort !== "off") {
+    const providerKey = config.provider;
+    if (providerKey === "anthropic") {
+      const budget = effort === "minimal" || effort === "low" ? 4000
+        : effort === "medium" ? 8000
+        : effort === "high" ? 16000
+        : 32000; // xhigh
+      providerOptions = {
+        [providerKey]: {
+          thinking: { type: "enabled", budgetTokens: budget },
+        },
+      };
+    } else {
+      // OpenAI and OpenAI-compatible providers accept reasoningEffort.
+      // Clamp xhigh → high (only a subset of models support xhigh natively).
+      const re = effort === "xhigh" ? "high" : effort;
+      providerOptions = {
+        [providerKey]: { reasoningEffort: re },
+      };
+    }
+  }
+
   try {
     const result = streamText({
       model,
@@ -122,6 +150,8 @@ export async function agentLoop(
         ? stepCountIs(options.maxToolRounds ?? 10)
         : stepCountIs(1),
       abortSignal: effectiveSignal,
+      ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
+      ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
     });
 
     let fullText = "";
@@ -189,6 +219,21 @@ export async function agentLoop(
     const err = error instanceof Error ? error : new Error(String(error));
     // Detect common provider error patterns and surface a friendly message
     const msg = err.message || "";
+    // Context-window overflow: every provider phrases this differently. We
+    // detect via regex over the error message and tag the resulting Error
+    // with a `code` property the UI can branch on (offer to switch model or
+    // trim earlier messages with one click).
+    if (
+      /(context.*length|maximum.*context|too\s+(long|many)\s+tokens|prompt\s+is\s+too\s+long|exceeds.*tokens|context\s+window|input.*too\s+long)/i.test(msg) ||
+      /token\s*limit/i.test(msg)
+    ) {
+      const overflow = new Error(
+        `This request is too long for the active model. You can switch to a longer-context model or trim earlier messages.\n\nDetails: ${msg.slice(0, 240)}`,
+      );
+      (overflow as Error & { code?: string }).code = "context_overflow";
+      callbacks.onError(overflow);
+      return;
+    }
     if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) {
       callbacks.onError(new Error(
         `The provider returned an invalid (non-JSON) response. This may be a temporary issue with the model or API endpoint. Try again or switch models.\n\nDetails: ${msg.slice(0, 200)}`
