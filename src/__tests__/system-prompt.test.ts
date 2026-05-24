@@ -23,6 +23,24 @@ describe("buildChatSystemPrompt", () => {
     const out = buildChatSystemPrompt("");
     expect(out).not.toMatch(/<user_instructions>/);
   });
+
+  it("omits the web_search nudge by default", () => {
+    const out = buildChatSystemPrompt();
+    expect(out).not.toMatch(/web_search tool is available/);
+  });
+
+  it("includes the web_search nudge when hasWebSearch is true", () => {
+    const out = buildChatSystemPrompt(undefined, false, true);
+    expect(out).toMatch(/web_search tool is available/);
+    expect(out).toMatch(/current events/i);
+  });
+
+  it("web_search nudge composes with user instructions", () => {
+    const out = buildChatSystemPrompt("be brief", false, true);
+    expect(out).toMatch(/web_search tool is available/);
+    expect(out).toMatch(/<user_instructions>/);
+    expect(out).toMatch(/be brief/);
+  });
 });
 
 describe("buildAgentSystemPrompt", () => {
@@ -55,6 +73,37 @@ describe("buildAgentSystemPrompt", () => {
     expect(out).toMatch(/coding agent/i);
     expect(out).toMatch(/goatLLM/);
   });
+
+  it("routes grep-shaped work to search_content (PR0 grep nudge)", () => {
+    const out = buildAgentSystemPrompt({ tools: [] });
+    // Tool routing: search_content beats bash grep, including the new flags.
+    expect(out).toMatch(/search_content[^.]*not bash grep/i);
+    expect(out).toMatch(/context_lines/);
+    expect(out).toMatch(/case_insensitive/);
+    // Bash guidance should NOT claim grep / find as bash territory anymore.
+    expect(out).not.toMatch(/Use bash for shell operations like ls, grep, find/);
+  });
+
+  it("does not include research preamble by default", () => {
+    const out = buildAgentSystemPrompt({ tools: [] });
+    expect(out).not.toMatch(/RESEARCH MODE/);
+  });
+
+  it("prepends research preamble when researchMode is true", () => {
+    const out = buildAgentSystemPrompt({ tools: [], researchMode: true });
+    expect(out).toMatch(/\[RESEARCH MODE\]/);
+    expect(out).toMatch(/PLAN/);
+    expect(out).toMatch(/SYNTHESIZE/);
+    expect(out).toMatch(/citations/i);
+  });
+
+  it("research preamble appears before the agent identity statement", () => {
+    const out = buildAgentSystemPrompt({ tools: [], researchMode: true });
+    const researchIdx = out.indexOf("[RESEARCH MODE]");
+    const agentIdx = out.indexOf("expert coding agent");
+    expect(researchIdx).toBeGreaterThanOrEqual(0);
+    expect(agentIdx).toBeGreaterThan(researchIdx);
+  });
 });
 
 describe("getGoatLLMToolInfo", () => {
@@ -73,6 +122,25 @@ describe("getGoatLLMToolInfo", () => {
     const tools = getGoatLLMToolInfo();
     for (const t of tools) {
       expect(t.description.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("is derived from the live registry — no drift", async () => {
+    // Drift-bug regression net: every tool registered in ALL_TOOLS must
+    // surface in the prompt list. Adding a tool to the registry without
+    // updating system-prompt should never silently hide it from the model.
+    const { ALL_TOOLS } = await import("../lib/tools/registry");
+    const promptNames = new Set(getGoatLLMToolInfo().map((t) => t.name));
+    for (const registeredName of Object.keys(ALL_TOOLS)) {
+      expect(promptNames.has(registeredName)).toBe(true);
+    }
+  });
+
+  it("buildAgentSystemPrompt accepts a live ToolSet and renders every tool", async () => {
+    const { ALL_TOOLS } = await import("../lib/tools/registry");
+    const prompt = buildAgentSystemPrompt({ tools: ALL_TOOLS });
+    for (const name of Object.keys(ALL_TOOLS)) {
+      expect(prompt).toMatch(new RegExp(`- ${name}:`));
     }
   });
 });

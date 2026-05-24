@@ -1,36 +1,44 @@
+/**
+ * llm.ts — public stream entry points and the title generator.
+ *
+ * The stream-and-tool-loop body lives in agentLoop.ts (one source of
+ * truth for both parent agents and PR2's subagents). This file is the
+ * stable surface call sites import: streamChat for the parent stream,
+ * generateTitle for async title generation, and the shared types.
+ */
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { streamText, stepCountIs, generateText, type ToolSet } from "ai";
-import type { LanguageModel } from "ai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateText, type LanguageModel } from "ai";
 import { getFetch, initFetch } from "./fetch-adapter";
+import { agentLoop, type AgentLoopOptions } from "./agentLoop";
+import type {
+  LlmConfig,
+  LlmMessage,
+  LlmContentPart,
+  StreamCallbacks,
+  ToolCallInfo,
+  ToolResultInfo,
+  ToolErrorInfo,
+} from "./llm-types";
 
-export type LlmContentPart =
-  | { type: "text"; text: string }
-  | { type: "image"; image: string; mimeType?: string };
+export type {
+  LlmConfig,
+  LlmMessage,
+  LlmContentPart,
+  StreamCallbacks,
+  ToolCallInfo,
+  ToolResultInfo,
+  ToolErrorInfo,
+};
 
-export interface LlmMessage {
-  role: "user" | "assistant" | "system";
-  content: string | LlmContentPart[];
-}
-
-export interface LlmConfig {
-  provider: string;
-  modelId: string;
-  apiKey: string | null;
-  baseUrl?: string;
-}
-
-export interface ToolCallInfo {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-}
-
-export interface ToolResultInfo {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
-  output: unknown;
+/** Public stream options. Mirrors AgentLoopOptions but omits internal
+ *  fields (parentSignal, depth) so callers can't accidentally pretend to
+ *  be a subagent. PR2's spawn_subagent calls agentLoop directly. */
+export interface StreamOptions {
+  abortSignal?: AbortSignal;
+  tools?: AgentLoopOptions["tools"];
+  maxToolRounds?: number;
 }
 
 async function createModel(config: LlmConfig): Promise<LanguageModel> {
@@ -39,9 +47,21 @@ async function createModel(config: LlmConfig): Promise<LanguageModel> {
 
   const baseURL = config.baseUrl ?? "http://localhost:1234/v1";
 
+  if (config.provider === "anthropic") {
+    const anthropic = createAnthropic({
+      apiKey: config.apiKey ?? "",
+      fetch: customFetch,
+    });
+    return anthropic.languageModel(config.modelId);
+  }
+
   if (
     config.provider === "opencode-go" ||
-    config.provider === "groq"
+    config.provider === "groq" ||
+    config.provider === "deepseek" ||
+    config.provider === "openrouter" ||
+    config.provider === "ollama" ||
+    config.provider === "lmstudio"
   ) {
     const compat = createOpenAICompatible({
       name: config.provider,
@@ -59,20 +79,12 @@ async function createModel(config: LlmConfig): Promise<LanguageModel> {
   return openai.languageModel(config.modelId);
 }
 
-export interface StreamCallbacks {
-  onToken: (token: string) => void;
-  onToolCall?: (toolCall: ToolCallInfo) => void;
-  onToolResult?: (result: ToolResultInfo) => void;
-  onDone: (fullText: string) => void;
-  onError: (error: Error) => void;
-}
-
-export interface StreamOptions {
-  abortSignal?: AbortSignal;
-  tools?: ToolSet;
-  maxToolRounds?: number;
-}
-
+/**
+ * Stream a chat turn (parent agent or chat-mode). Thin wrapper over
+ * agentLoop with depth=0 and no parentSignal so existing call sites are
+ * unchanged. PR2 will introduce a separate spawn entry point that calls
+ * agentLoop with depth=1 and the parent's signal chained in.
+ */
 export async function streamChat(
   messages: LlmMessage[],
   systemPrompt: string | null,
@@ -80,99 +92,12 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   options?: StreamOptions,
 ): Promise<void> {
-  const model = await createModel(config);
-
-  try {
-    const result = streamText({
-      model,
-      system: systemPrompt ?? undefined,
-      messages: messages.map((m) => {
-        const role = m.role as "user" | "assistant" | "system";
-        if (typeof m.content === "string") {
-          return { role, content: m.content };
-        }
-        return {
-          role,
-          content: m.content.map((part) => {
-            if (part.type === "text") return { type: "text" as const, text: part.text };
-            return { type: "image" as const, image: part.image, mimeType: part.mimeType };
-          }),
-        };
-      }) as any,
-      ...(options?.tools ? { tools: options.tools, toolChoice: "auto" as const } : {}),
-      stopWhen: options?.tools
-        ? stepCountIs(options.maxToolRounds ?? 10)
-        : stepCountIs(1),
-      abortSignal: options?.abortSignal,
-    });
-
-    let fullText = "";
-    for await (const chunk of result.fullStream) {
-      switch (chunk.type) {
-        case "text-delta":
-          fullText += chunk.text;
-          callbacks.onToken(chunk.text);
-          break;
-
-        case "tool-call":
-          callbacks.onToolCall?.({
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: (chunk as Record<string, unknown>).input,
-          });
-          break;
-
-        case "tool-result":
-          callbacks.onToolResult?.({
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: (chunk as Record<string, unknown>).input,
-            output: (chunk as Record<string, unknown>).output,
-          });
-          break;
-
-        case "tool-error":
-          callbacks.onError(
-            new Error(`Tool error: ${chunk.toolName} — ${(chunk as Record<string, unknown>).error}`),
-          );
-          break;
-
-        case "error":
-          callbacks.onError((chunk as Record<string, unknown>).error as Error);
-          return;
-
-        case "abort":
-          return;
-
-        case "finish":
-          // stream complete
-          break;
-      }
-    }
-
-    callbacks.onDone(fullText);
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      callbacks.onDone("");
-      return;
-    }
-    const err = error instanceof Error ? error : new Error(String(error));
-    // Detect common provider error patterns and surface a friendly message
-    const msg = err.message || "";
-    if (msg.includes("Unexpected token") || msg.includes("is not valid JSON") || msg.includes("JSON")) {
-      callbacks.onError(new Error(
-        `The provider returned an invalid (non-JSON) response. This may be a temporary issue with the model or API endpoint. Try again or switch models.\n\nDetails: ${msg.slice(0, 200)}`
-      ));
-      return;
-    }
-    if (msg.includes("fetch") || msg.includes("NetworkError") || msg.includes("Failed to fetch") || msg.includes("Load failed")) {
-      callbacks.onError(new Error(
-        `Cannot reach the model provider. Check that the service is running and accessible. If running locally, this may be a CORS issue — make sure the app is launched via \`pnpm tauri dev\` (not just \`pnpm dev\`).\n\nDetails: ${msg.slice(0, 200)}`
-      ));
-      return;
-    }
-    callbacks.onError(err);
-  }
+  return agentLoop(messages, systemPrompt, config, callbacks, {
+    abortSignal: options?.abortSignal,
+    tools: options?.tools,
+    maxToolRounds: options?.maxToolRounds,
+    depth: 0,
+  });
 }
 
 export async function generateTitle(
