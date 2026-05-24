@@ -16,6 +16,17 @@ When reviewing UI changes (in `/design-review`, `/qa`, or PR review), flag any:
 - Use of decorative gradients, blobs, 3-column icon grids, centered-everything, or any AI-slop pattern listed in `DESIGN.md`.
 - New "primary" colors. There is one accent.
 
+## Persistence — Dual Write Strategy
+
+Every message and conversation is written to TWO backends:
+
+1. **localStorage journal** (`goatllm-*` keys) — synchronous, survives any close path including Cmd+Q and force-quit. Written on the calling thread before control returns to the UI.
+2. **SQLite mirror** (via Tauri IPC `@tauri-apps/plugin-store`) — async, durable. Powers search, large history loads, and cross-restart loads.
+
+On startup: read the journal first (instant, no IPC), then merge in SQLite. The journal fills gaps SQLite may have missed; SQLite fills gaps the journal may have lost. The UX guarantee is: "type a message, close the app a millisecond later, reopen → it's there."
+
+Source: `src/lib/db.ts`. This is intentional overkill — crash-proof message saving is a real UX moat.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.

@@ -19,11 +19,8 @@
  * streamChat is now a thin wrapper that calls agentLoop with depth=0 and
  * no parentSignal — preserving every existing import-site contract.
  */
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { streamText, stepCountIs, type ToolSet, type LanguageModel } from "ai";
-import { getFetch, initFetch } from "./fetch-adapter";
+import { streamText, stepCountIs, type ToolSet } from "ai";
+import { createModel } from "./model-factory";
 import type {
   LlmConfig,
   LlmMessage,
@@ -71,44 +68,6 @@ function combineSignals(
   if (parent.aborted) ctrl.abort(parent.reason);
   else parent.addEventListener("abort", onParent, { once: true });
   return ctrl.signal;
-}
-
-async function createModel(config: LlmConfig): Promise<LanguageModel> {
-  await initFetch();
-  const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
-
-  const baseURL = config.baseUrl ?? "http://localhost:1234/v1";
-
-  if (config.provider === "anthropic") {
-    const anthropic = createAnthropic({
-      apiKey: config.apiKey ?? "",
-      fetch: customFetch,
-    });
-    return anthropic.languageModel(config.modelId);
-  }
-
-  if (
-    config.provider === "opencode-go" ||
-    config.provider === "groq" ||
-    config.provider === "deepseek" ||
-    config.provider === "openrouter" ||
-    config.provider === "ollama" ||
-    config.provider === "lmstudio"
-  ) {
-    const compat = createOpenAICompatible({
-      name: config.provider,
-      baseURL,
-      apiKey: config.apiKey ?? "not-needed",
-      fetch: customFetch,
-    });
-    return compat.languageModel(config.modelId);
-  }
-
-  const openai = createOpenAI({
-    apiKey: config.apiKey ?? "",
-    fetch: customFetch,
-  });
-  return openai.languageModel(config.modelId);
 }
 
 /**

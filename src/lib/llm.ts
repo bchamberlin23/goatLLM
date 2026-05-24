@@ -6,11 +6,8 @@
  * stable surface call sites import: streamChat for the parent stream,
  * generateTitle for async title generation, and the shared types.
  */
-import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { generateText, type LanguageModel } from "ai";
-import { getFetch, initFetch } from "./fetch-adapter";
+import { generateText } from "ai";
+import { createModel } from "./model-factory";
 import { agentLoop, type AgentLoopOptions } from "./agentLoop";
 import type {
   LlmConfig,
@@ -39,44 +36,6 @@ export interface StreamOptions {
   abortSignal?: AbortSignal;
   tools?: AgentLoopOptions["tools"];
   maxToolRounds?: number;
-}
-
-async function createModel(config: LlmConfig): Promise<LanguageModel> {
-  await initFetch();
-  const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
-
-  const baseURL = config.baseUrl ?? "http://localhost:1234/v1";
-
-  if (config.provider === "anthropic") {
-    const anthropic = createAnthropic({
-      apiKey: config.apiKey ?? "",
-      fetch: customFetch,
-    });
-    return anthropic.languageModel(config.modelId);
-  }
-
-  if (
-    config.provider === "opencode-go" ||
-    config.provider === "groq" ||
-    config.provider === "deepseek" ||
-    config.provider === "openrouter" ||
-    config.provider === "ollama" ||
-    config.provider === "lmstudio"
-  ) {
-    const compat = createOpenAICompatible({
-      name: config.provider,
-      baseURL,
-      apiKey: config.apiKey ?? "not-needed",
-      fetch: customFetch,
-    });
-    return compat.languageModel(config.modelId);
-  }
-
-  const openai = createOpenAI({
-    apiKey: config.apiKey ?? "",
-    fetch: customFetch,
-  });
-  return openai.languageModel(config.modelId);
 }
 
 /**
@@ -160,6 +119,12 @@ export function heuristicTitle(firstMessage: string): string {
     .replace(/`[^`]*`/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
     .replace(/\[File:[^\]]*\]/g, " ")
+    .replace(/\[PDF:[^\]]*\]/g, " ")
+    .replace(/\[Word:[^\]]*\]/g, " ")
+    .replace(/\[Slides:[^\]]*\]/g, " ")
+    .replace(/\[Spreadsheet:[^\]]*\]/g, " ")
+    .replace(/\[Notebook:[^\]]*\]/g, " ")
+    .replace(/\[RTF:[^\]]*\]/g, " ")
     .replace(/\[Attached:[^\]]*\]/g, " ")
     .replace(/[^\p{L}\p{N}\s'-]+/gu, " ")
     .replace(/\s+/g, " ")
