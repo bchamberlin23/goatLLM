@@ -4,3 +4,6 @@ target/
 .gstack/
 .ralph/
 CLAUDE.md
+*.tsbuildinfo
+.DS_Store
+.vscode/settings.json
