@@ -328,7 +328,7 @@ export function InputBar() {
     handleSend({ content: "continue" });
   }, [activeId, handleSend, setContinueConversation]);
 
-  const canSend = (value.trim().length > 0 || files.length > 0) && !isStreaming && !showContinue;
+  const canSend = (value.trim().length > 0 || files.length > 0) && !isStreaming && !showContinue && !noModelsAvailable && !!selectedModelId;
 
   const handleToggleMic = useCallback(() => {
     if (speech.listening) {
