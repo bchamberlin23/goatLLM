@@ -7,3 +7,6 @@ CLAUDE.md
 *.tsbuildinfo
 .DS_Store
 .vscode/settings.json
+DESIGN.md
+DESIGN_MODE_PLAN.md
+.commandcode/
