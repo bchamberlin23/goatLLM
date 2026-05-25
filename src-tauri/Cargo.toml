@@ -23,6 +23,7 @@ zip = "0.6"
 calamine = "0.24"
 quick-xml = "0.31"
 dirs = "5"
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

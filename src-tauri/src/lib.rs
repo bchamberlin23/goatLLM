@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod ollama;
+mod mcp;
 
 const WORKSPACES_DIR: &str = "workspaces";
 const WORKSPACES_FILE: &str = "workspaces.json";
@@ -2793,6 +2794,9 @@ pub fn run() {
             // Track the managed Ollama child (if any).
             app.manage(ollama::OllamaProcess::new());
 
+            // Track MCP stdio child processes.
+            app.manage(mcp::McpProcesses::new());
+
             let _window = app.get_webview_window("main").unwrap();
             Ok(())
         })
@@ -2856,6 +2860,9 @@ pub fn run() {
             ollama::ollama_status,
             ollama::ollama_start,
             ollama::ollama_stop,
+            mcp::mcp_stdio_spawn,
+            mcp::mcp_stdio_send,
+            mcp::mcp_stdio_disconnect,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
