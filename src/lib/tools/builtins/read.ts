@@ -300,6 +300,14 @@ export const READ_ONLY_TOOLS = {
     }),
     execute: async ({ query, maxResults }) => {
       const state = useChatStore.getState();
+
+      if (!state.researchMode && state.webSearchCount >= 2) {
+        return "Maximum web searches (2) already used this turn. Answer with what you already know.";
+      }
+      if (!state.researchMode) {
+        state.incrementWebSearchCount();
+      }
+
       const { getFetch } = await import("../../fetch-adapter");
       const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
 

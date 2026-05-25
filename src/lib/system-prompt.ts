@@ -195,7 +195,7 @@ export function buildChatSystemPrompt(
     : inlineOnlyGuide;
 
   const webSearchGuide = hasWebSearch
-    ? "\n\nA web_search tool is available. Use it whenever the user asks about current events, recent updates, prices, scores, releases, or any fact that may have changed after your training cutoff — or when you simply don't know. Don't announce that you'll search; just call the tool, then answer with the result. One or two queries is enough for a quick lookup; reserve heavier multi-step research for when the user explicitly asks for it."
+    ? "\n\nA web_search tool is available. Use it whenever the user asks about current events, recent updates, prices, scores, releases, or any fact that may have changed after your training cutoff — or when you simply don't know. Don't announce that you'll search; just call the tool, then answer with the result.\n\nCRITICAL: You only get ONE search per turn. Read the user's request carefully, figure out exactly what they need, and craft a single optimized query. Do NOT search multiple angles or do follow-up searches — the tool will fail if you exceed the limit. Answer with whatever the one result gives you."
     : "";
   let body = base + artifactGuide + webSearchGuide;
   if (userPrompt) {

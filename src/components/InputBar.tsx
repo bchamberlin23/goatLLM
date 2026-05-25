@@ -672,6 +672,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     });
 
     const ac = new AbortController();
+    useChatStore.getState().resetWebSearchCount();
     startStreaming(convId!, ac);
 
     const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
@@ -776,6 +777,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         state: writeTool ? "pending_approval" : "running",
         contentAtInvocation: currentContent.length,
       };
+      // Suppress web_search pills beyond the hard cap — the tool returns an
+      // error to the model but the user never sees a doomed search attempt.
+      // Research mode is exempt from the cap (it has its own budget via stepCountIs).
+      if (tc.toolName === "web_search" && !isResearchMode && useChatStore.getState().webSearchCount >= 2) {
+        return;
+      }
       if (tc.toolName === "exec_command" || tc.toolName === "bash") {
         const input = tc.input as { command?: string } | undefined;
         if (input?.command) {

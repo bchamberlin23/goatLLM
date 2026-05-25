@@ -584,6 +584,12 @@ interface ChatStore {
   /** Stable per-install token sent as the `Token` header. Generated on first use. */
   freeWebSearchToken: string;
 
+  /** Per-turn web search call counter. Resets on each send. Caps the model at
+   *  2 searches per turn to prevent runaway search loops. */
+  webSearchCount: number;
+  incrementWebSearchCount: () => void;
+  resetWebSearchCount: () => void;
+
   /** Code execution in chat mode — when true, run_python and run_javascript
    *  surface as approved tools so a student can ask the model to compute
    *  something inline. Off by default; opt-in via Settings. */
@@ -828,6 +834,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       freeWebSearch: false,
       chatCodeExec: false,
       freeWebSearchToken: "",
+      webSearchCount: 0,
       autoArtifacts: true,
       officeArtifacts: true,
       // ── Skills ──
@@ -1947,6 +1954,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       setFreeWebSearch: (enabled) => {
         set({ freeWebSearch: enabled });
         try { localStorage.setItem("goatllm-free-web-search", enabled ? "true" : "false"); } catch {}
+      },
+      incrementWebSearchCount: () => {
+        set((s) => ({ webSearchCount: s.webSearchCount + 1 }));
+      },
+      resetWebSearchCount: () => {
+        set({ webSearchCount: 0 });
       },
       setChatCodeExec: (enabled) => {
         set({ chatCodeExec: enabled });
