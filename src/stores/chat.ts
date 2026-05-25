@@ -2472,6 +2472,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                 m.isStreaming = false;
                 (m as Message & { interrupted?: boolean }).interrupted = true;
               }
+              // Finalize any tool calls stuck in running/pending_approval
+              // so restored chats don't show stale shimmer pills or
+              // broken ApprovalGate buttons.
+              if (m.toolCalls?.length) {
+                for (const tc of m.toolCalls) {
+                  if (tc.state === "running" || tc.state === "pending_approval") {
+                    tc.state = "done";
+                  }
+                }
+              }
             }
           }
           // Fix conversations whose title generation never completed.
@@ -2567,8 +2577,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const defaultSystemPrompt = localStorage.getItem("goatllm-default-system-prompt") || "";
           const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
           const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
-          const researchMode = localStorage.getItem("goatllm-research-mode") === "true";
-          const planMode = agentMode && localStorage.getItem("goatllm-plan-mode") === "true";
+          // Reset per-session state so old chats always open fresh.
+          localStorage.removeItem("goatllm-research-mode");
+          localStorage.removeItem("goatllm-plan-mode");
+          const researchMode = false;
+          const planMode = false;
           const activeId = localStorage.getItem("goatllm-active-conversation") || null;
           // Only restore activeId if that conversation actually exists in loaded data
           const validActiveId = activeId && data.conversations.some((c) => c.id === activeId) ? activeId : null;
@@ -2628,6 +2641,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               localStorage.setItem("goatllm-free-web-search-token", freeWebSearchToken);
             } catch { /* ignore */ }
           }
+          // Reset per-session state so old chats always open fresh.
+          localStorage.removeItem("goatllm-research-mode");
+          localStorage.removeItem("goatllm-plan-mode");
           const agentMode = localStorage.getItem("goatllm-agent-mode") === "true";
           const designMode = !agentMode && localStorage.getItem("goatllm-design-mode") === "true";
           const activeSkillId = localStorage.getItem("goatllm-active-skill") || null;
@@ -2638,8 +2654,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const defaultSystemPrompt = localStorage.getItem("goatllm-default-system-prompt") || "";
           const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
           const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
-          const researchMode = localStorage.getItem("goatllm-research-mode") === "true";
-          const planMode = agentMode && localStorage.getItem("goatllm-plan-mode") === "true";
           set({
             providerConfigs,
             selectedModelId: savedModel,
@@ -2660,8 +2674,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             defaultSystemPrompt,
             ollamaUrl,
             embeddingModel,
-            researchMode,
-            planMode,
+            researchMode: false,
+            planMode: false,
             autoApprove: savedMode === "yolo",
             _hydrated: true,
           });

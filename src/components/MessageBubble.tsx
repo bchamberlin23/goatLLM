@@ -414,7 +414,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
   const agentMode = useChatStore((s) => s.agentMode);
-  const showWorkingHeader = isAssistant && (hasToolCalls || (isStreaming && agentMode));
+  const showWorkingHeader = isAssistant && isStreaming && (hasToolCalls || agentMode);
   const headerRunning = isAssistant && isStreaming;
 
   return (
