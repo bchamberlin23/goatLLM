@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import {
   RECOMMENDED_MODELS,
+  getTierModelIds,
   modelFit,
   formatBytes,
   ollamaSystemInfo,
@@ -207,15 +208,10 @@ export function LocalModelsSection() {
     await handlePull(id);
   }, [customPull, handlePull]);
 
-  // Sort recommended models so the best fit for this hardware lands first.
+  // Only show the 3 models for the user's hardware tier.
   const sortedRecs = useMemo(() => {
-    const fitOrder: Record<ModelFit, number> = { recommended: 0, fits: 1, tight: 2, "too-big": 3 };
-    return [...RECOMMENDED_MODELS].sort((a, b) => {
-      const fa = fitOrder[modelFit(a, info)];
-      const fb = fitOrder[modelFit(b, info)];
-      if (fa !== fb) return fa - fb;
-      return a.order - b.order;
-    });
+    const tierIds = new Set(getTierModelIds(info));
+    return RECOMMENDED_MODELS.filter((m) => tierIds.has(m.id));
   }, [info]);
 
   // Treat "running daemon" as the most authoritative installed signal —

@@ -106,12 +106,17 @@ function autoDetectContextWindow(modelId: string, providerId: string): number {
   if (name.includes("gemini-1.5")) return 1_000_000;
   if (name.includes("gemini")) return 32_768;
 
+  // Google Gemma (open models)
+  if (name.includes("gemma4")) return 128_000;
+  if (name.includes("gemma3")) return 128_000;
+
   // Meta Llama (handles both "llama-3.2" and "llama3.2" formats)
   if (/\bllama[-.]?4\b/.test(name)) return 1_000_000;
   if (/\bllama[-.]?3(\.\d)?\b/.test(name)) return 128_000;
   if (/\bllama[-.]?2\b/.test(name)) return 4_096;
 
   // Mistral / Mixtral
+  if (name.includes("mistral-medium")) return 128_000;
   if (name.includes("mistral-large")) return 128_000;
   if (name.includes("mistral-nemo")) return 128_000;
   if (name.includes("mistral-small") || name.includes("ministral")) return 32_000;
@@ -131,6 +136,18 @@ function autoDetectContextWindow(modelId: string, providerId: string): number {
   // Qwen
   if (name.includes("qwen3")) return 262_144;
   if (name.includes("qwen2.5") || name.includes("qwen2")) return 128_000;
+
+  // Granite (IBM)
+  if (name.includes("granite4")) return 128_000;
+
+  // GPT-OSS (OpenAI open-weight)
+  if (name.includes("gpt-oss")) return 128_000;
+
+  // OLMo (Ai2)
+  if (name.includes("olmo")) return 128_000;
+
+  // Nemotron (NVIDIA)
+  if (name.includes("nemotron")) return 128_000;
 
   // Kimi
   if (name.includes("kimi-k2")) return 262_144;

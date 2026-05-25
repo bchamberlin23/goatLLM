@@ -309,30 +309,117 @@ fn probe_gpu(ram_bytes: u64) -> (bool, Option<String>, Option<u64>) {
         return (true, Some(format!("{} (Metal)", chip)), Some(ram_bytes));
     }
 
-    // Try nvidia-smi for everyone else.
-    let nv = Command::new("nvidia-smi")
+    // ── NVIDIA GPU ──
+    if let Some((name, vram)) = probe_nvidia_gpu() {
+        return (true, Some(name), Some(vram));
+    }
+
+    // ── AMD GPU ──
+    if let Some((name, vram)) = probe_amd_gpu() {
+        return (true, Some(name), Some(vram));
+    }
+
+    // Integrated graphics / no detectable GPU: fall back to CPU-only inference.
+    (false, None, None)
+}
+
+/// Probe NVIDIA GPUs via `nvidia-smi`. Returns (name, vram_bytes) on success.
+fn probe_nvidia_gpu() -> Option<(String, u64)> {
+    let out = Command::new("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total",
             "--format=csv,noheader,nounits",
         ])
-        .output();
-    if let Ok(out) = nv {
-        if out.status.success() {
-            let body = String::from_utf8_lossy(&out.stdout);
-            if let Some(line) = body.lines().next() {
-                let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
-                if parts.len() >= 2 {
-                    let mb = parts[1].parse::<u64>().ok();
-                    let vram = mb.map(|m| m * 1024 * 1024);
-                    return (true, Some(parts[0].to_string()), vram);
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let body = String::from_utf8_lossy(&out.stdout);
+    let line = body.lines().next()?;
+    let parts: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let mb = parts[1].parse::<u64>().ok()?;
+    let vram = mb * 1024 * 1024;
+    Some((parts[0].to_string(), vram))
+}
+
+/// Probe AMD GPUs (ROCm / DirectML).
+///
+/// Linux: walks `/sys/class/drm/card*/device/` looking for vendor `0x1002`
+/// and reads `mem_info_vram_total` (bytes, available on amdgpu driver with
+/// kernel ≥ 4.6).
+///
+/// Windows: queries `wmic win32_videocontroller` for AdapterRAM on devices
+/// whose name contains "AMD" or "Radeon".
+fn probe_amd_gpu() -> Option<(String, u64)> {
+    match std::env::consts::OS {
+        "linux" => probe_amd_linux(),
+        "windows" => probe_amd_windows(),
+        _ => None,
+    }
+}
+
+fn probe_amd_linux() -> Option<(String, u64)> {
+    let drm = fs::read_dir("/sys/class/drm").ok()?;
+    for entry in drm.flatten() {
+        let dev = entry.path().join("device");
+        let vendor = fs::read_to_string(dev.join("vendor")).ok()?;
+        if vendor.trim() != "0x1002" {
+            continue;
+        }
+        let name = fs::read_to_string(dev.join("product_name"))
+            .ok()
+            .map(|s| s.trim().to_string())?;
+        let vram = fs::read_to_string(dev.join("mem_info_vram_total"))
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())?;
+        if vram > 0 {
+            return Some((name, vram));
+        }
+    }
+    None
+}
+
+fn probe_amd_windows() -> Option<(String, u64)> {
+    // wmic outputs columns: AdapterRAM  Name
+    // followed by rows:    4293918720  AMD Radeon RX 7900 XTX
+    let out = Command::new("wmic")
+        .args([
+            "path",
+            "win32_videocontroller",
+            "get",
+            "Name,AdapterRAM",
+        ])
+        .output()
+        .ok()?;
+    let body = String::from_utf8_lossy(&out.stdout);
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty()
+            || line.starts_with("AdapterRAM")
+            || line.starts_with("Name")
+        {
+            continue;
+        }
+        let lower = line.to_lowercase();
+        if !lower.contains("amd") && !lower.contains("radeon") {
+            continue;
+        }
+        // Line format: "<bytes>  <name …>" — split on first whitespace.
+        if let Some(idx) = line.find(char::is_whitespace) {
+            let ram_str = line[..idx].trim();
+            let name = line[idx..].trim();
+            if let Ok(vram) = ram_str.parse::<u64>() {
+                if vram > 0 {
+                    return Some((name.to_string(), vram));
                 }
             }
         }
     }
-
-    // Intel Mac / non-NVIDIA Linux / non-NVIDIA Windows: assume integrated
-    // graphics, treat as no usable GPU for Ollama's purposes.
-    (false, None, None)
+    None
 }
 
 #[tauri::command]

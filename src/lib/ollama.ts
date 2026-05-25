@@ -137,87 +137,250 @@ export interface RecommendedModel {
  * — those are still pull-able by typing the ID, but we don't recommend.
  */
 export const RECOMMENDED_MODELS: RecommendedModel[] = [
+  // ── 4 GB tier ──
   {
-    id: "llama3.2:3b",
-    name: "Llama 3.2 3B",
-    blurb: "Tiny and quick. Great default for any laptop.",
-    sizeGb: 2.0,
+    id: "gemma4:e2b",
+    name: "Gemma 4 Edge 2B",
+    blurb: "Google's efficient edge model. Top-tier instruction following on minimal hardware.",
+    sizeGb: 1.8,
     ramGb: 4,
-    params: "3B",
-    use: "chat",
-    order: 1,
-  },
-  {
-    id: "llama3.2:1b",
-    name: "Llama 3.2 1B",
-    blurb: "Smallest viable chat model. Fits on anything.",
-    sizeGb: 1.3,
-    ramGb: 2,
-    params: "1B",
+    params: "2B",
     use: "chat",
     order: 0,
   },
   {
-    id: "qwen2.5-coder:7b",
-    name: "Qwen 2.5 Coder 7B",
-    blurb: "Coding-tuned. Strong tool use for the agent.",
-    sizeGb: 4.7,
-    ramGb: 8,
-    params: "7B",
+    id: "qwen3.5:2b",
+    name: "Qwen 3.5 2B",
+    blurb: "Outstanding baseline for general chat and light tool utilization.",
+    sizeGb: 1.5,
+    ramGb: 4,
+    params: "2B",
+    use: "chat",
+    order: 1,
+  },
+  {
+    id: "granite4.1:3b",
+    name: "Granite 4.1 3B",
+    blurb: "IBM's enterprise model. Highly optimized for structured JSON and tool workflows.",
+    sizeGb: 2.2,
+    ramGb: 4,
+    params: "3B",
     use: "coding",
     order: 2,
   },
+
+  // ── 8 GB tier ──
   {
-    id: "llama3.1:8b",
-    name: "Llama 3.1 8B",
-    blurb: "Balanced general-purpose chat.",
-    sizeGb: 4.7,
+    id: "gemma4:e4b",
+    name: "Gemma 4 Edge 4B",
+    blurb: "Best reasoning depth and native vision for standard consumer hardware.",
+    sizeGb: 3.5,
     ramGb: 8,
-    params: "8B",
+    params: "4B",
     use: "chat",
     order: 3,
   },
   {
-    id: "gemma3:4b",
-    name: "Gemma 3 4B",
-    blurb: "Google's small open model. Multilingual.",
-    sizeGb: 3.3,
-    ramGb: 6,
-    params: "4B",
-    use: "chat",
+    id: "qwen3.5:9b",
+    name: "Qwen 3.5 9B",
+    blurb: "Extremely reliable for multilingual tasks, structured workflows, and coding.",
+    sizeGb: 5.5,
+    ramGb: 8,
+    params: "9B",
+    use: "coding",
     order: 4,
   },
   {
-    id: "qwen2.5:14b",
-    name: "Qwen 2.5 14B",
-    blurb: "Heavier reasoning. Needs 16GB+ free.",
-    sizeGb: 9.0,
-    ramGb: 16,
-    params: "14B",
-    use: "chat",
+    id: "deepseek-r1:8b",
+    name: "DeepSeek R1 8B",
+    blurb: "Dedicated reasoning model for deep math, logic, and analysis tasks.",
+    sizeGb: 5.0,
+    ramGb: 8,
+    params: "8B",
+    use: "coding",
     order: 5,
   },
+
+  // ── 12 GB tier ──
   {
-    id: "llava:7b",
-    name: "LLaVA 7B",
-    blurb: "Multimodal — pass images in chat.",
-    sizeGb: 4.7,
-    ramGb: 8,
-    params: "7B",
-    use: "vision",
+    id: "qwen3.5:14b",
+    name: "Qwen 3.5 14B",
+    blurb: "Perfectly balanced foundation model with robust vision and tool calling.",
+    sizeGb: 9.0,
+    ramGb: 12,
+    params: "14B",
+    use: "chat",
     order: 6,
   },
   {
-    id: "nomic-embed-text",
-    name: "Nomic Embed Text",
-    blurb: "Embedding model. Required for semantic search.",
-    sizeGb: 0.3,
-    ramGb: 1,
-    params: "137M",
-    use: "embedding",
+    id: "ministral-3:14b",
+    name: "Ministral 3 14B",
+    blurb: "Highly optimized edge model for reliable multimodal deployment.",
+    sizeGb: 9.0,
+    ramGb: 12,
+    params: "14B",
+    use: "vision",
     order: 7,
   },
+
+  // ── 16 GB tier ──
+  {
+    id: "qwen3.6:27b",
+    name: "Qwen 3.6 27B",
+    blurb: "Generational leap. Elite commercial-grade intelligence, agentic coding, and thinking preservation.",
+    sizeGb: 16.0,
+    ramGb: 16,
+    params: "27B",
+    use: "coding",
+    order: 8,
+  },
+  {
+    id: "gemma4:26b",
+    name: "Gemma 4 26B",
+    blurb: "Frontier-class alternative for complex workflow orchestration and logic.",
+    sizeGb: 15.5,
+    ramGb: 16,
+    params: "26B",
+    use: "chat",
+    order: 9,
+  },
+  {
+    id: "gpt-oss:20b",
+    name: "GPT-OSS 20B",
+    blurb: "OpenAI's open-weight option. Smaller footprint leaves room for multi-step dev tasks.",
+    sizeGb: 12.0,
+    ramGb: 16,
+    params: "20B",
+    use: "coding",
+    order: 10,
+  },
+
+  // ── 24 GB tier ──
+  {
+    id: "gemma4:31b",
+    name: "Gemma 4 31B",
+    blurb: "Google's dense 31B model. Unlocks deep logic and long-form execution without MoE complexity.",
+    sizeGb: 18.5,
+    ramGb: 24,
+    params: "31B",
+    use: "chat",
+    order: 11,
+  },
+  {
+    id: "mistral-small3.2:24b",
+    name: "Mistral Small 3.2 24B",
+    blurb: "Excellent for structural tool use and exploring multi-file local codebases.",
+    sizeGb: 14.5,
+    ramGb: 20,
+    params: "24B",
+    use: "coding",
+    order: 12,
+  },
+
+  // ── 32 GB tier ──
+  {
+    id: "qwen3.6:35b",
+    name: "Qwen 3.6 35B",
+    blurb: "Parameter scale-up of the 27B architecture. Maximum depth for dense multi-agent workflows.",
+    sizeGb: 21.0,
+    ramGb: 32,
+    params: "35B",
+    use: "coding",
+    order: 13,
+  },
+  {
+    id: "olmo-3.1:32b",
+    name: "OLMo 3.1 32B",
+    blurb: "Fully open science model optimized for multi-turn structured workflows and strict instruction adherence.",
+    sizeGb: 19.0,
+    ramGb: 32,
+    params: "32B",
+    use: "coding",
+    order: 14,
+  },
+
+  // ── 48 GB+ tier ──
+  {
+    id: "deepseek-r1:70b",
+    name: "DeepSeek R1 70B",
+    blurb: "Massive reasoning model for deep theoretical math, logic, and analysis.",
+    sizeGb: 42.0,
+    ramGb: 48,
+    params: "70B",
+    use: "chat",
+    order: 15,
+  },
+  {
+    id: "nemotron-3-super:120b",
+    name: "Nemotron-3 Super 120B",
+    blurb: "Highly efficient MoE — activates only 12B per token. Speed on enterprise hardware.",
+    sizeGb: 70.0,
+    ramGb: 64,
+    params: "120B",
+    use: "chat",
+    order: 16,
+  },
+  {
+    id: "mistral-medium-3.5:128b",
+    name: "Mistral Medium 3.5 128B",
+    blurb: "Flagship ultra-large dense model. Elite instruction following and vision.",
+    sizeGb: 75.0,
+    ramGb: 128,
+    params: "128B",
+    use: "chat",
+    order: 17,
+  },
+
 ];
+
+/**
+ * VRAM tier → the 3 model IDs to recommend for that tier.
+ * Ordered by ascending VRAM. The lookup walks backwards to find the
+ * largest tier the user's hardware can handle, so e.g. 10GB RAM gets
+ * the 8GB tier, 20GB gets the 16GB tier, etc.
+ */
+const TIER_MODEL_IDS: [vramGb: number, ids: string[]][] = [
+  [4,   ["gemma4:e2b", "qwen3.5:2b", "granite4.1:3b"]],
+  [8,   ["gemma4:e4b", "qwen3.5:9b", "deepseek-r1:8b"]],
+  [12,  ["gemma4:e4b", "qwen3.5:14b", "ministral-3:14b"]],
+  [16,  ["qwen3.6:27b", "gemma4:26b", "gpt-oss:20b"]],
+  [24,  ["qwen3.6:27b", "gemma4:31b", "mistral-small3.2:24b"]],
+  [32,  ["qwen3.6:35b", "gemma4:31b", "olmo-3.1:32b"]],
+  [48,  ["qwen3.6:35b", "gemma4:31b", "deepseek-r1:70b"]],
+  [64,  ["qwen3.6:35b", "gemma4:31b", "nemotron-3-super:120b"]],
+  [128, ["qwen3.6:35b", "gemma4:31b", "mistral-medium-3.5:128b"]],
+];
+
+/**
+ * Given system info, return the 3 model IDs to recommend for the
+ * user's hardware tier. Falls back to the 4GB tier if nothing is known.
+ * Returns exactly 3 model IDs — the three curated picks for the
+ * largest VRAM tier the hardware can handle.
+ */
+export function getTierModelIds(info: OllamaSystemInfo | null): string[] {
+  if (!info) return TIER_MODEL_IDS[0][1];
+
+  const ramGb = info.ramBytes / (1024 ** 3);
+
+  // Mirror modelFit's memory-sizing logic so tier picks match reality:
+  // - Apple Silicon → unified memory (RAM = VRAM)
+  // - NVIDIA GPU   → use VRAM as the binding constraint
+  // - Integrated / CPU-only → use system RAM with OS reserve
+  const isUnified = info.os === "macos" && info.arch === "aarch64";
+  let availableGb = ramGb;
+  if (info.hasGpu && !isUnified && info.vramBytes) {
+    // Discrete GPU: VRAM is the limit; Ollama can offload overflow to CPU
+    // so the ceiling is whichever pool is larger.
+    availableGb = Math.max(info.vramBytes / (1024 ** 3), ramGb);
+  }
+  // Reserve 4GB for OS + browser; never drop below half of system RAM.
+  const usable = Math.max(availableGb - 4, ramGb * 0.5);
+
+  for (let i = TIER_MODEL_IDS.length - 1; i >= 0; i--) {
+    if (usable >= TIER_MODEL_IDS[i][0]) return TIER_MODEL_IDS[i][1];
+  }
+  return TIER_MODEL_IDS[0][1];
+}
 
 export type ModelFit = "recommended" | "fits" | "tight" | "too-big";
 
