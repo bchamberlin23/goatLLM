@@ -24,7 +24,13 @@ export function MessageList() {
   // re-enabled by sending a message or pressing the down-arrow button.
   const stickyRef = useRef(true);
   const programmaticScrollRef = useRef(false);
+  const rafPendingRef = useRef<number | null>(null);
   const activeIdRef = useRef(activeId);
+
+  // Kill any queued RAF when component unmounts.
+  useEffect(() => () => {
+    if (rafPendingRef.current) cancelAnimationFrame(rafPendingRef.current);
+  }, []);
 
   // Count of user messages and total content length — primitive deps that grow
   // monotonically as the conversation evolves.
@@ -41,17 +47,26 @@ export function MessageList() {
     return n;
   }, [messages]);
 
-  // The actual scroll action — same code path the down-arrow button uses.
+  // Smooth, coalesced scroll-to-bottom. Uses a single rAF guard so multiple
+  // triggers inside one frame only schedule one scroll. During active streaming
+  // we use `behavior: "auto"` for instant tracking; manual clicks use smooth.
   const doScrollToBottom = useCallback(() => {
-    programmaticScrollRef.current = true;
     const el = listRef.current;
-    const sentinel = bottomRef.current;
-    if (sentinel) sentinel.scrollIntoView({ block: "end", behavior: "auto" });
-    if (el) el.scrollTop = el.scrollHeight;
-    // Reset the programmatic flag on the next frame after the scroll event
-    // has had a chance to fire.
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
+    if (!el) return;
+    // Coalesce: if a scroll is already scheduled for this frame, bail —
+    // the pending rAF will pick up the latest scrollHeight.
+    if (rafPendingRef.current !== null) return;
+    rafPendingRef.current = requestAnimationFrame(() => {
+      rafPendingRef.current = null;
+      const currentEl = listRef.current;
+      if (!currentEl) return;
+      programmaticScrollRef.current = true;
+      currentEl.scrollTo({ top: currentEl.scrollHeight, behavior: "auto" });
+      // Release the programmatic flag on the next paint frame so any
+      // scroll event that fires is properly classified.
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
     });
   }, []);
 
@@ -130,9 +145,20 @@ export function MessageList() {
 
   const scrollToBottom = useCallback(() => {
     stickyRef.current = true;
-    doScrollToBottom();
+    // Flush any pending auto-scroll before doing a manual smooth one.
+    if (rafPendingRef.current !== null) {
+      cancelAnimationFrame(rafPendingRef.current);
+      rafPendingRef.current = null;
+    }
+    const el = listRef.current;
+    if (!el) return;
+    programmaticScrollRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
     setShowScrollBtn(false);
-  }, [doScrollToBottom]);
+  }, []);
 
   if (messages.length === 0) return null;
 
@@ -141,7 +167,7 @@ export function MessageList() {
       <div
         ref={listRef}
         className="h-full overflow-y-auto"
-        style={{ overscrollBehavior: "contain", scrollbarGutter: "stable" }}
+        style={{ overscrollBehavior: "contain", scrollbarGutter: "stable", scrollBehavior: "smooth", contain: "layout style" }}
         onScroll={handleScroll}
         role="log"
         aria-label="Conversation messages"

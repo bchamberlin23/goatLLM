@@ -80,7 +80,11 @@ html, body, #root {
 
 /* ─── Scrollbar ─── */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+*::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+  transition: background 200ms ease;
+}
 *::-webkit-scrollbar-thumb:hover { background: #555; }
 *::-webkit-scrollbar-track { background: transparent; }
 

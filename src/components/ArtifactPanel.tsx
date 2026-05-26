@@ -78,6 +78,7 @@ function ArtifactContent({
 }) {
   const activeId = useChatStore((s) => s.activeId);
   const updateArtifact = useChatStore((s) => s.updateArtifact);
+  const editorRef = useRef<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -91,6 +92,7 @@ function ArtifactContent({
     setPdfDataUrl(null); setPdfError(null);
     setPyOutput(null); setPyError(null);
     setOfficeHtml(null); setOfficeError(null);
+    autoFollowRef.current = true;
   }, [artifact.id]);
 
   // Render the Office preview HTML whenever the source changes. All three
@@ -146,10 +148,51 @@ function ArtifactContent({
     finally { setPyRunning(false); }
   }, [artifact.code, pyRunning]);
 
+  // Auto-scroll Monaco to the bottom while streaming — follows code
+  // generation without requiring the user to chase the cursor. Breaks
+  // smoothly when the user scrolls away. Re-engages on next streaming
+  // artifact switch.
+  const wasStreamingRef = useRef(false);
+  const autoFollowRef = useRef(true);
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const isNow = artifact.versions?.[
+      artifact.activeVersionIndex ?? (artifact.versions?.length ?? 1) - 1
+    ]?.streaming;
+    if (isNow && autoFollowRef.current) {
+      // Scroll the editor to the last line without moving the cursor.
+      const model = editor.getModel();
+      if (model) {
+        const lastLine = model.getLineCount();
+        editor.revealLine(lastLine, 1); // 1 = smooth
+      }
+    }
+    // User scrolled away mid-stream? Detect and disable auto-follow.
+    if (wasStreamingRef.current && !isNow) {
+      autoFollowRef.current = true; // reset for next streaming session
+    }
+    wasStreamingRef.current = !!isNow;
+  }, [artifact.code, artifact.id]);
+
   if (view === "code") {
     const handleEditorChange = (value: string | undefined) => {
       if (value === undefined || !activeId) return;
       updateArtifact(activeId, artifact.id, value);
+    };
+    const handleEditorMount = (editor: any) => {
+      editorRef.current = editor;
+      editor.onDidScrollChange(() => {
+        // If the editor viewport is near the bottom, stay in auto-follow
+        // mode; otherwise the user has scrolled away — pause following.
+        const model = editor.getModel();
+        if (!model) return;
+        const visibleRanges = editor.getVisibleRanges();
+        if (visibleRanges.length === 0) return;
+        const lastVisible = visibleRanges[visibleRanges.length - 1];
+        const distFromBottom = model.getLineCount() - lastVisible.endLineNumber;
+        autoFollowRef.current = distFromBottom <= 2;
+      });
     };
 
     return (
@@ -167,6 +210,7 @@ function ArtifactContent({
             language={ARTIFACT_LANG[artifact.kind]}
             value={artifact.code}
             theme="vs-dark"
+            onMount={handleEditorMount}
             onChange={handleEditorChange}
             options={{
               fontSize: 13,
@@ -178,6 +222,8 @@ function ArtifactContent({
               automaticLayout: true,
               renderLineHighlight: "line",
               lineNumbers: "on",
+              smoothScrolling: true,
+              cursorSmoothCaretAnimation: "on",
               padding: { top: 12, bottom: 12 },
             }}
           />
