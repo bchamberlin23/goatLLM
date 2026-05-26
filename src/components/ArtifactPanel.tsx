@@ -239,13 +239,28 @@ function ArtifactContent({
       // can toggle scripts on via a small control in the panel footer.
       const isDesignArtifact = useChatStore.getState().designMode;
       const sandboxAttr = isDesignArtifact
-        ? "allow-same-origin"
-        : "allow-scripts allow-same-origin";
+        ? "allow-same-origin allow-popups"
+        : "allow-scripts allow-same-origin allow-popups";
+
+      // Inject <base target="_blank"> so links open externally instead of
+      // navigating the iframe to a goatLLM instance. A click-interception
+      // script is also injected as a belt-and-suspenders measure when
+      // scripts are enabled.
+      const baseInjection = '<base target="_blank">\n';
+      const clickScript =
+        `<script>document.addEventListener('click',function(e){var a=e.target.closest('a');` +
+        `if(a&&a.getAttribute('href')&&!/^(javascript:|#)/.test(a.getAttribute('href')||''))` +
+        `{e.preventDefault();e.stopPropagation();window.open(a.href,'_blank','noopener,noreferrer')}},!0)</script>`;
+
+      const preppedHtml = isDesignArtifact
+        ? baseInjection + artifact.code
+        : baseInjection + artifact.code + clickScript;
+
       return (
         <iframe
           key={htmlReloadKey}
           className="flex-1 w-full border-none bg-white"
-          srcDoc={artifact.code}
+          srcDoc={preppedHtml}
           sandbox={sandboxAttr}
           title={artifact.title}
         />
