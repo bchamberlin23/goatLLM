@@ -73,6 +73,9 @@ export interface ToolCallEntry {
   /** Length of message content at the time this tool call was added. Used to
    * interleave tool calls with text in chronological order. */
   contentAtInvocation?: number;
+  /** Full subagent conversation transcript for spawn_subagent tool calls.
+   *  Rendered as a nested chat thread when the user expands the pill. */
+  subagentTranscript?: import("../lib/llm-types").SubagentTranscriptEntry[];
 }
 
 export interface Message {
@@ -412,6 +415,14 @@ interface ChatStore {
   updateToolCallState: (conversationId: string, messageId: string, toolCallId: string, state: ToolCallEntry["state"]) => void;
   /** Mark any tool calls still in "running" state on the given message as done. Used to recover when a stream ends without a tool-result chunk. */
   finalizeStuckToolCalls: (conversationId: string, messageId: string) => void;
+  /** Attach a subagent transcript to a spawn_subagent tool call entry.
+   *  Called by the spawn_subagent tool after the subagent loop finishes. */
+  updateToolCallTranscript: (
+    conversationId: string,
+    messageId: string,
+    toolCallId: string,
+    transcript: import("../lib/llm-types").SubagentTranscriptEntry[],
+  ) => void;
 
   // Provider actions
   configureProvider: (providerId: string, config: ProviderConfig) => void;
@@ -450,10 +461,6 @@ interface ChatStore {
   dequeueMessage: (conversationId: string) => { content: string } | undefined;
   steerMessage: (conversationId: string, content: string) => void;
   setSteerPayload: (payload: { conversationId: string; content: string } | null) => void;
-
-  // Continue (non-persisted) — show "Continue" button after stream interruption
-  continueConversationId: string | null;
-  setContinueConversation: (id: string | null) => void;
 
   // Artifacts (non-persisted) — auto-detected code blocks rendered in side panel
   artifacts: Record<string, Artifact[]>;
@@ -828,7 +835,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       resendPayload: null,
       messageQueue: {},
       steerPayload: null,
-      continueConversationId: null,
       artifacts: {},
       artifactPanelOpen: false,
       activeArtifactId: null,
@@ -1316,6 +1322,29 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      updateToolCallTranscript: (conversationId, messageId, toolCallId, transcript) => {
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          const updated = convMessages.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  toolCalls: m.toolCalls?.map((tc) =>
+                    tc.toolCallId === toolCallId
+                      ? { ...tc, subagentTranscript: transcript }
+                      : tc,
+                  ),
+                }
+              : m,
+          );
+          const changed = updated.find((m) => m.id === messageId);
+          if (changed) persistMessage(changed);
+          return {
+            messages: { ...state.messages, [conversationId]: updated },
+          };
+        });
+      },
+
       triggerResend: (conversationId, content, attachments) => {
         set({ resendPayload: { conversationId, content, attachments } });
       },
@@ -1356,10 +1385,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       setSteerPayload: (payload) => set({ steerPayload: payload }),
-
-      setContinueConversation: (id) => {
-        set({ continueConversationId: id });
-      },
 
       addPendingDroppedFiles: (files) => {
         set((state) => ({ pendingDroppedFiles: [...state.pendingDroppedFiles, ...files] }));

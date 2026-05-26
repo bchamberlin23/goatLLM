@@ -416,21 +416,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     store.updateMessage(message.conversationId, message.id, { pinned: !message.pinned });
   }, [message.conversationId, message.id, message.pinned]);
 
-  const isInterrupted = isAssistant && !!(message as Message & { interrupted?: boolean }).interrupted;
-  const handleContinueAfterInterrupt = useCallback(() => {
-    const store = useChatStore.getState();
-    const convMessages = store.messages[message.conversationId] ?? [];
-    const idx = convMessages.findIndex((m) => m.id === message.id);
-    if (idx <= 0) return;
-    const prevMessage = convMessages[idx - 1];
-    if (prevMessage.role !== "user") return;
-    // Mark this assistant message as no longer interrupted (it's about to be
-    // replaced) and resend the user message that triggered it.
-    store.updateMessage(message.conversationId, message.id, { interrupted: false } as Record<string, unknown>);
-    store.removeMessagesAfter(message.conversationId, prevMessage.id);
-    store.triggerResend(message.conversationId, prevMessage.content, prevMessage.attachments);
-  }, [message.conversationId, message.id]);
-
   const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
   const anyToolRunning = !!message.toolCalls?.some((t) => t.state === "running" || t.state === "pending_approval");
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
@@ -518,18 +503,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             </div>
           );
         })()}
-
-        {isInterrupted && (
-          <div className="flex items-center justify-between gap-3 px-3 py-2 mb-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] text-[12px]">
-            <span className="text-[#f59e42]">⚠ This response was interrupted (app closed mid-stream).</span>
-            <button
-              onClick={handleContinueAfterInterrupt}
-              className="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-[#fcd34d] text-[11.5px] font-medium transition-colors shrink-0"
-            >
-              Continue from here
-            </button>
-          </div>
-        )}
 
         {hasToolCalls && isAssistant ? (() => {
           // Interleave text and tool calls chronologically using contentAtInvocation
