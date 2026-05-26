@@ -9,6 +9,7 @@ import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder } from "lucide-react";
+import { SubagentPanel } from "./SubagentPanel";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
 
@@ -115,6 +116,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
   const attachmentPanelOpen = useChatStore((s) => s.attachmentPanelOpen);
+  const subagentPanelOpen = useChatStore((s) => s.subagentPanelOpen);
   const getModels = useChatStore((s) => s.getModels);
   const _hydrated = useChatStore((s) => s._hydrated);
   const addPendingDroppedFiles = useChatStore((s) => s.addPendingDroppedFiles);
@@ -233,23 +235,27 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       <TodoWidget />
       {!showHero && (
         <div className="flex-1 min-h-0 flex overflow-hidden">
-          <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${
-            artifactPanelOpen || attachmentPanelOpen ? "basis-[34%] grow-0 shrink-0" : "flex-1"
-          }`}>
-            <MessageList />
-            {/* Input + mode/workspace footer live inside the left column so
-                they squeeze with the chat when the artifact panel is open.
-                `mt-auto` keeps the bar pinned to the bottom even when
-                MessageList is briefly empty (e.g. between createConversation
-                and the awaited file-extraction step in handleSend). */}
-            <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
-              <InputBar onOpenSettings={onOpenSettings} />
+          {/* Subagent panel replaces chat when active */}
+          {subagentPanelOpen ? (
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+              <SubagentPanel />
             </div>
-          </div>
-          {(artifactPanelOpen || attachmentPanelOpen) && (
-            <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-              {attachmentPanelOpen ? <AttachmentPanel /> : <ArtifactPanel />}
-            </div>
+          ) : (
+            <>
+              <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${
+                artifactPanelOpen || attachmentPanelOpen ? "basis-[34%] grow-0 shrink-0" : "flex-1"
+              }`}>
+                <MessageList />
+                <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
+                  <InputBar onOpenSettings={onOpenSettings} />
+                </div>
+              </div>
+              {(artifactPanelOpen || attachmentPanelOpen) && (
+                <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
+                  {attachmentPanelOpen ? <AttachmentPanel /> : <ArtifactPanel />}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

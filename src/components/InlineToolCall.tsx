@@ -1,10 +1,10 @@
-import { useState, useEffect, type ReactNode, type ReactElement } from "react";
+import { useState, useEffect, useCallback, type ReactNode, type ReactElement } from "react";
 import type { ToolCallEntry } from "../stores/chat";
 import { useChatStore } from "../stores/chat";
 import { approveExecution, denyExecution } from "../lib/tools";
 import { computeDiff, type DiffResult } from "../lib/diff-utils";
 import { Shimmer } from "./ThinkingIndicator";
-import { ChevronDown, AlertTriangle } from "lucide-react";
+import { ChevronDown, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { ansiToHtml, hasAnsi } from "../lib/ansi";
 
 // ── Helpers (extracted from MessageBubble.tsx) ─────────────────────
@@ -333,6 +333,13 @@ export function InlineToolCall({
   const pres = presentTool(tc);
   const verb = isRunning || isPending ? pres.runningVerb : pres.doneVerb;
   const canExpand = (isDone || isError) && hasOutput;
+  const isSubagent = tc.toolName === "spawn_subagent" && tc.subagentTranscript;
+
+  const handleOpenPanel = useCallback(() => {
+    if (isSubagent) {
+      useChatStore.getState().openSubagentPanel(tc.toolCallId);
+    }
+  }, [isSubagent, tc.toolCallId]);
 
   if (isPending) return <ApprovalGate tc={tc} />;
 
@@ -340,45 +347,57 @@ export function InlineToolCall({
 
   return (
     <div className="py-1 group/tool">
-      <button
-        type="button"
-        disabled={!canExpand}
-        onClick={() => canExpand && setExpanded((v) => !v)}
-        className={`flex items-baseline gap-1.5 text-[13px] leading-relaxed text-left w-full max-w-full min-w-0 ${
-          canExpand ? "cursor-pointer" : "cursor-default"
-        }`}
-        aria-expanded={canExpand ? expanded : undefined}
-      >
-        {isRunning ? (
-          <Shimmer text={label} className="text-[13px] font-normal" />
-        ) : (
-          <span
-            className={`truncate ${isError ? "text-[#888]" : "text-[#a0a0a0]"} ${
-              canExpand
-                ? "group-hover/tool:text-[#d5d5d5] transition-colors"
-                : ""
-            }`}
+      <div className="flex items-baseline gap-1.5">
+        <button
+          type="button"
+          disabled={!canExpand}
+          onClick={() => canExpand && setExpanded((v) => !v)}
+          className={`flex items-baseline gap-1.5 text-[13px] leading-relaxed text-left max-w-full min-w-0 ${
+            canExpand ? "cursor-pointer" : "cursor-default"
+          }`}
+          aria-expanded={canExpand ? expanded : undefined}
+        >
+          {isRunning ? (
+            <Shimmer text={label} className="text-[13px] font-normal" />
+          ) : (
+            <span
+              className={`truncate ${isError ? "text-[#888]" : "text-[#a0a0a0]"} ${
+                canExpand
+                  ? "group-hover/tool:text-[#d5d5d5] transition-colors"
+                  : ""
+              }`}
+            >
+              {label}
+              {isError && <span className="text-[#888]"> — failed</span>}
+            </span>
+          )}
+          {pres.detail && !isRunning && (
+            <span className="text-[12px] text-[#777] font-mono break-all line-clamp-1 shrink-0">
+              {pres.detail}
+            </span>
+          )}
+          {canExpand && (
+            <ChevronDown
+              size={11}
+              strokeWidth={1.6}
+              className={`shrink-0 self-center text-[#666] group-hover/tool:text-[#a0a0a0] transition-all duration-200 ${
+                expanded ? "rotate-180" : ""
+              }`}
+              aria-hidden="true"
+            />
+          )}
+        </button>
+        {isSubagent && (isDone || isRunning) && (
+          <button
+            type="button"
+            onClick={handleOpenPanel}
+            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-[#f59e42] hover:bg-[#f59e42]/10 transition-colors"
+            title="Open subagent workspace"
           >
-            {label}
-            {isError && <span className="text-[#888]"> — failed</span>}
-          </span>
+            <ArrowUpRight size={11} strokeWidth={2} />
+          </button>
         )}
-        {pres.detail && !isRunning && (
-          <span className="text-[12px] text-[#777] font-mono break-all line-clamp-1 shrink-0">
-            {pres.detail}
-          </span>
-        )}
-        {canExpand && (
-          <ChevronDown
-            size={11}
-            strokeWidth={1.6}
-            className={`shrink-0 self-center text-[#666] group-hover/tool:text-[#a0a0a0] transition-all duration-200 ${
-              expanded ? "rotate-180" : ""
-            }`}
-            aria-hidden="true"
-          />
-        )}
-      </button>
+      </div>
       <div
         className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
           expanded && hasOutput

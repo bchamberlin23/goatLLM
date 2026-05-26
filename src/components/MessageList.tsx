@@ -61,12 +61,15 @@ export function MessageList() {
     if (rafPendingRef.current !== null) return;
     rafPendingRef.current = requestAnimationFrame(() => {
       rafPendingRef.current = null;
+      if (!stickyRef.current) return;
       const currentEl = listRef.current;
       if (!currentEl) return;
+      // Bail if the user scrolled up since this rAF was queued —
+      // guard with ground-truth scroll position, not just the flag.
+      const dist = currentEl.scrollHeight - currentEl.scrollTop - currentEl.clientHeight;
+      if (dist > 160) return;
       programmaticScrollRef.current = true;
       currentEl.scrollTo({ top: currentEl.scrollHeight, behavior: "auto" });
-      // Release the programmatic flag on the next paint frame so any
-      // scroll event that fires is properly classified.
       requestAnimationFrame(() => {
         programmaticScrollRef.current = false;
       });
@@ -96,6 +99,10 @@ export function MessageList() {
     if (!list || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       if (!stickyRef.current) return;
+      const el = listRef.current;
+      if (!el) return;
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (dist > 160) return;
       doScrollToBottom();
     });
     ro.observe(list);
@@ -136,10 +143,17 @@ export function MessageList() {
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distFromBottom < 80;
 
-    // Only update stickiness on user-driven scrolls. Programmatic scrolls
-    // (from doScrollToBottom) shouldn't influence user intent.
-    if (!programmaticScrollRef.current) {
-      stickyRef.current = nearBottom;
+    // Always break stickiness when scrolling up — the user's intent to
+    // disengage must win. Only guard re-enabling stickiness against
+    // programmatic scrolls (which would look like a user scrolling to bottom).
+    if (!nearBottom) {
+      stickyRef.current = false;
+      if (rafPendingRef.current !== null) {
+        cancelAnimationFrame(rafPendingRef.current);
+        rafPendingRef.current = null;
+      }
+    } else if (!programmaticScrollRef.current) {
+      stickyRef.current = true;
     }
     setShowScrollBtn(!nearBottom && el.scrollHeight > el.clientHeight + 200);
     const id = activeIdRef.current;

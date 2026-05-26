@@ -41,12 +41,20 @@ function getSubagentTools(hasWrite: boolean): ToolSet {
 
 function buildSubagentSystemPrompt(task: string): string {
   return [
-    "You are a specialized subagent operating inside goatLLM. Your task:",
-    task,
+    "You are a specialized subagent operating inside goatLLM.",
     "",
-    "You have access to tools — work autonomously to complete the task and",
-    "return a clear, concise summary of your findings. The parent agent will",
-    "use your output to continue its work.",
+    `TASK: ${task}`,
+    "",
+    "Work autonomously using the tools available to you. Take as many steps as needed.",
+    "",
+    "CRITICAL — when you finish, you MUST provide a clear, detailed summary of:",
+    "1. What you did (each step you took)",
+    "2. What you found (all relevant discoveries, file contents, search results)",
+    "3. Any important context the parent agent needs to continue its work",
+    "",
+    "Do NOT just say \"done\" or give a one-line response. The parent agent ",
+    "will see ONLY your text output — not your tool calls — so pack all ",
+    "useful information into your final message.",
   ].join("\n");
 }
 
@@ -134,6 +142,19 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
 
       let fullText = "";
 
+      // Push transcript updates to the store so the SubagentPanel can show
+      // live streaming progress. Debounced: we flush on tool events and
+      // throttle token updates to every ~200ms.
+      let lastFlush = 0;
+      const flushTranscript = () => {
+        const { conversationId, messageId } = locateToolCallInStore(toolCallId);
+        if (conversationId && messageId) {
+          useChatStore
+            .getState()
+            .updateToolCallTranscript(conversationId, messageId, toolCallId, transcript);
+        }
+      };
+
       // ── Messages ────────────────────────────────────────────
       const messages: LlmMessage[] = [{ role: "user", content: task }];
 
@@ -142,6 +163,12 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
         onToken: (token) => {
           fullText += token;
           assistantEntry.content += token;
+          // Throttle token flushes to ~200ms
+          const now = Date.now();
+          if (now - lastFlush > 200) {
+            lastFlush = now;
+            flushTranscript();
+          }
         },
         onToolCall: (tc) => {
           assistantTools.push({
@@ -150,12 +177,14 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
             input: tc.input,
             state: "done",
           });
+          flushTranscript();
         },
         onToolResult: (tr) => {
           const found = assistantTools.find(
             (t) => t.toolCallId === tr.toolCallId,
           );
           if (found) found.output = tr.output;
+          flushTranscript();
         },
         onToolError: (te) => {
           const found = assistantTools.find(
@@ -165,11 +194,15 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
             found.state = "error";
             found.output = te.error;
           }
+          flushTranscript();
         },
-        onDone: () => {},
+        onDone: () => {
+          flushTranscript();
+        },
         onError: (err) => {
           fullText = `Subagent error: ${err.message}`;
           assistantEntry.content = fullText;
+          flushTranscript();
         },
       };
 
@@ -204,9 +237,27 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           .updateToolCallTranscript(conversationId, messageId, toolCallId, transcript);
       }
 
-      const summary = fullText.trim()
-        ? fullText
-        : "Subagent completed but produced no text output.";
+      const summary = (() => {
+        const text = fullText.trim();
+        if (text && text.length > 80) return text;
+
+        // If the subagent produced very little text (model got cut off or
+        // didn't summarize), build a fallback from the tool call results.
+        if (assistantTools.length > 0) {
+          const toolResults = assistantTools
+            .filter((t) => t.output !== undefined)
+            .map((t) => {
+              const out = typeof t.output === "string" ? t.output : JSON.stringify(t.output);
+              const truncated = out.length > 800 ? out.slice(0, 800) + "\n…[truncated]" : out;
+              return `[${t.toolName}]: ${truncated}`;
+            })
+            .join("\n\n");
+          const prefix = text || "Subagent completed.";
+          return `${prefix}\n\nTool results:\n\n${toolResults}`;
+        }
+
+        return text || "Subagent completed but produced no text output.";
+      })();
 
       return summary;
     },

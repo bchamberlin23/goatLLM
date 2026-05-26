@@ -501,6 +501,15 @@ interface ChatStore {
   attachmentPanelOpen: boolean;
   setActiveAttachment: (a: Attachment | null) => void;
 
+  // Subagent panel (non-persisted) — replaces the main chat view when a
+  // subagent tool call is clicked. Shows the subagent's live transcript
+  // in a full chat-like interface with a back arrow.
+  subagentPanelOpen: boolean;
+  /** The toolCallId of the spawn_subagent tool call being viewed. */
+  activeSubagentToolCallId: string | null;
+  openSubagentPanel: (toolCallId: string) => void;
+  closeSubagentPanel: () => void;
+
   // Sidebar (non-persisted)
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -841,6 +850,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       _artifactStatePerConv: {},
       activeAttachment: null,
       attachmentPanelOpen: false,
+      subagentPanelOpen: false,
+      activeSubagentToolCallId: null,
       sidebarOpen: true,
       defaultSystemPrompt: "",
       workspacePath: null,
@@ -1470,6 +1481,23 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           activeArtifactId: a ? null : get().activeArtifactId,
           artifactPanelOpen: a ? false : get().artifactPanelOpen,
           sidebarOpen: a ? false : get().sidebarOpen,
+        });
+      },
+
+      openSubagentPanel: (toolCallId) => {
+        set({
+          subagentPanelOpen: true,
+          activeSubagentToolCallId: toolCallId,
+          artifactPanelOpen: false,
+          attachmentPanelOpen: false,
+          sidebarOpen: false,
+        });
+      },
+
+      closeSubagentPanel: () => {
+        set({
+          subagentPanelOpen: false,
+          activeSubagentToolCallId: null,
         });
       },
 
