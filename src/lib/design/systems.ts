@@ -485,6 +485,206 @@ export const DESIGN_SYSTEMS: DesignSystem[] = [
       antiPatterns: "No light mode default. No second accent CTA.",
     }),
   },
+
+  // Devtools — GitHub
+  {
+    id: "github",
+    name: "GitHub",
+    category: "devtools",
+    tagline: "Systematic, accessible, blue-gray calm. Design at scale.",
+    swatches: ["#ffffff", "#f6f8fa", "#0969da", "#1f2328"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("GitHub (Primer)", {
+      voice: "Helpful, precise, no-nonsense. Written by developers for developers.",
+      palette: "bg #ffffff · surface #f6f8fa · accent #0969da (blue) · fg #1f2328. Semantic colors: green #1a7f37 (success), red #cf222e (danger), purple #8250df (done).",
+      typography: "Inter 32-48px / 600 for headings. Body Inter 14-16px / 1.5. Mono JetBrains Mono. Tabular numbers everywhere.",
+      spacing: "4-pt baseline. 8 / 16 / 24 / 32 / 48px steps. Container 1280px max with 16px gutters.",
+      components: "1px borders on surfaces. Buttons are rounded-md (6px). Focus ring = 2px blue. Inline code has 0.5px border + light bg.",
+      motion: "Subtle, fast. Hover transitions 120ms. No scroll animations. Reduce-motion respected.",
+      brand: "The Octocat mark. Blue primary CTA. Green success states. Accessible contrast ratios enforced.",
+      antiPatterns: "No gradients. No emoji in UI chrome. No aggressive drop shadows. No serif display.",
+    }),
+  },
+
+  // Fintech — Mercury
+  {
+    id: "mercury",
+    name: "Mercury",
+    category: "fintech",
+    tagline: "Cinematic dark banking. Purple glow, custom type, aspirational.",
+    swatches: ["#0f0f14", "#191920", "#6c5ce7", "#ededf3"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Mercury", {
+      voice: "Premium, precise, radically different. Banking for founders who care about craft.",
+      palette: "bg rgb(15,15,20) · surface rgb(25,25,32) · accent rgb(108,92,231) purple · fg rgb(237,237,243) soft off-white. Semantic: green #34d399 (credits), red #f87171 (debits).",
+      typography: "Display 40-48px / 480 weight / 1.1 line-height for headlines. Body Inter 16px / 1.625 line-height. Financial amounts get distinct treatment: 28px, 500 weight, -0.5px tracking.",
+      spacing: "8-pt. Section padding 64-96px. Cards with 24px gutters. Content max 1100px.",
+      components: "Dark elevated cards with subtle shadow (rgba(0,0,0,0.4)). CTA buttons have purple glow box-shadow. Borders 1px rgba(255,255,255,0.08).",
+      motion: "Subtle. CTA glow on hover. Section reveals 480ms ease-out. No parallax.",
+      brand: "Arcadia typeface (480 weight distinctiveness). Purple accent. Cinematic hero photography with dramatic lighting and gradient overlays.",
+      antiPatterns: "No bright greens or blues (traditional banking colors). No light mode toggle. No stock photography. No emoji icons.",
+    }),
+  },
+
+  // Productivity — Discord
+  {
+    id: "discord",
+    name: "Discord",
+    category: "other",
+    tagline: "Blurple warmth, gaming-adjacent dark, playful community feel.",
+    swatches: ["#313338", "#2b2d31", "#5865f2", "#f2f3f5"],
+    fonts: { display: "gg sans", body: "gg sans", mono: "JetBrains Mono" },
+    designMd: ds("Discord", {
+      voice: "Playful, welcoming, community-first. Speaks the language of gamers and creators.",
+      palette: "bg #313338 (dark grey) · surface #2b2d31 · accent #5865f2 (blurple) · fg #f2f3f5. Secondary accents: green #57f287, yellow #fee75c, fuchsia #eb459e, red #ed4245.",
+      typography: "gg sans 24-48px / 600 for headings. Body gg sans 14-16px / 1.5. Generous use of uppercase tracking at 11px for microcopy.",
+      spacing: "4-pt. Server sidebar 240px. Message list fills remaining space. Compact but readable density.",
+      components: "Rounded-md everywhere (8px). Blurple buttons with white text. Server icons as circular crops. Mentions highlighted in blurple/amber.",
+      motion: "Smooth hover lifts on interactive elements (100ms). Message send animation is crisp, not bouncy.",
+      brand: "The Clyde mark. Blurple. Custom emoji culture embedded in the product.",
+      antiPatterns: "No pure black backgrounds. No serif fonts. No light mode default. No over-designed marketing sections.",
+    }),
+  },
+
+  // Productivity — Slack
+  {
+    id: "slack",
+    name: "Slack",
+    category: "productivity",
+    tagline: "Aubergine purple, vibrant secondary palette, collaborative energy.",
+    swatches: ["#ffffff", "#f8f8f8", "#541554", "#1d1c1d"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Slack", {
+      voice: "Friendly, energetic, human. Work happens here, but make it pleasant.",
+      palette: "bg #ffffff · surface #f8f8f8 · accent #541554 (aubergine) · fg #1d1c1d. Secondary colors: blue #36c5f0, green #2eb67d, yellow #ecb22e, red #e01e5a, orange #e8a838.",
+      typography: "Inter 32-56px / 600 for marketing headlines. Body Inter 15-17px / 1.55. Uppercase overlines at 11px with 0.12em tracking.",
+      spacing: "8-pt. 12-col grid with generous 32px gutters. Hero sections 400-600px tall.",
+      components: "Rounded-xl buttons (12px radius). Solid aubergine CTAs. Cards with subtle 1px border and gentle shadow. Colorful badge accents.",
+      motion: "Playful but restrained. Section reveals 400ms ease-out. CTA hover lift 2px.",
+      brand: "The hashtag mark. Aubergine. Four-color secondary palette always used together. Custom Slack illustrations.",
+      antiPatterns: "No single-color marketing pages. No dark mode as primary canvas. No serif body copy. No aggressive gradients.",
+    }),
+  },
+
+  // Education / Other — Duolingo
+  {
+    id: "duolingo",
+    name: "Duolingo",
+    category: "other",
+    tagline: "Feather green, bold rounded illustrations, gamified delight.",
+    swatches: ["#ffffff", "#f7fff0", "#58cc02", "#3c3c3c"],
+    fonts: { display: "Feather Bold", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Duolingo", {
+      voice: "Encouraging, playful, never condescending. Learning should feel like a game.",
+      palette: "bg #ffffff · surface #f7fff0 (pale green tint) · accent #58cc02 (feather green) · fg #3c3c3c. Secondary: blue #1cb0f6, orange #ff9600, red #ff4b4b, purple #ce82ff.",
+      typography: "Feather Bold 36-64px / 700 for display headlines. Body Inter 15-18px / 1.5. Rounded, friendly letterforms throughout.",
+      spacing: "8-pt. Generous rounded borders (16-24px). Cards with 16px padding. White space signals ease.",
+      components: "Rounded-2xl everything (16-24px). Feather green solid CTAs. Bold, colorful badges. Drop shadows at 0 4px 0 for 3D depth on buttons.",
+      motion: "Bouncy, energetic. Character animations, confetti on completion. Button presses feel tactile (scale 0.97). Reduce-motion respected.",
+      brand: "Duo the owl. Feather green. Bold, rounded illustration style. Gamification UI (streaks, XP, leaderboards).",
+      antiPatterns: "No sharp corners. No muted/dull palettes. No dense text blocks. No serif body copy.",
+    }),
+  },
+
+  // Productivity — Zapier
+  {
+    id: "zapier",
+    name: "Zapier",
+    category: "productivity",
+    tagline: "Deep orange on warm cream. Automation that feels human.",
+    swatches: ["#fff5eb", "#ffede0", "#ff4a00", "#1a1a1a"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Zapier", {
+      voice: "Helpful, warm, quietly confident. Automation shouldn't feel robotic.",
+      palette: "bg #fff5eb (warm cream, never pure white) · surface #ffede0 · accent #ff4a00 (deep orange) · fg #1a1a1a. Support colors: blue #3172d0, aqua #48c6c1.",
+      typography: "Inter 40-64px / 600 for headlines. Body Inter 16-18px / 1.6. Generous leading on cream background for readability.",
+      spacing: "8-pt. Sections 80-120px. 12-col grid. Content max 1140px with 32px gutters.",
+      components: "Rounded-xl cards (12px) with 1px warm hairline. Orange solid CTAs. Outline ghost buttons for secondary actions. No drop shadows over 8px.",
+      motion: "Gentle. Section fades 300ms ease. Hover states instant. No parallax.",
+      brand: "Orange as the single chromatic signature. Warm cream canvas. The lightning-bolt mark.",
+      antiPatterns: "No pure white backgrounds. No cool/blue-dominant palettes. No emoji-only icons. No dark mode default.",
+    }),
+  },
+
+  // Devtools — Replit
+  {
+    id: "replit",
+    name: "Replit",
+    category: "devtools",
+    tagline: "Dark terminal warmth, orange accent, code-first density.",
+    swatches: ["#0e1525", "#1c2333", "#f26207", "#f5f9fc"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Replit", {
+      voice: "Builder-to-builder. Fast, friendly, never patronizing. Code is the hero.",
+      palette: "bg #0e1525 (deep navy-black) · surface #1c2333 · accent #f26207 (warm orange) · fg #f5f9fc. Semantic: green #43b581 (run), red #f04747 (error), blue #7289da (link).",
+      typography: "Inter 28-40px / 600 for headings. Body Inter 14-15px / 1.5. Code blocks dominate — JetBrains Mono 13px / 1.6 with generous padding.",
+      spacing: "4-pt. IDE-like density. Sidebar 260px, editor fills the rest. Tight 8px gaps.",
+      components: "Sharp 4px corners. Orange solid CTAs. Code blocks with subtle border + dark surface. File explorer tree with 2px depth indentation.",
+      motion: "Fast, functional. No decorative animations. Hover states instant. Console output appears naturally.",
+      brand: "The Replit mark. Orange. Code-first layouts. Terminal and editor as design vocabulary.",
+      antiPatterns: "No rounded-xl. No pastel palettes. No marketing hero sections. No emoji in UI.",
+    }),
+  },
+
+  // AI — Perplexity
+  {
+    id: "perplexity",
+    name: "Perplexity",
+    category: "ai",
+    tagline: "Subdued, academic, search-native. The brand disappears behind the answer.",
+    swatches: ["#ffffff", "#f7f7f8", "#1a1a2e", "#202123"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Perplexity", {
+      voice: "Invisible, trustworthy, precise. The interface is the answer, not the brand.",
+      palette: "bg #ffffff · surface #f7f7f8 · accent #1a1a2e (deep ink) · fg #202123. Subtle. The palette serves content, never competes with it.",
+      typography: "Inter 32-48px / 500 for headings. Body Inter 15-17px / 1.6. Generous measure (~70ch). Citations in small mono.",
+      spacing: "4-pt. Search bar centered, results left-aligned. Generous whitespace between citations. 720px content max.",
+      components: "Minimal chrome. No card borders — surface shifts only. Hairline dividers between results. Cursor in the logo as the only decorative element.",
+      motion: "Almost none. Results appear. No page transitions, no hover lifts, no reveals.",
+      brand: "The cursor mark. Letting the content be the brand. Typographic restraint above all.",
+      antiPatterns: "No gradients. No decorative illustrations. No color beyond the primary palette. No animations. No dark mode as default canvas.",
+    }),
+  },
+
+  // Fintech — Ramp
+  {
+    id: "ramp",
+    name: "Ramp",
+    category: "fintech",
+    tagline: "Solar yellow, dark and premium. Spend management as brand.",
+    swatches: ["#0b0b0b", "#1a1a1a", "#ffc501", "#ffffff"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Ramp", {
+      voice: "Sharp, modern, ambitious. Finance for the fastest-growing companies.",
+      palette: "bg #0b0b0b · surface #1a1a1a · accent #ffc501 (solar yellow) · fg #ffffff. Single accent — yellow is the whole brand color story.",
+      typography: "Inter 40-64px / 600 for headlines. Body Inter 15-17px / 1.5. Bold numbers in tabular format for financial data.",
+      spacing: "8-pt. Dashboard-dense layouts. Sidebar 240px. Content fills remaining width.",
+      components: "Sharp 6px corners. Yellow solid CTAs on dark. Cards with 1px subtle border. Data tables with alternating-row subtle surface shifts.",
+      motion: "Crisp, confident. Instant hover states. Page transitions 200ms.",
+      brand: "Solar yellow on black. Inter everywhere. The ramp mark.",
+      antiPatterns: "No second accent color. No light mode. No rounded-xl. No emoji in product UI.",
+    }),
+  },
+
+  // Media — Runway
+  {
+    id: "runway",
+    name: "Runway",
+    category: "media",
+    tagline: "Cinematic dark, film-grain texture. AI video that feels like film.",
+    swatches: ["#000000", "#0a0a0a", "#ffffff", "#fafafa"],
+    fonts: { display: "Inter", body: "Inter", mono: "JetBrains Mono" },
+    designMd: ds("Runway", {
+      voice: "Cinematic, confident, forward-looking. The tool behind the next wave of visual storytelling.",
+      palette: "bg #000000 (true black) · surface #0a0a0a · accent #ffffff (white) · fg #fafafa. Monochromatic with 5 tiers of grey. Slate #676f7b for tertiary metadata.",
+      typography: "Inter 48px / 400 / 1.0 / -1.2px for hero display. Body Inter 16px / 400 / 1.5. Eyebrow caps 11px / 450 / 0.2px tracking. Type does the heavy lifting.",
+      spacing: "8-pt base. Section vertical rhythm alternates 64px and 96px. Cinematic interlude panels break pacing.",
+      components: "Pill buttons (full radius). Bottom-rule-only form fields (no border box). No card shadows — depth via photography and tonal surface shifts.",
+      motion: "Slow, cinematic. Crossfades between sections. No scroll-jacking. Pacing feels editorial.",
+      brand: "Black-on-white precision. Cinematic stills and poster tiles. The Runway logotype as the only decoration.",
+      antiPatterns: "No gradients. No drop shadows. No colored CTAs. No emoji. No serif display. No rounded corners (buttons excepted).",
+    }),
+  },
 ];
 
 const BY_ID = new Map(DESIGN_SYSTEMS.map((d) => [d.id, d] as const));

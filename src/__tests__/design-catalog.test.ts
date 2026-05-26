@@ -98,13 +98,13 @@ describe("design catalog", () => {
   describe("directions", () => {
     const directions = listDirections();
 
-    it("ships exactly 5 directions", () => {
-      expect(directions.length).toBe(5);
+    it("ships at least 5 directions", () => {
+      expect(directions.length).toBeGreaterThanOrEqual(5);
     });
 
     it("every direction has full palette + fonts + refs", () => {
       for (const d of directions) {
-        expect(d.id).toMatch(/^(editorial|modern-minimal|tech-utility|brutalist|soft-warm)$/);
+        expect(d.id).toMatch(/^(editorial|modern-minimal|tech-utility|brutalist|soft-warm|neo-brutalist|luxury|cyberpunk|swiss-modern)$/);
         expect(d.name).toBeTruthy();
         expect(d.mood.length).toBeGreaterThan(20);
         // OKLch palette

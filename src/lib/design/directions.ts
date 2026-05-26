@@ -11,7 +11,7 @@
  */
 
 export interface Direction {
-  id: "editorial" | "modern-minimal" | "tech-utility" | "brutalist" | "soft-warm";
+  id: "editorial" | "modern-minimal" | "tech-utility" | "brutalist" | "soft-warm" | "neo-brutalist" | "luxury" | "cyberpunk" | "swiss-modern";
   name: string;
   mood: string;
   /** OKLch tokens. Each value is a CSS-ready color string. */
@@ -121,6 +121,78 @@ export const DIRECTIONS: Direction[] = [
       mono: "'JetBrains Mono', monospace",
     },
     refs: ["Notion marketing", "Apple Health", "Calm", "Headspace"],
+  },
+  {
+    id: "neo-brutalist",
+    name: "Neo-Brutalist — Gumroad / Figma",
+    mood: "Bold primaries, hard black shadows, no gradients. Raw, honest, loud.",
+    palette: {
+      bg: "oklch(0.99 0.014 90)",
+      fg: "oklch(0.10 0.005 90)",
+      accent: "oklch(0.72 0.22 25)",
+      mute: "oklch(0.50 0.005 90)",
+      surface: "oklch(0.94 0.012 90)",
+    },
+    fonts: {
+      display: "'Druk', 'Helvetica Now Display', 'Helvetica Neue', system-ui, sans-serif",
+      body: "'Helvetica Now Text', 'Helvetica Neue', Arial, sans-serif",
+      mono: "'JetBrains Mono', monospace",
+    },
+    refs: ["Gumroad", "Figma Marketing", "A24 Films", "Actual Source"],
+  },
+  {
+    id: "luxury",
+    name: "Luxury — Vogue / Saint Laurent",
+    mood: "High contrast, thin serifs, gold/black, editorial whitespace. Haute couture sensibility.",
+    palette: {
+      bg: "oklch(0.99 0.001 90)",
+      fg: "oklch(0.08 0.002 90)",
+      accent: "oklch(0.75 0.15 70)",
+      mute: "oklch(0.55 0.005 90)",
+      surface: "oklch(0.95 0.002 90)",
+    },
+    fonts: {
+      display: "'Didot', 'Bodoni Moda', 'Cormorant Garamond', Georgia, serif",
+      body: "'Inter', 'SF Pro Text', system-ui, sans-serif",
+      mono: "'JetBrains Mono', monospace",
+    },
+    refs: ["Vogue", "Saint Laurent", "Chanel", "Cartier"],
+  },
+  {
+    id: "cyberpunk",
+    name: "Cyberpunk — Hackers / Synthwave",
+    mood: "Neon on black, monospace dominance, glowing accents, terminal romance.",
+    palette: {
+      bg: "oklch(0.08 0.018 265)",
+      fg: "oklch(0.92 0.04 145)",
+      accent: "oklch(0.78 0.22 180)",
+      mute: "oklch(0.55 0.018 260)",
+      surface: "oklch(0.12 0.020 260)",
+    },
+    fonts: {
+      display: "'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', monospace",
+      body: "'JetBrains Mono', 'IBM Plex Mono', monospace",
+      mono: "'JetBrains Mono', monospace",
+    },
+    refs: ["Hackers (1995)", "Hyper Terminal", "Ghost in the Shell", "Synthwave"],
+  },
+  {
+    id: "swiss-modern",
+    name: "Swiss Modern — Helvetica / Bauhaus",
+    mood: "Strict modular grid, red/black/white, Helvetica purity, functional honesty.",
+    palette: {
+      bg: "oklch(0.99 0.001 260)",
+      fg: "oklch(0.15 0.005 260)",
+      accent: "oklch(0.55 0.23 20)",
+      mute: "oklch(0.55 0.005 260)",
+      surface: "oklch(0.95 0.003 260)",
+    },
+    fonts: {
+      display: "'Helvetica Now Display', 'Helvetica Neue', system-ui, sans-serif",
+      body: "'Helvetica Now Text', 'Helvetica Neue', Arial, sans-serif",
+      mono: "'JetBrains Mono', monospace",
+    },
+    refs: ["Swiss Design", "Bauhaus", "Massimo Vignelli", "Josef Müller-Brockmann"],
   },
 ];
 
