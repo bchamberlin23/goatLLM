@@ -441,8 +441,15 @@ interface ChatStore {
 
   // Regenerate (non-persisted)
   resendPayload: { conversationId: string; content: string; attachments?: Attachment[] } | null;
+  /** Agent-mode message queue: messages sent while the LLM is working. */
+  messageQueue: Record<string, { content: string }[]>;
+  steerPayload: { conversationId: string; content: string } | null;
   triggerResend: (conversationId: string, content: string, attachments?: Attachment[]) => void;
   clearResend: () => void;
+  enqueueMessage: (conversationId: string, content: string) => void;
+  dequeueMessage: (conversationId: string) => { content: string } | undefined;
+  steerMessage: (conversationId: string, content: string) => void;
+  setSteerPayload: (payload: { conversationId: string; content: string } | null) => void;
 
   // Continue (non-persisted) — show "Continue" button after stream interruption
   continueConversationId: string | null;
@@ -819,6 +826,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       discoveryStatus: {},
       discoveryError: {},
       resendPayload: null,
+      messageQueue: {},
+      steerPayload: null,
       continueConversationId: null,
       artifacts: {},
       artifactPanelOpen: false,
@@ -906,17 +915,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       deleteConversation: (id: string) => {
-        const { conversations, activeId, messages, drafts } = get();
+        const { conversations, activeId, messages, drafts, messageQueue } = get();
         const remaining = conversations.filter((c) => c.id !== id);
         const newMessages = { ...messages };
         delete newMessages[id];
         const newDrafts = { ...drafts };
         delete newDrafts[id];
+        const newQueue = { ...messageQueue };
+        delete newQueue[id];
         let newActiveId = activeId;
         if (activeId === id) {
           newActiveId = remaining.length > 0 ? remaining[0].id : null;
         }
-        set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts });
+        set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts, messageQueue: newQueue });
         deleteConversationFromDb(id);
         // Drop the in-memory attachment text cache for this conversation.
         import("../lib/attachment-cache").then((m) => m.clearConversation(id)).catch(() => {});
@@ -1312,6 +1323,39 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       clearResend: () => {
         set({ resendPayload: null });
       },
+
+      enqueueMessage: (conversationId, content) =>
+        set((state) => ({
+          messageQueue: {
+            ...state.messageQueue,
+            [conversationId]: [...(state.messageQueue[conversationId] || []), { content }],
+          },
+        })),
+
+      dequeueMessage: (conversationId) => {
+        const queue = get().messageQueue[conversationId];
+        if (!queue || queue.length === 0) return undefined;
+        const [first, ...rest] = queue;
+        set((state) => ({
+          messageQueue: { ...state.messageQueue, [conversationId]: rest },
+        }));
+        return first;
+      },
+
+      steerMessage: (conversationId, content) => {
+        const { cancelStreaming } = get();
+        cancelStreaming();
+        const queue = get().messageQueue[conversationId];
+        if (queue) {
+          const filtered = queue.filter((q) => q.content !== content);
+          set((state) => ({
+            messageQueue: { ...state.messageQueue, [conversationId]: filtered },
+          }));
+        }
+        set({ steerPayload: { conversationId, content } });
+      },
+
+      setSteerPayload: (payload) => set({ steerPayload: payload }),
 
       setContinueConversation: (id) => {
         set({ continueConversationId: id });

@@ -179,6 +179,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const finalizeStreamingArtifacts = useChatStore((s) => s.finalizeStreamingArtifacts);
   const resendPayload = useChatStore((s) => s.resendPayload);
   const clearResend = useChatStore((s) => s.clearResend);
+  const enqueueMessage = useChatStore((s) => s.enqueueMessage);
+  const dequeueMessage = useChatStore((s) => s.dequeueMessage);
+  const steerPayload = useChatStore((s) => s.steerPayload);
+  const setSteerPayload = useChatStore((s) => s.setSteerPayload);
   // Reactive subscriptions for the skills picker so it updates when the
   // skill list refreshes mid-session (e.g. after the seed completes or the
   // user adds a custom skill path in Settings).
@@ -372,7 +376,20 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const rawTrimmed = (overrides?.content ?? value).trim();
     const currentFiles = overrides?.attachments ?? files;
     const isResend = !!overrides;
-    if ((!rawTrimmed && currentFiles.length === 0) || isStreaming) return;
+    if (!rawTrimmed && currentFiles.length === 0) return;
+
+    // Agent mode: enqueue instead of blocking while streaming
+    if (isStreaming) {
+      const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
+      if (useChatStore.getState().agentMode && rawTrimmed && activeId) {
+        enqueueMessage(activeId, rawTrimmed);
+        clearDraft(k);
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        return;
+      }
+      // Non-agent mode: block
+      return;
+    }
 
     const llmConfig = getActiveLlmConfig();
     if (!llmConfig) {
@@ -941,6 +958,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         }
         // Squash jjagent change back into parent now that the turn is complete.
         endJjAgentSessionIfNeeded();
+        // Auto-dispatch next queued message
+        const next = dequeueMessage(convId!);
+        if (next) {
+          setSteerPayload({ conversationId: convId!, content: next.content });
+        }
       },
       onError: (err) => {
         // If the user aborted, don't surface an error — onDone has already
@@ -988,7 +1010,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,
     renameConversation, setTitleGenerating, conversations,
     addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
-    detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts]);
+    detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts,
+    enqueueMessage, dequeueMessage, setSteerPayload, clearDraft,
+    setContinueConversation]);
 
   // Keep the ref pointed at the latest handleSend so the question-form
   // effect (which fires from outside this component) doesn't see a stale
@@ -1001,6 +1025,13 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     clearResend();
     handleSend({ content: resendPayload.content, attachments: resendPayload.attachments });
   }, [resendPayload, activeId, clearResend, handleSend]);
+
+  useEffect(() => {
+    if (!steerPayload) return;
+    if (steerPayload.conversationId !== activeId) { setSteerPayload(null); return; }
+    setSteerPayload(null);
+    handleSend({ content: steerPayload.content });
+  }, [steerPayload, activeId, setSteerPayload, handleSend]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -1015,7 +1046,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     handleSend({ content: "continue" });
   }, [activeId, handleSend, setContinueConversation]);
 
-  const canSend = (value.trim().length > 0 || files.length > 0) && !isStreaming && !showContinue && !noModelsAvailable && !!selectedModelId;
+  const canSend = (value.trim().length > 0 || files.length > 0) && !showContinue && !noModelsAvailable && !!selectedModelId;
 
   const handleToggleMic = useCallback(() => {
     if (speech.listening) {
@@ -1131,7 +1162,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           onPaste={handlePaste}
           rows={1}
           aria-label="Message input"
-          placeholder={speech.listening ? "Listening…" : isStreaming ? "Type your next message…" : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
+          placeholder={speech.listening ? "Listening…" : isStreaming ? (agentMode ? "Agent is working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
           className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
         />
 
@@ -1346,24 +1377,31 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           <div className="flex items-center gap-1 text-[13px]">
             <ModelPicker onOpenSettings={onOpenSettings} />
 
-            <button
-              onClick={isStreaming ? cancelStreaming : () => handleSend()}
-              disabled={!canSend && !isStreaming}
-              aria-label={isStreaming ? "Stop generating" : "Send message"}
-              className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                isStreaming
-                  ? "bg-[#ececec] hover:bg-white scale-100"
-                  : !canSend
-                    ? "bg-[#3a3a3a] cursor-not-allowed scale-95 opacity-70"
-                    : "bg-[#f59e42] hover:bg-[#f0903a] shadow-[0_4px_14px_-4px_rgba(245,158,66,0.55)] hover:shadow-[0_6px_18px_-4px_rgba(245,158,66,0.7)] hover:scale-[1.04] active:scale-95"
-              }`}
-            >
-              {isStreaming ? (
-                <Square size={11} strokeWidth={2.5} className="text-[#2d2d2d]" aria-hidden="true" />
-              ) : (
-                <ArrowUp size={16} strokeWidth={2.4} className={canSend ? "text-[#1a1a1c]" : "text-[#a0a0a0]"} aria-hidden="true" />
-              )}
-            </button>
+            {(() => {
+              const hasInput = value.trim().length > 0;
+              const showStop = isStreaming && !hasInput;
+              const disabled = !isStreaming && !canSend;
+              return (
+                <button
+                  onClick={showStop ? cancelStreaming : () => handleSend()}
+                  disabled={disabled}
+                  aria-label={showStop ? "Stop generating" : "Send message"}
+                  className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    showStop
+                      ? "bg-[#ececec] hover:bg-white scale-100"
+                      : disabled
+                        ? "bg-[#3a3a3a] cursor-not-allowed scale-95 opacity-70"
+                        : "bg-[#f59e42] hover:bg-[#f0903a] shadow-[0_4px_14px_-4px_rgba(245,158,66,0.55)] hover:shadow-[0_6px_18px_-4px_rgba(245,158,66,0.7)] hover:scale-[1.04] active:scale-95"
+                  }`}
+                >
+                  {showStop ? (
+                    <Square size={11} strokeWidth={2.5} className="text-[#2d2d2d]" aria-hidden="true" />
+                  ) : (
+                    <ArrowUp size={16} strokeWidth={2.4} className={disabled ? "text-[#a0a0a0]" : "text-[#1a1a1c]"} aria-hidden="true" />
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>

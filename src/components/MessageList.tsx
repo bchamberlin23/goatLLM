@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import { useChatStore } from "../stores/chat";
 import { MessageBubble } from "./MessageBubble";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Send } from "lucide-react";
 import { formatDateSeparator, formatLongDateTime, sameDay } from "../lib/datetime";
 
 function isToday(ts: number): boolean {
@@ -15,6 +15,9 @@ export function MessageList() {
   const scrollPositions = useChatStore((s) => s.scrollPositions);
   const msgMap = useChatStore((s) => s.messages);
   const messages = activeId ? (msgMap[activeId] ?? []) : [];
+  const messageQueue = useChatStore((s) => s.messageQueue);
+  const steerMessage = useChatStore((s) => s.steerMessage);
+  const queuedMessages = activeId ? (messageQueue[activeId] ?? []) : [];
 
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -185,6 +188,13 @@ export function MessageList() {
             </div>
           );
         })}
+        {queuedMessages.map((q, i) => (
+          <QueuedMessageBubble
+            key={`queue-${i}`}
+            content={q.content}
+            onSteer={() => activeId && steerMessage(activeId, q.content)}
+          />
+        ))}
         <div className="h-3" />
         <div ref={bottomRef} aria-hidden="true" />
       </div>
@@ -221,6 +231,28 @@ function DateSeparator({ ts }: { ts: number }) {
           {formatDateSeparator(ts)}
         </span>
         <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+function QueuedMessageBubble({ content, onSteer }: { content: string; onSteer: () => void }) {
+  return (
+    <div className="flex flex-col items-end px-6 py-1.5">
+      <div className="max-w-[70%] bg-[#f59e42]/5 border border-[#f59e42]/15 rounded-2xl rounded-br-md px-4 py-2.5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#f59e42]/60">
+            Queued
+          </span>
+        </div>
+        <p className="text-[14px] text-[#d5d5d5] whitespace-pre-wrap">{content}</p>
+        <button
+          onClick={onSteer}
+          className="flex items-center gap-1 mt-2 px-2 py-1 rounded-md bg-[#f59e42] text-[#1a1a1c] text-[11px] font-medium hover:bg-[#f0903a] transition-colors"
+        >
+          <Send size={11} />
+          Steer
+        </button>
       </div>
     </div>
   );
