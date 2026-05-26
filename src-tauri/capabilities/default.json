@@ -21,10 +21,12 @@
         { "url": "http://127.0.0.1:*/**" }
       ]
     },
+    "shell:allow-open",
     {
       "identifier": "shell:default",
       "allow": [
-        { "name": "git", "cmd": "git", "args": true }
+        { "name": "git", "cmd": "git", "args": true },
+        { "name": "open", "cmd": "open", "args": true }
       ]
     }
   ]

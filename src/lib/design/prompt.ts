@@ -120,6 +120,7 @@ const DISCOVERY_DIRECTIVES_FOLLOWUP = `<discovery turn="2+">
   4. In 4-6 lines, state the palette + typography as a brand-spec before the artifact.
   5. One sentence before the artifact: "Working from <brand>: <accent hex>, <display family>."
 - If no brand info was provided, skip brand extraction and proceed directly to the artifact.
+- If the user submitted the discovery form with all or most fields left blank (marked as "(skipped)" or empty), the user is telling you they trust your judgment. Pick sensible defaults for the surface/audience/tone/scale, name your assumptions in one line, then proceed directly to the artifact — do not emit another question form, do not stall.
 - Once direction or brand is settled, emit the <artifact>.
 - After every artifact, run a silent 5-dimensional self-check (philosophy / hierarchy / execution / specificity / restraint, score 1-5). If any dimension is below 3, regenerate before emitting. Do not surface the scores unless asked.
 </discovery>`;

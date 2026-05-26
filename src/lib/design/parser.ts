@@ -176,9 +176,15 @@ export function formatFormSubmission(
   values: Record<string, string | string[]>,
 ): string {
   const lines: string[] = [`[form: ${formId}]`];
+  let filled = false;
   for (const [k, v] of Object.entries(values)) {
     const display = Array.isArray(v) ? v.join(", ") : v;
-    lines.push(`${k}: ${display}`);
+    if (display) filled = true;
+    lines.push(`${k}: ${display || "(skipped)"}`);
+  }
+  if (!filled) {
+    lines.push("");
+    lines.push("[All fields left blank — the user trusts your judgment. Pick sensible defaults, state your assumptions in one line, then proceed directly to the artifact.]");
   }
   return lines.join("\n");
 }
