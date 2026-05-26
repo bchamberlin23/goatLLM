@@ -172,8 +172,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const setTitleGenerating = useChatStore((s) => s.setTitleGenerating);
   const conversations = useChatStore((s) => s.conversations);
   const cancelStreaming = useChatStore((s) => s.cancelStreaming);
-  const setContinueConversation = useChatStore((s) => s.setContinueConversation);
-  const continueConversationId = useChatStore((s) => s.continueConversationId);
   const detectArtifacts = useChatStore((s) => s.detectArtifacts);
   const streamArtifactDelta = useChatStore((s) => s.streamArtifactDelta);
   const finalizeStreamingArtifacts = useChatStore((s) => s.finalizeStreamingArtifacts);
@@ -320,15 +318,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   useEffect(() => { adjustHeight(); }, [value, adjustHeight]);
   useEffect(() => { textareaRef.current?.focus(); }, [activeId, focusNonce]);
 
-  // Auto-dismiss "Continue generating" the moment the user starts typing — they're
-  // clearly moving on, no need to leave it hanging until they click X.
-  useEffect(() => {
-    if (!activeId) return;
-    if (value.length === 0) return;
-    if (continueConversationId !== activeId) return;
-    setContinueConversation(null);
-  }, [value, activeId, continueConversationId, setContinueConversation]);
-
   const handleAttach = useCallback(() => fileInputRef.current?.click(), []);
 
   const handleFilesChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -460,7 +449,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       // draft, also clear the conversation-keyed slot in case anything
       // raced into it.
       if (startingDraftKey !== convId) clearDraft(convId!);
-      setContinueConversation(null);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
     }
 
@@ -938,10 +926,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
         updateMessage(convId!, assistantMsg.id, { content: finalContent, isStreaming: false });
         stopStreaming(convId!);
-        // If stream was interrupted with partial content, show Continue button
-        if (!fullText && currentContent.trim()) {
-          setContinueConversation(convId!);
-        }
         // Auto-detect artifacts in completed messages
         if (finalContent.trim()) {
           detectArtifacts(convId!, assistantMsg.id, finalContent);
@@ -1011,8 +995,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     renameConversation, setTitleGenerating, conversations,
     addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
     detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts,
-    enqueueMessage, dequeueMessage, setSteerPayload, clearDraft,
-    setContinueConversation]);
+    enqueueMessage, dequeueMessage, setSteerPayload, clearDraft]);
 
   // Keep the ref pointed at the latest handleSend so the question-form
   // effect (which fires from outside this component) doesn't see a stale
@@ -1037,16 +1020,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }, [handleSend]);
 
-  const showContinue = !!activeId && continueConversationId === activeId && !isStreaming;
-
-  const handleContinue = useCallback(() => {
-    if (!activeId) return;
-    setContinueConversation(null);
-    // Re-send with empty user message — the model will see the partial response and continue
-    handleSend({ content: "continue" });
-  }, [activeId, handleSend, setContinueConversation]);
-
-  const canSend = (value.trim().length > 0 || files.length > 0) && !showContinue && !noModelsAvailable && !!selectedModelId;
+  const canSend = (value.trim().length > 0 || files.length > 0) && !noModelsAvailable && !!selectedModelId;
 
   const handleToggleMic = useCallback(() => {
     if (speech.listening) {
@@ -1165,20 +1139,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           placeholder={speech.listening ? "Listening…" : isStreaming ? (agentMode ? "Agent is working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
           className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
         />
-
-        {showContinue && (
-          <div className="flex items-center gap-2 mt-3 animate-[fadeIn_180ms_ease-out]">
-            <button
-              onClick={handleContinue}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#f59e42]/10 border border-[#f59e42]/20 text-[#f59e42] text-[12.5px] font-medium hover:bg-[#f59e42]/20 hover:-translate-y-px active:translate-y-0 transition-[colors,transform] duration-[140ms]"
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="4,2 14,8 4,14" />
-              </svg>
-              Continue generating
-            </button>
-          </div>
-        )}
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
           <div className="flex items-center gap-3">
