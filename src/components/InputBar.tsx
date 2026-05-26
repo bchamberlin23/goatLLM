@@ -24,6 +24,7 @@ import { readSkillFile } from "../lib/skills";
  */
 const llmSummaryCache = new Map<string, string>();
 const llmSummaryInflight = new Set<string>();
+const EMPTY_SKILLS: string[] = [];
 
 /**
  * Per-workspace cache of slash-command prompt templates. Loaded once when
@@ -82,6 +83,7 @@ import {
   FileSpreadsheet,
   FileArchive,
   X,
+  Check,
   Wand2,
   Sparkles,
   ListChecks,
@@ -181,7 +183,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   // user adds a custom skill path in Settings).
   const discoveredSkills = useChatStore((s) => s.discoveredSkills);
   const disabledSkills = useChatStore((s) => s.disabledSkills);
-  const setConversationSkill = useChatStore((s) => s.setConversationSkill);
+  const setConversationSkills = useChatStore((s) => s.setConversationSkills);
   // Pi/Claude skills assume tool access; gate them to agent mode. Skills
   // marked `chat` or `both` show up in either mode.
   const agentMode = useChatStore((s) => s.agentMode);
@@ -190,11 +192,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (s.mode === "both") return true;
     return agentMode ? s.mode === "agent" : s.mode === "chat";
   });
-  // Per-conversation active skill: lives on the conversation row so it
+  // Per-conversation active skills: lives on the conversation row so it
   // survives reloads and switches with the chat.
-  const activeSkill = useChatStore((s) =>
-    s.activeId ? (s.conversations.find((c) => c.id === s.activeId)?.activeSkillName ?? null) : null
-  );
+  const activeSkillNames = useChatStore((s) => {
+    if (!s.activeId) return EMPTY_SKILLS;
+    return s.conversations.find((c) => c.id === s.activeId)?.activeSkillNames ?? EMPTY_SKILLS;
+  });
 
   // Plan mode — agent-only. When on, the agent runs read-only tools to
   // produce a build plan. The MessageBubble surfaces a Build button when
@@ -241,6 +244,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   );
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [pendingSkills, setPendingSkills] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Forward ref for handleSend so effects can call into it without
@@ -385,7 +389,13 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     setError(null);
     let convId = activeId;
     const startingDraftKey = convId ?? NEW_CHAT_DRAFT_KEY;
-    if (!convId) convId = createConversation();
+    if (!convId) {
+      convId = createConversation();
+      if (pendingSkills.length > 0) {
+        setConversationSkills(convId, pendingSkills);
+        setPendingSkills([]);
+      }
+    }
 
     // Slash command: /skill:name [optional message].
     // Switches the conversation's active skill (persists across sends) and
@@ -410,7 +420,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           );
           return;
         }
-        setConversationSkill(convId!, reqName);
+        setConversationSkills(convId!, [reqName]);
         trimmed = (skillCmd[2] ?? "").trim();
         if (!trimmed) trimmed = `Apply the "${reqName}" skill from now on.`;
       }
@@ -688,26 +698,51 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       ? await loadProjectContext(currentWorkspace).catch(() => [])
       : [];
 
-    // If a skill is bound to this conversation, fetch its SKILL.md so it
+    // If skills are bound to this conversation, fetch each SKILL.md so they
     // can be injected into the system prompt for this turn (and every turn
-    // until the user toggles it off). This is the goatLLM equivalent of
+    // until the user toggles them off). This is the goatLLM equivalent of
     // pi's progressive-disclosure /skill mechanism.
     //
     // Skip injection when the bound skill's mode doesn't match the current
     // mode — e.g. an agent-only skill (filesystem editing) bound while in
     // chat mode silently drops out instead of giving the model bad advice.
-    const activeSkillForConv = useChatStore.getState().conversations.find((c) => c.id === convId)?.activeSkillName ?? null;
-    const activeSkillObj = activeSkillForConv
-      ? useChatStore.getState().discoveredSkills.find((s) => s.name === activeSkillForConv) ?? null
-      : null;
-    const skillModeMatches = activeSkillObj
-      ? activeSkillObj.mode === "both" ||
-        (isAgentMode ? activeSkillObj.mode === "agent" : activeSkillObj.mode === "chat")
-      : false;
-    const activeSkillData =
-      activeSkillForConv && skillModeMatches ? await getSkillBody(activeSkillForConv) : null;
-    const activeSkillBlock = activeSkillData
-      ? `\n<active_skill name="${activeSkillData.name}" location="${activeSkillData.filePath}">\nThis skill is active for the rest of this conversation. Apply its instructions to every reply.\n\n${activeSkillData.body}\n</active_skill>\n`
+    const activeSkillNamesForConv = useChatStore.getState().conversations.find((c) => c.id === convId)?.activeSkillNames ?? [];
+    const activeSkillDatas: { name: string; filePath: string; body: string }[] = [];
+    for (const sn of activeSkillNamesForConv) {
+      const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
+      if (!obj) continue;
+      const matches = obj.mode === "both" ||
+        (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
+      if (!matches) continue;
+      try {
+        const body = await getSkillBody(sn);
+        if (body) activeSkillDatas.push(body);
+      } catch { /* skip */ }
+    }
+    const activeSkillBlock = activeSkillDatas.length > 0
+      ? `\n<active_skills>\n${activeSkillDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills are active for the rest of this conversation. Apply their instructions to every reply.\n</active_skills>\n`
+      : "";
+
+    // Auto-trigger skills: their full SKILL.md body is injected into every
+    // system prompt so the model follows the instructions automatically
+    // without needing to read the file itself.
+    const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
+    const autoTriggerDatas: { name: string; filePath: string; body: string }[] = [];
+    for (const sn of autoTriggerNames) {
+      const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
+      if (!obj) continue;
+      const matches = obj.mode === "both" ||
+        (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
+      if (!matches) continue;
+      // Skip if already in active skills (don't inject twice)
+      if (activeSkillNamesForConv.includes(sn)) continue;
+      try {
+        const body = await getSkillBody(sn);
+        if (body) autoTriggerDatas.push(body);
+      } catch { /* skip */ }
+    }
+    const autoTriggerBlock = autoTriggerDatas.length > 0
+      ? `\n<auto_trigger_skills>\n${autoTriggerDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills auto-load every turn. Follow their instructions without re-reading them.\n</auto_trigger_skills>\n`
       : "";
 
     const systemPrompt = isDesignMode
@@ -727,11 +762,15 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         })()
       : isAgentMode
       ? (() => {
-          // Only include enabled skills that apply to agent mode
+          // Only include enabled skills that apply to agent mode.
+          // Auto-trigger skills are excluded from available_skills —
+          // their full body is injected directly so the model follows
+          // them without needing to read the file.
           const allSkills = useChatStore.getState().discoveredSkills;
           const disabled = useChatStore.getState().disabledSkills;
+          const autoTrigger = useChatStore.getState().autoTriggerSkills;
           const enabledSkills = allSkills.filter(
-            (s) => !disabled.has(s.name) && (s.mode === "agent" || s.mode === "both"),
+            (s) => !disabled.has(s.name) && !autoTrigger.has(s.name) && (s.mode === "agent" || s.mode === "both"),
           );
           const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
 
@@ -745,15 +784,19 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           const prefix = userPrompt ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>` : dynamicPrompt;
           let out = prefix;
           if (skillsBlock) out += `\n${skillsBlock}`;
+          if (autoTriggerBlock) out += autoTriggerBlock;
           if (activeSkillBlock) out += activeSkillBlock;
           return out;
         })()
       : (() => {
           // Chat mode: only chat-compatible skills, drop agent-only ones.
+          // Auto-trigger skills are excluded from available_skills —
+          // their full body is injected directly.
           const allSkills = useChatStore.getState().discoveredSkills;
           const disabled = useChatStore.getState().disabledSkills;
+          const autoTrigger = useChatStore.getState().autoTriggerSkills;
           const enabledSkills = allSkills.filter(
-            (s) => !disabled.has(s.name) && (s.mode === "chat" || s.mode === "both"),
+            (s) => !disabled.has(s.name) && !autoTrigger.has(s.name) && (s.mode === "chat" || s.mode === "both"),
           );
           const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
           const autoArtifacts = useChatStore.getState().autoArtifacts;
@@ -764,6 +807,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           });
           let out = base;
           if (skillsBlock) out += `\n${skillsBlock}`;
+          if (autoTriggerBlock) out += autoTriggerBlock;
           if (activeSkillBlock) out += activeSkillBlock;
           return out;
         })();
@@ -1023,22 +1067,34 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           </div>
         )}
 
-        {/* Active skill indicator */}
-        {activeSkill && (
-          <div className="mb-2 flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[12px] text-[#f59e42] border border-[#f59e42]/20">
-              <Sparkles size={11} strokeWidth={2} />
-              {activeSkill}
-              <button
-                onClick={() => activeId && setConversationSkill(activeId, null)}
-                className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
-                aria-label="Remove skill"
-              >
-                <X size={10} strokeWidth={2} />
-              </button>
-            </span>
-          </div>
-        )}
+          {/* Active skill chips */}
+          {(activeId ? activeSkillNames : pendingSkills).length > 0 && (
+            <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+              {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
+                <span
+                  key={sn}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[12px] text-[#f59e42] border border-[#f59e42]/20"
+                >
+                  <Sparkles size={11} strokeWidth={2} />
+                  {sn}
+                  <button
+                    onClick={() => {
+                      if (activeId) {
+                        const next = activeSkillNames.filter((n) => n !== sn);
+                        setConversationSkills(activeId, next);
+                      } else {
+                        setPendingSkills((prev) => prev.filter((n) => n !== sn));
+                      }
+                    }}
+                    className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
+                    aria-label={`Remove ${sn} skill`}
+                  >
+                    <X size={10} strokeWidth={2} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
         <textarea
           ref={textareaRef}
@@ -1115,7 +1171,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                           }]
                         : []),
                       ...(skillsForCurrentMode.length > 0
-                        ? [{ icon: Wand2, label: "Choose skill", onClick: () => { setShowPlusMenu(false); setShowSkillPicker((s) => !s); } }]
+                        ? [{ icon: Wand2, label: "Choose skills", onClick: () => { setShowPlusMenu(false); setPendingSkills(activeId ? activeSkillNames : pendingSkills); setShowSkillPicker((s) => !s); } }]
                         : []),
                     ].map((opt) => (
                       <button
@@ -1158,42 +1214,40 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                   />
                   <div className="absolute bottom-full left-0 mb-2 w-64 bg-[#2a2a2a] border border-white/10 rounded-xl p-1.5 shadow-xl z-20 origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                     <div className="px-2.5 py-1.5 text-[11px] font-semibold tracking-wider uppercase text-[#888888]">
-                      Choose a skill
+                      Choose skills
                     </div>
                     {skillsForCurrentMode
                       .filter((s) => !disabledSkills.has(s.name))
-                      .map((skill) => (
-                        <button
-                          key={skill.name}
-                          onClick={() => {
-                            if (!activeId) {
-                              // No conversation yet — create one and bind the skill to it.
-                              const newId = createConversation();
-                              setConversationSkill(newId, skill.name);
-                            } else {
-                              setConversationSkill(activeId, skill.name === activeSkill ? null : skill.name);
-                            }
-                            setShowSkillPicker(false);
-                          }}
-                          className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
-                            skill.name === activeSkill
-                              ? "bg-[#f59e42]/10 text-[#f59e42]"
-                              : "text-[#d5d5d5] hover:bg-white/5"
-                          }`}
-                        >
-                          <Sparkles
-                            size={14}
-                            strokeWidth={1.75}
-                            className={skill.name === activeSkill ? "text-[#f59e42]" : "text-[#c9c9c9]"}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="truncate">{skill.name}</div>
-                            <div className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
-                              {skill.description.slice(0, 80)}
+                      .map((skill) => {
+                        const selected = pendingSkills.includes(skill.name);
+                        return (
+                          <button
+                            key={skill.name}
+                            onClick={() => {
+                              setPendingSkills((prev) =>
+                                selected ? prev.filter((n) => n !== skill.name) : [...prev, skill.name]
+                              );
+                            }}
+                            className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
+                              selected
+                                ? "bg-[#f59e42]/10 text-[#f59e42]"
+                                : "text-[#d5d5d5] hover:bg-white/5"
+                            }`}
+                          >
+                            {selected ? (
+                              <Check size={14} strokeWidth={2} className="text-[#f59e42] shrink-0" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-sm border border-white/20 shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate">{skill.name}</div>
+                              <div className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
+                                {skill.description.slice(0, 80)}
+                              </div>
                             </div>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     {skillsForCurrentMode.length === 0 && (
                       <div className="px-2.5 py-3 text-[13px] text-[#a0a0a0]">
                         {discoveredSkills.length > 0
@@ -1201,6 +1255,18 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                           : "No skills discovered. Add skills in Settings."}
                       </div>
                     )}
+                    <button
+                      onClick={() => {
+                        if (activeId) {
+                          setConversationSkills(activeId, pendingSkills);
+                        }
+                        setShowSkillPicker(false);
+                      }}
+                      className="flex items-center justify-center gap-1.5 w-full mt-1.5 px-3 py-1.5 rounded-lg bg-[#f59e42]/15 hover:bg-[#f59e42]/25 text-[#f59e42] text-[13px] font-medium transition-colors"
+                    >
+                      <Check size={14} strokeWidth={2.5} />
+                      Done
+                    </button>
                   </div>
                 </>
               )}

@@ -62,8 +62,8 @@ const BUILTIN_SKILLS: SeedManifest[] = [
   // Agent-mode discipline skill. Engineering rigor as a prompt: TDD,
   // root-cause thinking, no fake fixes, no swallowed errors.
   { name: "superpowers", files: ["SKILL.md"] },
-  // Project-specific knowledge for working on goatLLM itself.
-  { name: "goatllm", files: ["SKILL.md"] },
+  // Ralph loop — iterative agent-driven development methodology.
+  { name: "ralph-loop", files: ["SKILL.md"] },
 ];
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

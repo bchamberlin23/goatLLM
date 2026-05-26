@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, AlertCircle, X } from "lucide-react";
+import { Sparkles, AlertCircle, X, Zap } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 
 export function SkillsSection() {
   const discoveredSkills = useChatStore((s) => s.discoveredSkills);
   const disabledSkills = useChatStore((s) => s.disabledSkills);
+  const autoTriggerSkills = useChatStore((s) => s.autoTriggerSkills);
   const setSkillEnabled = useChatStore((s) => s.setSkillEnabled);
+  const setAutoTriggerSkill = useChatStore((s) => s.setAutoTriggerSkill);
   const skillPaths = useChatStore((s) => s.skillPaths);
   const addSkillPath = useChatStore((s) => s.addSkillPath);
   const removeSkillPath = useChatStore((s) => s.removeSkillPath);
@@ -68,51 +70,82 @@ export function SkillsSection() {
           <div className="flex flex-col gap-1">
             {visible.map((skill) => {
               const isDisabled = disabledSkills.has(skill.name);
+              const isAutoTrigger = autoTriggerSkills.has(skill.name);
               return (
-                <div key={skill.name} className="flex items-center justify-between gap-3 p-2.5 bg-[#212122] border border-white/5 rounded-lg">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-[#d5d5d5] truncate">{skill.name}</span>
-                      <span
-                        className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                          skill.mode === "agent"
-                            ? "text-[#f59e42] bg-[#f59e42]/10"
-                            : skill.mode === "chat"
-                              ? "text-[#7dd3fc] bg-[#7dd3fc]/10"
-                              : "text-[#a0a0a0] bg-white/5"
-                        }`}
-                        title={
-                          skill.mode === "agent"
-                            ? "Available in Agent mode only"
-                            : skill.mode === "chat"
-                              ? "Available in Chat mode only"
-                              : "Available in both modes"
-                        }
-                      >
-                        {skill.mode}
-                      </span>
-                      {isDisabled && (
-                        <span className="shrink-0 text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded">disabled</span>
-                      )}
+                <div key={skill.name} className="flex flex-col gap-2 p-2.5 bg-[#212122] border border-white/5 rounded-lg">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium text-[#d5d5d5] truncate">{skill.name}</span>
+                        <span
+                          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                            skill.mode === "agent"
+                              ? "text-[#f59e42] bg-[#f59e42]/10"
+                              : skill.mode === "chat"
+                                ? "text-[#7dd3fc] bg-[#7dd3fc]/10"
+                                : "text-[#a0a0a0] bg-white/5"
+                          }`}
+                          title={
+                            skill.mode === "agent"
+                              ? "Available in Agent mode only"
+                              : skill.mode === "chat"
+                                ? "Available in Chat mode only"
+                                : "Available in both modes"
+                          }
+                        >
+                          {skill.mode}
+                        </span>
+                        {isAutoTrigger && (
+                          <span className="shrink-0 text-[10px] text-[#f59e42] bg-[#f59e42]/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Zap size={10} />
+                            auto
+                          </span>
+                        )}
+                        {isDisabled && (
+                          <span className="shrink-0 text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded">disabled</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[#a0a0a0] truncate mt-0.5" title={skill.description}>
+                        {skill.description.length > 100 ? skill.description.slice(0, 100) + "…" : skill.description}
+                      </div>
+                      <div className="text-[10px] text-[#888888] mt-0.5">{skill.source}</div>
                     </div>
-                    <div className="text-[11px] text-[#a0a0a0] truncate mt-0.5" title={skill.description}>
-                      {skill.description.length > 100 ? skill.description.slice(0, 100) + "…" : skill.description}
-                    </div>
-                    <div className="text-[10px] text-[#888888] mt-0.5">{skill.source}</div>
-                  </div>
-                  <button
-                    className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${
-                      isDisabled ? "bg-white/10" : "bg-[#f59e42]"
-                    }`}
-                    onClick={() => setSkillEnabled(skill.name, !!isDisabled)}
-                    aria-label={`${isDisabled ? "Enable" : "Disable"} ${skill.name}`}
-                  >
-                    <span
-                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        isDisabled ? "left-0.5" : "left-[calc(100%-1.125rem)]"
+                    <button
+                      className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${
+                        isDisabled ? "bg-white/10" : "bg-[#f59e42]"
                       }`}
-                    />
-                  </button>
+                      onClick={() => setSkillEnabled(skill.name, !!isDisabled)}
+                      aria-label={`${isDisabled ? "Enable" : "Disable"} ${skill.name}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                          isDisabled ? "left-0.5" : "left-[calc(100%-1.125rem)]"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between pl-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Zap size={10} className="text-[#f59e42]" />
+                      <span className="text-[10.5px] text-[#888]">
+                        Auto-load every turn
+                      </span>
+                    </div>
+                    <button
+                      className={`shrink-0 w-7 h-4 rounded-full relative transition-colors ${
+                        isAutoTrigger ? "bg-[#f59e42]" : "bg-white/10"
+                      } ${isDisabled ? "opacity-30 cursor-not-allowed" : ""}`}
+                      disabled={isDisabled}
+                      onClick={() => setAutoTriggerSkill(skill.name, !isAutoTrigger)}
+                      aria-label={`${isAutoTrigger ? "Disable" : "Enable"} auto-trigger for ${skill.name}`}
+                    >
+                      <span
+                        className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                          isAutoTrigger ? "left-[calc(100%-0.875rem)]" : "left-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               );
             })}

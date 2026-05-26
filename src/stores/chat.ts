@@ -111,10 +111,10 @@ export interface Conversation {
   mode?: "chat" | "agent" | "design";
   /** Workspace path this conversation belongs to (agent mode). */
   workspacePath?: string | null;
-  /** Skill that's active for this conversation. The SKILL.md content gets
+  /** Skills that are active for this conversation. Each SKILL.md content gets
    *  injected into the system prompt for every turn until the user toggles
-   *  it off. */
-  activeSkillName?: string | null;
+   *  them off. */
+  activeSkillNames?: string[];
   /** Archived conversations are hidden from the main sidebar and live in
    *  the collapsible "Archived" section at the bottom. Same data otherwise. */
   archived?: boolean;
@@ -396,8 +396,8 @@ interface ChatStore {
   moveConversationToWorkspace: (id: string, workspacePath: string | null) => void;
   setTitleGenerating: (id: string, generating: boolean) => void;
   setSystemPrompt: (id: string, systemPrompt: string) => void;
-  /** Set or clear the conversation-scoped active skill. */
-  setConversationSkill: (id: string, skillName: string | null) => void;
+  /** Set or clear the conversation-scoped active skills. */
+  setConversationSkills: (id: string, skillNames: string[]) => void;
   setActiveConversation: (id: string | null) => void;
 
   // Message actions
@@ -616,9 +616,14 @@ interface ChatStore {
   setSkillPaths: (paths: string[]) => void;
   addSkillPath: (path: string) => void;
   removeSkillPath: (path: string) => void;
-  /** Set of enabled skill names (empty = all enabled). Persisted. */
+  /** Set of disabled skill names (empty = all enabled). Persisted. */
   disabledSkills: Set<string>;
   setSkillEnabled: (name: string, enabled: boolean) => void;
+  /** Set of auto-trigger skill names. The full SKILL.md body is injected
+   *  into every system prompt so the model follows the skill instructions
+   *  without needing to read the file itself. Persisted. */
+  autoTriggerSkills: Set<string>;
+  setAutoTriggerSkill: (name: string, enabled: boolean) => void;
   /** Discovered skill list (non-persisted). */
   discoveredSkills: Skill[];
   setDiscoveredSkills: (skills: Skill[]) => void;
@@ -843,6 +848,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       // ── Skills ──
       skillPaths: [] as string[],
       disabledSkills: new Set<string>(),
+      autoTriggerSkills: new Set<string>(),
       discoveredSkills: [] as Skill[],
       ollamaUrl: "http://localhost:11434",
       embeddingModel: "nomic-embed-text",
@@ -975,10 +981,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
-      setConversationSkill: (id: string, skillName: string | null) => {
+      setConversationSkills: (id: string, skillNames: string[]) => {
         set((state) => {
           const updated = state.conversations.map((c) =>
-            c.id === id ? { ...c, activeSkillName: skillName } : c
+            c.id === id ? { ...c, activeSkillNames: skillNames.length > 0 ? skillNames : undefined } : c
           );
           const changed = updated.find((c) => c.id === id);
           if (changed) persistConversation(changed);
@@ -2037,6 +2043,18 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           return { disabledSkills: next };
         });
       },
+      setAutoTriggerSkill: (name, enabled) => {
+        set((state) => {
+          const next = new Set(state.autoTriggerSkills);
+          if (enabled) {
+            next.add(name);
+          } else {
+            next.delete(name);
+          }
+          try { localStorage.setItem("goatllm-auto-trigger-skills", JSON.stringify([...next])); } catch {}
+          return { autoTriggerSkills: next };
+        });
+      },
       setDiscoveredSkills: (skills) => {
         set({ discoveredSkills: skills });
       },
@@ -2618,11 +2636,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // Load skill state from localStorage
           let skillPaths: string[] = [];
           let disabledSkills: Set<string> = new Set();
+          let autoTriggerSkills: Set<string> = new Set();
           try {
             const savedSkillPaths = localStorage.getItem("goatllm-skill-paths");
             if (savedSkillPaths) skillPaths = JSON.parse(savedSkillPaths);
             const savedDisabled = localStorage.getItem("goatllm-disabled-skills");
             if (savedDisabled) disabledSkills = new Set(JSON.parse(savedDisabled));
+            const savedAutoTrigger = localStorage.getItem("goatllm-auto-trigger-skills");
+            if (savedAutoTrigger) autoTriggerSkills = new Set(JSON.parse(savedAutoTrigger));
           } catch { /* ignore malformed JSON */ }
 
           set({
@@ -2653,6 +2674,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             planMode,
             skillPaths,
             disabledSkills,
+            autoTriggerSkills,
             activeId: validActiveId,
             _hydrated: true,
           });

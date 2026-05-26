@@ -7,7 +7,7 @@ import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-se
 import { approveExecution, denyExecution } from "../lib/tools";
 import { computeDiff, type DiffResult } from "../lib/diff-utils";
 import { Shimmer, WorkingHeader } from "./ThinkingIndicator";
-import { ChevronDown, AlertTriangle, Copy, Check, Pin, PinOff, Hammer, ListChecks } from "lucide-react";
+import { ChevronDown, AlertTriangle, Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles } from "lucide-react";
 import { ansiToHtml, hasAnsi } from "../lib/ansi";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
@@ -500,6 +500,24 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         </div>
 
         {showWorkingHeader && <WorkingHeader startedAt={startedAt} running={headerRunning} label="Working" />}
+
+        {isAssistant && isStreaming && (() => {
+          const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
+          if (autoTriggerNames.size === 0) return null;
+          return (
+            <div className="flex items-center gap-1.5 mb-1.5">
+              {[...autoTriggerNames].map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[11.5px] text-[#f59e42]"
+                >
+                  <Sparkles size={10} strokeWidth={1.75} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
 
         {isInterrupted && (
           <div className="flex items-center justify-between gap-3 px-3 py-2 mb-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] text-[12px]">
