@@ -115,6 +115,8 @@ export function buildAgentSystemPrompt(options: SystemPromptOptions): string {
     "Use search_content (not bash grep) for finding code patterns. It supports `context_lines` for ±N surrounding lines (like grep -A/-B/-C) and `case_insensitive` (like grep -i). Reach for it whenever the question is 'where is X' or 'show me lines matching Y'.",
     "Use search_semantic when search_content's exact-match misses (e.g. 'auth flow' should match 'login handler').",
     "Use list_dir instead of `bash ls` for directory listings. Use git_status/git_log/git_blame instead of shelling out to git for read-only inspection.",
+    // ---- Completion ---------------------------------------------------
+    "ALWAYS end your turn with a brief summary: what you did, whether it succeeded or failed, and any key takeaways. Never stop silently — close every response.",
   ];
   const guidelinesText = guidelines.map((g) => `- ${g}`).join("\n");
 
