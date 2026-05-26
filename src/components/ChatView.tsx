@@ -7,6 +7,7 @@ import { ModeToggle } from "./ModeToggle";
 import { ArtifactPanel } from "./ArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
+import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder } from "lucide-react";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
@@ -229,6 +230,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       )}
       <TopBar />
+      <TodoWidget />
       {!showHero && (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${

@@ -173,7 +173,7 @@ export function ContextMeter() {
         <div
           role="dialog"
           aria-label="Context window details"
-          className="absolute top-full right-0 mt-1.5 w-[260px] rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease] overflow-hidden"
+          className="absolute top-full left-0 mt-1.5 w-[260px] rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease] overflow-hidden"
         >
           <div className="px-3.5 pt-3 pb-2.5 flex items-start gap-3">
             {/* Larger ring inside the popover for legibility */}

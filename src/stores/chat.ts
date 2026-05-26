@@ -344,6 +344,8 @@ interface ChatStore {
   /** Bumps every time `setActiveConversation` is called, even when the new id matches
    * the current one. Lets InputBar re-focus the textarea on repeated New chat presses. */
   focusNonce: number;
+  /** Bumped whenever the todo board changes so the sidebar widget re-renders. */
+  todoBoardUpdated: number;
   /** Files dropped anywhere on the window — InputBar consumes and clears these. */
   pendingDroppedFiles: Attachment[];
   addPendingDroppedFiles: (files: Attachment[]) => void;
@@ -783,6 +785,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       conversations: [],
       activeId: null,
       focusNonce: 0,
+      todoBoardUpdated: 0,
       pendingDroppedFiles: [],
       drafts: {},
       messages: {},
@@ -1043,6 +1046,32 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               })
               .catch((e) => console.warn("[store] on-demand message load failed:", e));
           }
+        }
+
+        // Replay todo board state from conversation history on switch so the
+        // sidebar widget shows the correct tasks for the active conversation.
+        if (id) {
+          import("../lib/tools/todo").then((m) => {
+            const msgs = get().messages[id];
+            if (msgs && msgs.length > 0) {
+              const toolCalls = msgs
+                .filter((msg) => msg.role === "assistant" && msg.toolCalls?.length)
+                .flatMap((msg) =>
+                  msg.toolCalls!.map((tc) => ({
+                    toolName: tc.toolName,
+                    input: tc.input,
+                    output: tc.output as string | undefined,
+                  })),
+                );
+              const replayed = m.loadBoardFromHistory(id, toolCalls);
+              if (replayed) {
+                set((s) => ({ todoBoardUpdated: s.todoBoardUpdated + 1 }));
+              }
+            } else {
+              m.clearBoard(id);
+              set((s) => ({ todoBoardUpdated: s.todoBoardUpdated + 1 }));
+            }
+          }).catch(() => {});
         }
       },
 
@@ -2627,6 +2656,28 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             activeId: validActiveId,
             _hydrated: true,
           });
+
+          // Replay todo boards from conversation history on app start.
+          if (validActiveId && data.messages[validActiveId]) {
+            import("../lib/tools/todo").then((m) => {
+              const msgs = data.messages[validActiveId];
+              const toolCalls = msgs
+                .filter((msg) => msg.role === "assistant" && msg.toolCalls?.length)
+                .flatMap((msg) =>
+                  msg.toolCalls!.map((tc) => ({
+                    toolName: tc.toolName,
+                    input: tc.input,
+                    output: tc.output as string | undefined,
+                  })),
+                );
+              const replayed = m.loadBoardFromHistory(validActiveId, toolCalls);
+              if (replayed) {
+                useChatStore.setState((s) => ({
+                  todoBoardUpdated: s.todoBoardUpdated + 1,
+                }));
+              }
+            }).catch(() => {});
+          }
         } catch (e) {
           console.warn("[store] Failed to hydrate from DB, using empty state:", e);
           const providerConfigs = loadProviderConfigs();

@@ -1,155 +1,120 @@
 /**
- * Welcome messages — a collection of time-of-day-aware and quirky greetings
- * shown in the empty-state hero area above the input bar.
- *
- * Each message has text and an optional emoji prefix. The `getWelcomeMessage`
- * function picks a message based on the user's local hour, so the greeting
- * always feels fresh and contextually appropriate.
+ * Welcome messages — time-of-day-aware greetings shown in the empty-state
+ * hero area above the input bar.
  */
 
 export interface WelcomeMessage {
-  /** The main text shown below the goatLLM heading. */
   text: string;
-  /** Optional emoji prefix (e.g. "🌅", "☕"). Rendered inline. */
   emoji?: string;
-  /** Optional larger/display variant for random spotlight (some messages get
-   *  shown in a bigger font on occasion). */
   display?: boolean;
 }
 
-// ─── Dawn (5–7 AM) — early birds, late owls crossing over ───
+// ─── Dawn (5–7 AM) ───
 
 const dawn: WelcomeMessage[] = [
-  { text: "You're up early. Goat's ready.", emoji: "🌅" },
-  { text: "Crack of dawn, crack of code.", emoji: "🐐" },
-  { text: "First light, first commit.", emoji: "☀️" },
-  { text: "The early goat gets the LLM token.", emoji: "⏰" },
-  { text: "Who needs coffee when you have tokens?", emoji: "⚡" },
-  { text: "Sunrise session. Let's build something.", emoji: "🌄" },
-  { text: "The world is quiet. The goat is not.", emoji: "🌙" },
-  { text: "Dawn patrol. Type below.", emoji: "🕊️" },
-  { text: "Birds are chirping. So is your CPU.", emoji: "🐦" },
-  { text: "Zero notifications. Infinite context.", emoji: "🧘" },
+  { text: "You're up early. The servers never slept." },
+  { text: "Crack of dawn, crack of code." },
+  { text: "First light, first commit." },
+  { text: "Who needs coffee when you have curiosity?" },
+  { text: "Sunrise session. Let's build something." },
+  { text: "The world is quiet. Perfect time to ship." },
+  { text: "Dawn patrol. Type below." },
+  { text: "Zero notifications. Infinite focus." },
 ];
 
-// ─── Morning (7–11 AM) — fresh, productive, slightly caffeinated ───
+// ─── Morning (7–11 AM) ───
 
 const morning: WelcomeMessage[] = [
-  { text: "Good morning. Let's make things.", emoji: "☀️" },
-  { text: "Fresh cup, fresh chat.", emoji: "☕" },
-  { text: "Morning headspace. What's the plan?", emoji: "🧠" },
-  { text: "The goat is caffeinated and ready.", emoji: "🐐" },
-  { text: "Breakfast of champions: tokens and ambition.", emoji: "🥐" },
-  { text: "Another day, another prompt.", emoji: "📝" },
-  { text: "Type your morning thoughts below.", emoji: "💭" },
-  { text: "Sun's up. Ship it.", emoji: "🚀" },
-  { text: "Let's make today's first mistake together.", emoji: "🤝" },
-  { text: "Morning ritual: stare at goat, type words.", emoji: "🫡" },
-  { text: "The early bird gets the GPT-4o response.", emoji: "🐦" },
-  { text: "Rise and prompt.", emoji: "🌅" },
-  { text: "Go get 'em, tiger. And by 'em, I mean tokens.", emoji: "🐯" },
-  { text: "Your goat is ready when you are.", emoji: "✅" },
-  { text: "Startup warmup sequence complete.", emoji: "🔄" },
+  { text: "Good morning. Let's make things." },
+  { text: "Fresh cup, fresh chat." },
+  { text: "Morning headspace. What's the plan?" },
+  { text: "Breakfast of champions: caffeine and ambition." },
+  { text: "Another day, another prompt." },
+  { text: "Type your morning thoughts below." },
+  { text: "Sun's up. Ship it." },
+  { text: "Let's make today's first mistake together." },
+  { text: "The early bird gets the cached response." },
+  { text: "Rise and prompt." },
 ];
 
 // ─── Late Morning / Pre-Noon (11 AM – 12 PM) ───
 
 const preNoon: WelcomeMessage[] = [
-  { text: "Almost lunch. Almost shipped.", emoji: "⏳" },
-  { text: "Pre-noon crunch. Let's go.", emoji: "🔥" },
-  { text: "Still morning if you haven't eaten yet.", emoji: "🤷" },
-  { text: "Second coffee, third prompt.", emoji: "☕" },
-  { text: "Noon approaches. The goat does not nap.", emoji: "🐐" },
-  { text: "Eleventh hour energy.", emoji: "⚡" },
-  { text: "Just shipped something? No? There's still time.", emoji: "🕚" },
-  { text: "Pre-lunch deep work window. Use it.", emoji: "🎯" },
-  { text: "Morning momentum. Don't break the chain.", emoji: "⛓️" },
-  { text: "The goat is in flow. Join it.", emoji: "🌊" },
+  { text: "Almost lunch. Almost shipped." },
+  { text: "Pre-noon crunch. Let's go." },
+  { text: "Still morning if you haven't eaten yet." },
+  { text: "Second coffee, third prompt." },
+  { text: "Eleventh hour energy." },
+  { text: "Just shipped something? No? There's still time." },
+  { text: "Pre-lunch deep work window. Use it." },
+  { text: "Morning momentum. Don't break the chain." },
 ];
 
-// ─── Afternoon (12–5 PM) — workhorse hours ───
+// ─── Afternoon (12–5 PM) ───
 
 const afternoon: WelcomeMessage[] = [
-  { text: "Afternoon grind. Let's ship.", emoji: "⚙️" },
-  { text: "Post-lunch clarity. Time to build.", emoji: "🍱" },
-  { text: "The goat doesn't siesta. Well, maybe a little.", emoji: "😴" },
-  { text: "Afternoon session. Caffeine level: optimal.", emoji: "☕" },
-  { text: "Let's make this afternoon count.", emoji: "🎯" },
-  { text: "Second wind. Feel that?", emoji: "💨" },
-  { text: "Afternoon code hits different.", emoji: "⚡" },
-  { text: "The goat is in the zone. Disturb, if you dare.", emoji: "🐐" },
-  { text: "Three o'clock energy. Let's roll.", emoji: "🕐" },
-  { text: "Mid-afternoon. Prime prompting hours.", emoji: "📊" },
-  { text: "Keep going. The goat believes in you.", emoji: "💪" },
-  { text: "You've got 2-3 good hours left. Use them.", emoji: "⏰" },
-  { text: "Afternoon deep work > morning panic.", emoji: "🧘" },
-  { text: "Type your way through the afternoon slump.", emoji: "⌨️" },
-  { text: "The goat is persistent. You should be too.", emoji: "🦾" },
-  { text: "One more feature before standup.", emoji: "🏗️" },
-  { text: "Afternoon delight: unlimited tokens.", emoji: "🍪" },
-  { text: "Crunch time, but make it relaxed.", emoji: "😎" },
+  { text: "Afternoon grind. Let's ship." },
+  { text: "Post-lunch clarity. Time to build." },
+  { text: "Afternoon session. Caffeine level: optimal." },
+  { text: "Let's make this afternoon count." },
+  { text: "Second wind. Feel that?" },
+  { text: "Afternoon code hits different." },
+  { text: "Three o'clock energy. Let's roll." },
+  { text: "Keep going. You've got this." },
+  { text: "You've got 2-3 good hours left. Use them." },
+  { text: "Afternoon deep work beats morning panic." },
+  { text: "Type your way through the afternoon slump." },
+  { text: "One more feature before standup." },
+  { text: "Crunch time, but make it relaxed." },
 ];
 
-// ─── Evening (5–8 PM) — winding down or pushing through ───
+// ─── Evening (5–8 PM) ───
 
 const evening: WelcomeMessage[] = [
-  { text: "Evening code. Dim the lights, open the IDE.", emoji: "🌆" },
-  { text: "Golden hour for golden prompts.", emoji: "🌇" },
-  { text: "The goat moonlights as well.", emoji: "🐐" },
-  { text: "Sunset session. One more feature.", emoji: "☀️" },
-  { text: "Evening vibes. Still building.", emoji: "🎑" },
-  { text: "Day's almost done. Ship that last thing.", emoji: "📦" },
-  { text: "Evening grind. The goat doesn't clock out.", emoji: "🕐" },
-  { text: "One more prompt before dinner.", emoji: "🍝" },
-  { text: "Twilight code. Magic happens here.", emoji: "✨" },
-  { text: "Evening calm, focused mind.", emoji: "🧠" },
-  { text: "Wind down or double down. Your call.", emoji: "🤷" },
-  { text: "After-hours access granted.", emoji: "🛠️" },
-  { text: "The debugger doesn't rest. Neither does the goat.", emoji: "🐛" },
-  { text: "Prime time for the unhinged prompts.", emoji: "🎭" },
-  { text: "Evening mode: unlocked.", emoji: "🔓" },
-  { text: "Work-life balance? Never heard of her.", emoji: "⚖️" },
+  { text: "Evening code. Dim the lights, open the IDE." },
+  { text: "Golden hour for golden ideas." },
+  { text: "Sunset session. One more feature." },
+  { text: "Evening vibes. Still building." },
+  { text: "Day's almost done. Ship that last thing." },
+  { text: "One more prompt before dinner." },
+  { text: "Twilight code. Magic happens here." },
+  { text: "Evening calm, focused mind." },
+  { text: "Wind down or double down. Your call." },
+  { text: "Prime time for the unhinged prompts." },
 ];
 
-// ─── Night (8 PM – 12 AM) — late night coding energy ───
+// ─── Night (8 PM – 12 AM) ───
 
 const night: WelcomeMessage[] = [
-  { text: "Night owl mode. The goat sees in the dark.", emoji: "🦉" },
-  { text: "Late night, sharp mind, zero distractions.", emoji: "🌙" },
-  { text: "The stars are out. So is the context window.", emoji: "⭐" },
-  { text: "Night coding > day coding. Change my mind.", emoji: "🌃" },
-  { text: "Midnight oil. Premium grade.", emoji: "🕯️" },
-  { text: "The goat doesn't sleep. Do you?", emoji: "😈" },
-  { text: "Silence. Darkness. Infinite tokens.", emoji: "🖤" },
-  { text: "Late night prompt energy. Unfiltered.", emoji: "🔥" },
-  { text: "No meetings. No notifications. Just the goat.", emoji: "📵" },
-  { text: "Night mode activates: goblin hours.", emoji: "🧌" },
-  { text: "The LLM is awake. Are you?", emoji: "👁️" },
-  { text: "After midnight code. Dangerous. Fun.", emoji: "⚡" },
-  { text: "Third wind. Let's see where this goes.", emoji: "🌪️" },
-  { text: "Tangents welcome. The goat has no deadlines.", emoji: "🌀" },
-  { text: "2 AM energy: the best ideas and the worst typos.", emoji: "🤪" },
-  { text: "Night owl server. Tokens served 24/7.", emoji: "🦉" },
+  { text: "Night owl mode. Silence is golden." },
+  { text: "Late night, sharp mind, zero distractions." },
+  { text: "The stars are out. So is the cursor." },
+  { text: "Night coding beats day coding. Fight me." },
+  { text: "Midnight oil. Premium grade." },
+  { text: "Silence. Darkness. Infinite possibilities." },
+  { text: "Late night prompt energy. Unfiltered." },
+  { text: "No meetings. No notifications. Just you." },
+  { text: "After midnight code. Dangerous. Fun." },
+  { text: "Third wind. Let's see where this goes." },
+  { text: "Tangents welcome. No deadlines here." },
+  { text: "2 AM energy: the best ideas and the worst typos." },
 ];
 
-// ─── Witching Hour (12 AM – 5 AM) — deep, unhinged, dangerous ───
+// ─── Witching Hour (12 AM – 5 AM) ───
 
 const witching: WelcomeMessage[] = [
-  { text: "It's past midnight. Are you building or breaking?", emoji: "🔮" },
-  { text: "Witching hour. The goat is at full power.", emoji: "🧙" },
-  { text: "Sleep is for people without ideas.", emoji: "💡" },
-  { text: "Deep night. Deep context. Deep code.", emoji: "🕳️" },
-  { text: "The witching hour. Tokens flow freely.", emoji: "🌕" },
-  { text: "You should be asleep. So should your bugs.", emoji: "🐛" },
-  { text: "3 AM thoughts deserve 128K context.", emoji: "🤯" },
-  { text: "The goat never sleeps. But you probably should.", emoji: "😵" },
-  { text: "Late night existentialism meets LLM.", emoji: "♾️" },
-  { text: "Dark mode IRL. The goat adapts.", emoji: "🌑" },
-  { text: "No one is watching. Type anything.", emoji: "🫣" },
-  { text: "The best code is written when no one's looking.", emoji: "🤫" },
-  { text: "Insomnia has never been this productive.", emoji: "📈" },
-  { text: "4 AM creativity hits different.", emoji: "🎨" },
-  { text: "The goat is here for your 3 AM refactor idea.", emoji: "🔄" },
+  { text: "It's past midnight. Building or breaking?" },
+  { text: "Sleep is for people without ideas." },
+  { text: "Deep night. Deep focus. Deep code." },
+  { text: "You should be asleep. So should your bugs." },
+  { text: "3 AM thoughts deserve unlimited context." },
+  { text: "Late night existentialism meets the terminal." },
+  { text: "Dark mode IRL." },
+  { text: "No one is watching. Type anything." },
+  { text: "The best code is written when no one's looking." },
+  { text: "Insomnia has never been this productive." },
+  { text: "4 AM creativity hits different." },
+  { text: "Here for your 3 AM refactor idea." },
 ];
 
 // ─── Weekday-specific ───
@@ -157,151 +122,109 @@ const witching: WelcomeMessage[] = [
 const weekday: Record<number, WelcomeMessage[]> = {
   // Monday
   1: [
-    { text: "Monday. The goat has no case of the Mondays.", emoji: "🐐" },
-    { text: "New week, new prompts. Let's go.", emoji: "📅" },
-    { text: "Monday momentum. Start strong.", emoji: "💪" },
-    { text: "Monday mode: caffeinate, prompt, repeat.", emoji: "☕" },
+    { text: "Monday. New week, new prompts." },
+    { text: "Monday momentum. Start strong." },
+    { text: "Monday mode: caffeinate, prompt, repeat." },
+    { text: "Fresh week. Fresh context window." },
   ],
   // Tuesday
   2: [
-    { text: "Tuesday. The real Monday.", emoji: "📆" },
-    { text: "Tuesday grind. You've got this.", emoji: "🔥" },
-    { text: "Second day energy. No more Monday excuses.", emoji: "⚡" },
-    { text: "Tuesday: Monday's less angry cousin.", emoji: "😌" },
+    { text: "Tuesday. The real Monday." },
+    { text: "Tuesday grind. You've got this." },
+    { text: "Second day energy. No more Monday excuses." },
+    { text: "Tuesday: Monday's less angry cousin." },
   ],
   // Wednesday
   3: [
-    { text: "Hump day. The goat is halfway there.", emoji: "🐫" },
-    { text: "Wednesday. You can see the weekend from here.", emoji: "👀" },
-    { text: "Midweek check. How's the code looking?", emoji: "✅" },
-    { text: "Wednesday wisdom: prompt early, ship often.", emoji: "📜" },
-    { text: "Hump day. Keep climbing.", emoji: "⛰️" },
+    { text: "Hump day. Halfway there." },
+    { text: "Wednesday. You can see the weekend from here." },
+    { text: "Midweek check. How's the code looking?" },
+    { text: "Wednesday wisdom: prompt early, ship often." },
+    { text: "Hump day. Keep climbing." },
   ],
   // Thursday
   4: [
-    { text: "Thursday. Almost there. Ship something.", emoji: "📦" },
-    { text: "Pre-Friday energy. Dangerous levels of productivity.", emoji: "🧨" },
-    { text: "Thursday. The Friday preview.", emoji: "👀" },
-    { text: "One more day of disciplined prompting.", emoji: "📋" },
+    { text: "Thursday. Almost there. Ship something." },
+    { text: "Pre-Friday energy. Dangerous levels of productivity." },
+    { text: "Thursday. The Friday preview." },
+    { text: "One more day. You've got this." },
   ],
   // Friday
   5: [
-    { text: "Friday. Ship it and go home.", emoji: "🚀" },
-    { text: "Friday vibes. Prompt fast, break nothing.", emoji: "🎉" },
-    { text: "Weekend preview mode. The goat earned it.", emoji: "🐐" },
-    { text: "Friday afternoon code. Handle with care.", emoji: "⚠️" },
-    { text: "TGIF. The Goat Is Free.", emoji: "🦅" },
-    { text: "Friday: last chance to ship before Monday you regrets it.", emoji: "🎯" },
+    { text: "Friday. Ship it and go home." },
+    { text: "Friday vibes. Prompt fast, break nothing." },
+    { text: "Weekend preview mode." },
+    { text: "Friday afternoon code. Handle with care." },
+    { text: "Friday: last chance to ship before Monday you regrets it." },
   ],
   // Saturday
   6: [
-    { text: "Saturday code. No deadlines, pure joy.", emoji: "😌" },
-    { text: "Weekend mode. Build for fun.", emoji: "🎨" },
-    { text: "Saturday. No standup. Just goat.", emoji: "🐐" },
-    { text: "Weekend warrior. The goat respects the hustle.", emoji: "⚔️" },
-    { text: "Zero meetings. Infinite context. Perfect.", emoji: "🧘" },
+    { text: "Saturday code. No deadlines, pure joy." },
+    { text: "Weekend mode. Build for fun." },
+    { text: "Saturday. No standup. Just code." },
+    { text: "Weekend warrior. Respect the hustle." },
+    { text: "Zero meetings. Infinite context. Perfect." },
   ],
   // Sunday
   0: [
-    { text: "Sunday. The calm before the commit.", emoji: "😇" },
-    { text: "Sunday session. Refactor with a clear mind.", emoji: "🧹" },
-    { text: "Sunday code hits different. No pressure.", emoji: "🎵" },
-    { text: "Lazy Sunday prompts. No judgment.", emoji: "🛋️" },
-    { text: "Sunday: the best day to break and fix things.", emoji: "🔧" },
+    { text: "Sunday. The calm before the commit." },
+    { text: "Sunday session. Refactor with a clear mind." },
+    { text: "Sunday code hits different. No pressure." },
+    { text: "Lazy Sunday prompts. No judgment." },
+    { text: "Sunday: the best day to break and fix things." },
   ],
 };
 
 // ─── Anytime — general, quirky, funny ───
 
 const anytime: WelcomeMessage[] = [
-  { text: "Goat is ready. Are you?", emoji: "🐐" },
-  { text: "Type below. The goat is listening.", emoji: "👂" },
-  { text: "Your wish is the goat's command.", emoji: "🧞" },
-  { text: "Start typing. Magic happens.", emoji: "✨" },
-  { text: "Prompt me, maybe?", emoji: "🎤" },
-  { text: "The goat has entered the chat.", emoji: "🐐" },
-  { text: "Hello, builder. What's it gonna be?", emoji: "👷" },
-  { text: "Your AI coworker is clocked in.", emoji: "⏰" },
-  { text: "GoatLLM: like a rubber duck, but it talks back.", emoji: "🦆" },
-  { text: "Welcome back. Your tokens missed you.", emoji: "🫶" },
-  { text: "So, what are we building today?", emoji: "🏗️" },
-  { text: "The goat is patient. Type when ready.", emoji: "🧘" },
-  { text: "Fire away. I'll clean up the mess.", emoji: "🔥" },
-  { text: "This is your brain on goatLLM.", emoji: "🧠" },
-  { text: "New chat, who dis?", emoji: "📱" },
-  { text: "Ready when you are, boss.", emoji: "👔" },
-  { text: "Let's cook.", emoji: "👨‍🍳" },
-  { text: "The goat is a vibe. Are you?", emoji: "🎵" },
-  { text: "Prompt responsibly. Or don't. I'm not your manager.", emoji: "😏" },
-  { text: "Unlimited tokens, zero judgment.", emoji: "🃏" },
-  { text: "What's on your mind?", emoji: "💭" },
-  { text: "The goat is lean, mean, and prompting.", emoji: "💪" },
-  { text: "Type your heart out.", emoji: "❤️" },
-  { text: "Go ahead. Make me generate something.", emoji: "🎰" },
-  { text: "I'm literally built for this. Go on.", emoji: "🤖" },
-  { text: "Chats are cheap. Type something interesting.", emoji: "💰" },
-  { text: "The goat has unlimited context. Do you?", emoji: "📚" },
-  { text: "Beep boop. Ready to prompt.", emoji: "🛸" },
-  { text: "What if we just — yeah, type it.", emoji: "🤔" },
-  { text: "The goat sees your cursor blinking. Impress it.", emoji: "👀" },
-  { text: "Go ahead. Type the thing.", emoji: "🎯" },
-  { text: "You type, I respond. The circle of life.", emoji: "🌍" },
-  { text: "This is fine. Everything is fine. Type away.", emoji: "🐶" },
-  { text: "The goat is powered by electricity and vibes.", emoji: "⚡" },
-  { text: "Your prompt is my command. Literally.", emoji: "💻" },
-  { text: "I'm here to help you look smart.", emoji: "🎓" },
-  { text: "No prompt too small. No ask too weird.", emoji: "🛡️" },
-  { text: "Let's make something people actually use.", emoji: "🌐" },
-  { text: "The goat has entered the building.", emoji: "🚪" },
-  { text: "Type. It's free.", emoji: "🆓" },
-  { text: "Goat at your service. 24/7. No breaks.", emoji: "🛎️" },
-  { text: "Just you, the goat, and 128K of context.", emoji: "🌌" },
-  { text: "Ready, set, prompt!", emoji: "🏁" },
-  { text: "Let's make some magic happen.", emoji: "🎩" },
-  { text: "The goat is listening. Tell it everything.", emoji: "👂" },
-  { text: "This is your captain speaking. Prompt when ready.", emoji: "🧑‍✈️" },
-  { text: "Type below to unlock infinite possibilities.", emoji: "🔑" },
-  { text: "Don't overthink it. Just type.", emoji: "😤" },
-  { text: "Go ahead. Ask the goat anything.", emoji: "🙋" },
-  { text: "The goat's hot and ready.", emoji: "🌮" },
-  { text: "Prompting is the new Googling.", emoji: "🔍" },
-  { text: "The goat is serverless, fearless, and peerless.", emoji: "🏆" },
-  { text: "New conversation. Infinite potential.", emoji: "🌱" },
-  { text: "Let's build something that breaks prod.", emoji: "💥" },
-  { text: "Your personal AI goat. No subscription needed.", emoji: "🎁" },
-  { text: "The goat doesn't bite. Unless you ask nicely.", emoji: "😈" },
-  { text: "Goat mode: activated.", emoji: "🟢" },
-  { text: "This is the way.", emoji: "🤖" },
-  { text: "I don't always prompt, but when I do, I use goatLLM.", emoji: "🍺" },
-  { text: "The goat is ready. The question is: are you prompt?", emoji: "⌨️" },
-  { text: "Hello, world.", emoji: "👋" },
+  { text: "Type below. Magic happens." },
+  { text: "Start typing. Let's see where this goes." },
+  { text: "Hello, builder. What's it gonna be?" },
+  { text: "Your AI coworker is clocked in." },
+  { text: "Welcome back. Your tokens missed you." },
+  { text: "So, what are we building today?" },
+  { text: "Fire away. I'll clean up the mess." },
+  { text: "New chat, who dis?" },
+  { text: "Ready when you are." },
+  { text: "Let's cook." },
+  { text: "Prompt responsibly. Or don't." },
+  { text: "Unlimited tokens, zero judgment." },
+  { text: "What's on your mind?" },
+  { text: "Type your heart out." },
+  { text: "Go ahead. Make me generate something." },
+  { text: "I'm literally built for this. Go on." },
+  { text: "Chats are cheap. Type something interesting." },
+  { text: "Beep boop. Ready to prompt." },
+  { text: "What if we just — yeah, type it." },
+  { text: "Go ahead. Type the thing." },
+  { text: "You type, I respond. The circle of life." },
+  { text: "This is fine. Everything is fine. Type away." },
+  { text: "Your prompt is my command. Literally." },
+  { text: "No prompt too small. No ask too weird." },
+  { text: "Let's make something people actually use." },
+  { text: "Type. It's free." },
+  { text: "Let's make some magic happen." },
+  { text: "Don't overthink it. Just type." },
+  { text: "New conversation. Infinite potential." },
+  { text: "Hello, world." },
 ];
 
-// ─── "Display" messages — slightly longer, more whimsical, shown occasionally
-//      in a larger font as a fun surprise. ───
+// ─── Display messages — shown occasionally in larger font ───
 
 const displayMessages: WelcomeMessage[] = [
-  { text: "Let's build something ridiculous.", emoji: "🎪", display: true },
-  { text: "The goat is ready. No, wait — the goat was born ready.", emoji: "🐐", display: true },
-  { text: "Welcome to goatLLM. Prepare to be prompted.", emoji: "⚡", display: true },
-  { text: "So many tokens, so little time.", emoji: "⏳", display: true },
-  { text: "You bring the ideas. I'll bring the compute.", emoji: "🧠", display: true },
-  { text: "Another day, another 100K tokens.", emoji: "🥇", display: true },
-  { text: "GoatLLM: because thinking alone is overrated.", emoji: "🧐", display: true },
-  { text: "Do NOT go gentle into that good prompt.", emoji: "🌄", display: true },
-  { text: "I'm not a regular LLM, I'm a cool LLM.", emoji: "😎", display: true },
-  { text: "Type something. Anything. The goat has no judgment.", emoji: "🤷", display: true },
-  { text: "Who needs a rubber duck when you have a goat?", emoji: "🦆", display: true },
-  { text: "The goat is here. The goat is ready. The goat is prompt.", emoji: "🐐", display: true },
-  { text: "You had me at 'hello world'.", emoji: "💻", display: true },
-  { text: "Let's write some code that future us will thank us for.", emoji: "⏳", display: true },
-  { text: "goatLLM — because 'goatGPT' was already taken.", emoji: "🤦", display: true },
-  { text: "This is your brain. This is your brain on goatLLM.", emoji: "🍳", display: true },
-  { text: "All your base are belong to goat.", emoji: "👾", display: true },
-  { text: "The goat is feature-complete. You're not. Ship it.", emoji: "📦", display: true },
-  { text: "Warning: may cause sudden bursts of productivity.", emoji: "⚠️", display: true },
-  { text: "The goat is not just a mascot. The goat is a lifestyle.", emoji: "🐐", display: true },
-  { text: "The prompt is strong with this one.", emoji: "🪐", display: true },
+  { text: "Let's build something ridiculous.", display: true },
+  { text: "So many tokens, so little time.", display: true },
+  { text: "You bring the ideas. I'll bring the compute.", display: true },
+  { text: "Another day, another 100K tokens.", display: true },
+  { text: "Type something. Anything. Zero judgment.", display: true },
+  { text: "You had me at 'hello world'.", display: true },
+  { text: "Let's write code future us will thank us for.", display: true },
+  { text: "Warning: may cause sudden bursts of productivity.", display: true },
+  { text: "The prompt is strong with this one.", display: true },
+  { text: "Do NOT go gentle into that good prompt.", display: true },
+  { text: "I'm not a regular LLM, I'm a cool LLM.", display: true },
+  { text: "Welcome. Prepare to be prompted.", display: true },
 ];
 
 // ─── Pick a random element from an array ───
@@ -313,30 +236,15 @@ function pick<T>(arr: T[]): T {
 // ─── Public API ───
 
 export interface WelcomeMessageResult {
-  /** The selected WelcomeMessage. */
   message: WelcomeMessage;
-  /** The time-of-day bucket that was selected. */
   period: string;
 }
 
-/**
- * Returns a welcome message appropriate for the user's current local time.
- *
- * Selection strategy:
- *   1. If the current hour matches a time-of-day bucket, pick from that bucket.
- *   2. With 15% chance, also consider weekday-specific messages (Mon–Sun).
- *   3. With 5% chance, pick a "display" message (larger font variant).
- *   4. Otherwise fall back to the "anytime" general pool.
- *
- * The result includes the message and the period label for debugging or
- * display purposes.
- */
 export function getWelcomeMessage(): WelcomeMessageResult {
   const now = new Date();
   const hour = now.getHours();
-  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+  const dayOfWeek = now.getDay();
 
-  // Determine the time-of-day bucket
   let period: string;
   let pool: WelcomeMessage[];
 
@@ -348,12 +256,10 @@ export function getWelcomeMessage(): WelcomeMessageResult {
   else if (hour >= 20) { period = "night"; pool = night; }
   else { period = "witching"; pool = witching; }
 
-  // 12% chance: pick a display message (larger font)
   if (Math.random() < 0.12) {
     return { message: pick(displayMessages), period: "display" };
   }
 
-  // 15% chance: try weekday-specific
   if (Math.random() < 0.15) {
     const dayPool = weekday[dayOfWeek];
     if (dayPool && dayPool.length > 0) {
@@ -361,7 +267,6 @@ export function getWelcomeMessage(): WelcomeMessageResult {
     }
   }
 
-  // 50/50: pick from time-of-day pool vs. anytime pool
   if (Math.random() < 0.5) {
     return { message: pick(pool), period };
   }
@@ -369,9 +274,6 @@ export function getWelcomeMessage(): WelcomeMessageResult {
   return { message: pick(anytime), period: "anytime" };
 }
 
-/**
- * Returns the total count of unique messages across all pools (for stats).
- */
 export function getMessageCount(): number {
   const pools = [
     dawn, morning, preNoon, afternoon, evening, night, witching,

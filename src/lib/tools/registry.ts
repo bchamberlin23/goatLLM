@@ -15,6 +15,7 @@
  */
 import { READ_ONLY_TOOLS } from "./builtins/read";
 import { WRITE_TOOLS } from "./builtins/write";
+import { TODO_TOOLS } from "./builtins/todo";
 import type { ToolSet } from "ai";
 
 export { READ_ONLY_TOOLS, WRITE_TOOLS };
@@ -49,6 +50,7 @@ export function formatToolsForPrompt(tools: ToolSet): string {
 export const ALL_TOOLS = {
   ...READ_ONLY_TOOLS,
   ...WRITE_TOOLS,
+  ...TODO_TOOLS,
 };
 
 /**
@@ -72,6 +74,7 @@ export const RESEARCH_TOOLS = {
  */
 export const PLAN_TOOLS = {
   ...READ_ONLY_TOOLS,
+  ...TODO_TOOLS,
 };
 
 /**

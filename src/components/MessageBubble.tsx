@@ -121,6 +121,28 @@ function presentTool(tc: ToolCallEntry): ToolPresentation {
   if (name === "web_fetch") {
     return { runningVerb: "Fetching", doneVerb: "Fetched", target: url, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /></>) };
   }
+  if (name === "todo_create") {
+    const title = getInputField(tc.input, "title") || "task";
+    return { runningVerb: "Creating", doneVerb: "Created", target: `task: ${title}`, icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
+  }
+  if (name === "todo_update") {
+    const id = getInputField(tc.input, "id") || "task";
+    return { runningVerb: "Updating", doneVerb: "Updated", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>) };
+  }
+  if (name === "todo_list") {
+    return { runningVerb: "Listing", doneVerb: "Listed", target: "tasks", icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
+  }
+  if (name === "todo_get") {
+    const id = getInputField(tc.input, "id") || "task";
+    return { runningVerb: "Getting", doneVerb: "Got", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>) };
+  }
+  if (name === "todo_delete") {
+    const id = getInputField(tc.input, "id") || "task";
+    return { runningVerb: "Deleting", doneVerb: "Deleted", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>) };
+  }
+  if (name === "todo_clear") {
+    return { runningVerb: "Clearing", doneVerb: "Cleared", target: "all tasks", icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>) };
+  }
   return { runningVerb: "Running", doneVerb: "Ran", target: name, detail: formatInput(tc.input).slice(0, 200), icon: baseIcon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>) };
 }
 

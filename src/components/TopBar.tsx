@@ -73,6 +73,9 @@ export function TopBar() {
       style={{ paddingLeft: sidebarOpen ? 8 : 110, paddingRight: 12 }}
       data-tauri-drag-region
     >
+      {/* Context window meter — on the left, next to the sidebar border */}
+      {activeId && <ContextMeter />}
+
       {/* New chat + title + menu — only when sidebar is collapsed */}
       {!sidebarOpen && (
         <>
@@ -158,9 +161,6 @@ export function TopBar() {
       )}
 
       <div className="flex-1" data-tauri-drag-region />
-
-      {/* Context window meter — click for usage breakdown */}
-      {activeId && <ContextMeter />}
 
       {/* Right-side assets menu (artifacts + uploaded files) */}
       {activeId && <ChatAssetsMenu />}
