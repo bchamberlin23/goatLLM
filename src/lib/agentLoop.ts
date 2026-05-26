@@ -141,13 +141,30 @@ export async function agentLoop(
   }
 
   try {
+    // Inject spawn_subagent into the tool set when depth allows.
+    // Dynamic import to avoid circular dep: subagent.ts → agentLoop.ts.
+    let effectiveTools = options?.tools;
+    if (effectiveTools && (options?.depth ?? 0) < 2) {
+      const { createSpawnSubagent } = await import("./tools/builtins/subagent");
+      effectiveTools = {
+        ...effectiveTools,
+        spawn_subagent: createSpawnSubagent({
+          depth: options?.depth ?? 0,
+          parentSignal: options?.parentSignal,
+          abortSignal: options?.abortSignal,
+          config,
+          maxToolRounds: options?.maxToolRounds,
+        }),
+      };
+    }
+
     const result = streamText({
       model,
       system: systemPrompt ?? undefined,
       messages: mapMessagesForProvider(messages) as any,
-      ...(options?.tools ? { tools: options.tools, toolChoice: "auto" as const } : {}),
-      stopWhen: options?.tools
-        ? stepCountIs(options.maxToolRounds ?? 10)
+      ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
+      stopWhen: effectiveTools
+        ? stepCountIs(options?.maxToolRounds ?? 10)
         : stepCountIs(1),
       abortSignal: effectiveSignal,
       ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),

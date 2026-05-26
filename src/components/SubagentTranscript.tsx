@@ -1,0 +1,54 @@
+import { memo } from "react";
+import type { SubagentTranscriptEntry } from "../lib/llm-types";
+import type { ToolCallEntry } from "../stores/chat";
+import { InlineToolCall } from "./InlineToolCall";
+
+interface SubagentTranscriptViewProps {
+  transcript: SubagentTranscriptEntry[];
+}
+
+export const SubagentTranscriptView = memo(function SubagentTranscriptView({
+  transcript,
+}: SubagentTranscriptViewProps) {
+  return (
+    <div className="ml-5 mt-2 border border-white/10 rounded-xl bg-[#1a1a1c] overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.03] border-b border-white/5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+          Subagent conversation
+        </span>
+      </div>
+
+      <div className="p-3 flex flex-col gap-3 max-h-[500px] overflow-auto">
+        {transcript.map((entry, i) => (
+          <div key={i}>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#777] mb-1.5">
+              {entry.role === "user" ? "Task" : "Subagent"}
+            </div>
+
+            {entry.content && (
+              <div className="text-[12.5px] text-[#b4b4b4] leading-relaxed whitespace-pre-wrap">
+                {entry.content}
+              </div>
+            )}
+
+            {entry.toolCalls?.map((stc) => {
+              const tcEntry: ToolCallEntry = {
+                toolCallId: stc.toolCallId,
+                toolName: stc.toolName,
+                input: stc.input,
+                output: stc.output,
+                state: stc.state,
+              };
+
+              return (
+                <div key={stc.toolCallId} className="ml-1 mt-1">
+                  <InlineToolCall tc={tcEntry} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});

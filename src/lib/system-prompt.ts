@@ -117,6 +117,8 @@ export function buildAgentSystemPrompt(options: SystemPromptOptions): string {
     "Use list_dir instead of `bash ls` for directory listings. Use git_status/git_log/git_blame instead of shelling out to git for read-only inspection.",
     // ---- Completion ---------------------------------------------------
     "ALWAYS end your turn with a brief summary: what you did, whether it succeeded or failed, and any key takeaways. Never stop silently — close every response.",
+    // ---- Subagent routing ----------------------------------------------
+    "A spawn_subagent tool is available for delegating complex, self-contained tasks to a child agent loop. Use it for parallelizable research or multi-step operations that don't need user interaction. The subagent gets its own context and tools, and its transcript is visible in the UI for review.",
   ];
   const guidelinesText = guidelines.map((g) => `- ${g}`).join("\n");
 

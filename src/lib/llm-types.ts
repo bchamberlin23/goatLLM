@@ -62,3 +62,20 @@ export interface StreamCallbacks {
   onDone: (fullText: string) => void;
   onError: (error: Error) => void;
 }
+
+/** Captured tool call from a subagent's transcript. Lightweight — no UI
+ *  state (shimmer, approval) needed since subagent tools auto-execute. */
+export interface SubagentToolCall {
+  toolCallId: string;
+  toolName: string;
+  input: unknown;
+  output?: unknown;
+  state: "done" | "error";
+}
+
+/** One turn in a subagent conversation transcript. */
+export interface SubagentTranscriptEntry {
+  role: "user" | "assistant";
+  content: string;
+  toolCalls?: SubagentToolCall[];
+}

@@ -58,6 +58,25 @@ const AUTO_MODE_SAFE_TOOLS = new Set([
 
 export type PermissionMode = "manual" | "auto" | "yolo";
 
+/** Module-level bypass flag. Set by spawn_subagent while the child loop
+ *  runs — all write tools auto-execute without pausing for user approval.
+ *  Restored to false after the subagent finishes so the parent's
+ *  permission mode resumes normal gating. */
+let _bypassApproval = false;
+
+/** Run a function with the approval gate bypassed. Used by spawn_subagent
+ *  so the child loop's write tools execute immediately. Restores the
+ *  bypass state in a finally block. */
+export async function withSubagentBypass<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = _bypassApproval;
+  _bypassApproval = true;
+  try {
+    return await fn();
+  } finally {
+    _bypassApproval = prev;
+  }
+}
+
 /** Check if a tool name requires user approval before execution. */
 export function isWriteTool(name: string): boolean {
   return WRITE_TOOL_NAMES.has(name);
@@ -142,6 +161,9 @@ export async function withApproval(
   toolCallId: string,
   operation: DeferredOperation,
 ): Promise<unknown> {
+  // Subagent bypass: all tools auto-execute without the approval gate.
+  if (_bypassApproval) return operation();
+
   const store = useChatStore.getState();
   const tcEarly = findToolCall(toolCallId);
   const toolName = tcEarly?.toolName ?? "unknown";
