@@ -253,6 +253,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   // Forward ref for handleSend so effects can call into it without
   // breaking the dependency array. Assigned just below the callback def.
   const handleSendRef = useRef<((overrides?: { content?: string; attachments?: Attachment[] }) => void) | null>(null);
+  // Tracks the last artifact scan timestamp so we can throttle the full-content
+  // splitContentByArtifacts regex to ~80ms during streaming.
+  const artifactScanRef = useRef({ lastScan: 0 });
 
   // Auto-dismiss the error notice. Cancellations briefly flash then disappear;
   // real errors stick around longer in case the user wants to read them.
@@ -875,32 +878,36 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     await streamChat(llmMessages, systemPrompt, llmConfig, {
       onToken: (chunk) => {
         appendToMessage(convId!, assistantMsg.id, chunk);
-        // Pipe any partial artifact bodies straight into the canvas so the
-        // user sees the code being typed in Monaco. We run the parser on
-        // the full message content so the streaming version always reflects
-        // the latest fence state (heading + body).
-        const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-        const content = live?.content || "";
-        if (content.length === 0) return;
-        const segments = splitContentByArtifacts(content);
-        let fenceIndex = 0;
-        for (const seg of segments) {
-          if (seg.type !== "artifact") continue;
-          // Only stream while the body has at least one line — keeps the
-          // canvas tab from popping open at the moment the fence opens but
-          // before any code has been emitted, which would flash an empty
-          // editor.
-          if (seg.code.length > 0) {
-            streamArtifactDelta(
-              convId!,
-              assistantMsg.id,
-              seg.kind,
-              seg.title,
-              fenceIndex,
-              seg.code,
-            );
+        // Pipe any partial artifact bodies into the canvas for live code
+        // preview. The artifact-fence regex scan is throttled to ~80ms so
+        // it doesn't burn CPU on every token. Fence open/close lines (which
+        // contain ```   ) trigger an immediate scan so the artifact panel
+        // opens/closes at the right moment.
+        const artifactScanNow = artifactScanRef.current.lastScan === 0 ||
+          /```/.test(chunk) ||
+          performance.now() - artifactScanRef.current.lastScan > 80;
+        if (artifactScanNow) {
+          artifactScanRef.current.lastScan = performance.now();
+          const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+          const content = live?.content || "";
+          if (content.length > 0) {
+            const segments = splitContentByArtifacts(content);
+            let fenceIndex = 0;
+            for (const seg of segments) {
+              if (seg.type !== "artifact") continue;
+              if (seg.code.length > 0) {
+                streamArtifactDelta(
+                  convId!,
+                  assistantMsg.id,
+                  seg.kind,
+                  seg.title,
+                  fenceIndex,
+                  seg.code,
+                );
+              }
+              fenceIndex++;
+            }
           }
-          fenceIndex++;
         }
       },
       onToolCall: handleToolCall,

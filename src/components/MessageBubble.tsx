@@ -11,6 +11,8 @@ import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
 import { InlineToolCall } from "./InlineToolCall";
 import { SubagentTranscriptView } from "./SubagentTranscript";
+import { useThrottledContent } from "../hooks/useThrottledContent";
+import "./MessageBubble.css";
 
 function stripMarkdown(md: string): string {
   return md
@@ -196,64 +198,25 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           );
         })()}
 
-        {hasToolCalls && isAssistant ? (() => {
-          // Interleave text and tool calls chronologically using contentAtInvocation
-          const toolCalls = message.toolCalls!;
-          const content = message.content;
+        {hasToolCalls && isAssistant ? (
+          <ToolCallInterleavedBody
+            message={message}
+            isStreaming={isStreaming}
+            messageId={message.id}
+          />
+        ) : null}
+        {hasToolCalls && isAssistant && isStreaming && message.content.length === 0 && (
+          <Shimmer text="Thinking" className="thinking-line" />
+        )}
+        {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
+          <span className="streaming-cursor" />
+        )}
+        {hasToolCalls && isAssistant && !isStreaming && (
+          <FallbackArtifactCards messageId={message.id} />
+        )}
 
-          // Build segments: each tool call splits the content at its invocation point
-          type Segment = { type: "text"; text: string } | { type: "tool"; tc: ToolCallEntry };
-          const segments: Segment[] = [];
-          let lastContentPos = 0;
-
-          // Sort tool calls by contentAtInvocation to ensure correct order
-          const sortedTcs = [...toolCalls].sort(
-            (a, b) => (a.contentAtInvocation ?? 0) - (b.contentAtInvocation ?? 0)
-          );
-
-          for (const tc of sortedTcs) {
-            const pos = tc.contentAtInvocation ?? 0;
-            if (pos > lastContentPos && content.length > 0) {
-              const textSlice = content.slice(lastContentPos, pos).trim();
-              if (textSlice) segments.push({ type: "text", text: textSlice });
-            }
-            segments.push({ type: "tool", tc });
-            lastContentPos = Math.max(lastContentPos, pos);
-          }
-
-          // Remaining text after last tool call
-          if (lastContentPos < content.length) {
-            const remaining = content.slice(lastContentPos).trim();
-            if (remaining) segments.push({ type: "text", text: remaining });
-          }
-
-          return segments.map((seg, i) => {
-            if (seg.type === "tool") {
-              if (
-                seg.tc.toolName === "spawn_subagent" &&
-                seg.tc.subagentTranscript &&
-                seg.tc.state === "done"
-              ) {
-                return (
-                  <InlineToolCall key={seg.tc.toolCallId} tc={seg.tc}>
-                    <SubagentTranscriptView transcript={seg.tc.subagentTranscript} />
-                  </InlineToolCall>
-                );
-              }
-              return <InlineToolCall key={seg.tc.toolCallId} tc={seg.tc} />;
-            }
-            return (
-              <div key={`text-${i}`} className="w-full">
-                <SegmentedAssistantText
-                  content={seg.text}
-                  messageId={message.id}
-                  isStreaming={isStreaming}
-                />
-              </div>
-            );
-          });
-        })()
-        : (
+        {/* Plain assistant text (no tool calls) + user messages */}
+        {(!hasToolCalls || !isAssistant) && (
           <div className={isUser ? "bg-[#2d2d2d] border border-white/5 rounded-2xl px-4 py-2 max-w-[85%]" : "w-full"}>
             {editing ? (
               <textarea
@@ -270,27 +233,17 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
               <Shimmer text="Thinking" className="thinking-line" />
             ) : (
               <>
-                <SegmentedAssistantText
+                <StreamingSegmentedText
                   content={message.content}
                   messageId={message.id}
                   isStreaming={isStreaming}
                 />
                 {isStreaming && message.content.length > 0 && (
-                  <span className="inline-block w-0.5 h-4 bg-[#b4b4b4] ml-0.5 align-text-bottom rounded-sm animate-[cursorBlink_1s_step-end_infinite]" />
+                  <span className="streaming-cursor" />
                 )}
               </>
             )}
           </div>
-        )}
-
-        {hasToolCalls && isAssistant && isStreaming && message.content.length === 0 && (
-          <Shimmer text="Thinking" className="thinking-line" />
-        )}
-        {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
-          <span className="inline-block w-0.5 h-4 bg-[#b4b4b4] ml-0.5 align-text-bottom rounded-sm animate-[cursorBlink_1s_step-end_infinite]" />
-        )}
-        {hasToolCalls && isAssistant && !isStreaming && (
-          <FallbackArtifactCards messageId={message.id} />
         )}
         {isAssistant && !isStreaming && (
           <PlanBuildCTA message={message} />
@@ -299,6 +252,121 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     </div>
   );
 });
+
+// ── Tool-call interleaved body (memoized, throttled display) ───────────
+
+function ToolCallInterleavedBody({
+  message, isStreaming, messageId,
+}: {
+  message: Message;
+  isStreaming: boolean;
+  messageId: string;
+}) {
+  // Snapshot tool positions — stable ref while the tool list is the same,
+  // so interleaving computation is memoized and doesn't run on every token.
+  const tcSnapshot = useMemo(
+    () =>
+      (message.toolCalls ?? [])
+        .map((t) => ({
+          id: t.toolCallId,
+          state: t.state,
+          pos: t.contentAtInvocation ?? 0,
+        }))
+        .sort((a, b) => a.pos - b.pos),
+    [message.toolCalls],
+  );
+
+  // Throttle markdown/segment re-parses to ~80ms during streaming.
+  const displayContent = useThrottledContent(message.content, isStreaming);
+
+  // Interleave: split text at each tool-call position. Recomputes only when
+  // tcSnapshot changes (tool add/complete) or displayContent changes (which
+  // is already throttled).
+  const segments = useMemo(() => {
+    type Segment = { type: "text"; text: string } | { type: "tool"; tc: ToolCallEntry };
+    const result: Segment[] = [];
+    let lastPos = 0;
+    for (const snap of tcSnapshot) {
+      if (snap.pos > lastPos && displayContent.length > 0) {
+        const slice = displayContent.slice(lastPos, snap.pos).trim();
+        if (slice) result.push({ type: "text", text: slice });
+      }
+      const full = message.toolCalls?.find((t) => t.toolCallId === snap.id);
+      if (full) result.push({ type: "tool", tc: full });
+      lastPos = Math.max(lastPos, snap.pos);
+    }
+    if (lastPos < displayContent.length) {
+      const remaining = displayContent.slice(lastPos).trim();
+      if (remaining) result.push({ type: "text", text: remaining });
+    }
+    return result;
+  }, [tcSnapshot, displayContent, message.toolCalls]);
+
+  return (
+    <>
+      {segments.map((seg, i) => {
+        if (seg.type === "tool") {
+          if (
+            seg.tc.toolName === "spawn_subagent" &&
+            seg.tc.subagentTranscript &&
+            seg.tc.state === "done"
+          ) {
+            return (
+              <InlineToolCall key={seg.tc.toolCallId} tc={seg.tc}>
+                <SubagentTranscriptView transcript={seg.tc.subagentTranscript} />
+              </InlineToolCall>
+            );
+          }
+          return <InlineToolCall key={seg.tc.toolCallId} tc={seg.tc} />;
+        }
+        if (isStreaming) {
+          return (
+            <div key={`text-${i}`} className="w-full">
+              <SegmentedAssistantText
+                content={seg.text}
+                messageId={messageId}
+                isStreaming={false}
+              />
+            </div>
+          );
+        }
+        return (
+          <div key={`text-${i}`} className="w-full">
+            <SegmentedAssistantText
+              content={seg.text}
+              messageId={messageId}
+              isStreaming={false}
+            />
+          </div>
+        );
+      })}
+      {isStreaming && segments.length > 0 && (
+        <span className="streaming-cursor" />
+      )}
+    </>
+  );
+}
+
+// ── Streaming-aware SegmentedAssistantText wrapper ─────────────────────
+//
+// When streaming, the content is throttled via useThrottledContent so the
+// heavy MarkdownRenderer AST rebuild (react-markdown + remark + rehype +
+// KaTeX) runs ~12 times/second instead of 30-50 times/second.
+
+function StreamingSegmentedText({
+  content, messageId, isStreaming,
+}: {
+  content: string; messageId: string; isStreaming: boolean;
+}) {
+  const displayContent = useThrottledContent(content, isStreaming);
+  return (
+    <SegmentedAssistantText
+      content={displayContent}
+      messageId={messageId}
+      isStreaming={isStreaming}
+    />
+  );
+}
 
 // ── User message content (with attachment chips and stripped markers) ──
 

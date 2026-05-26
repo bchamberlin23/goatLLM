@@ -24,11 +24,13 @@ export function MessageList() {
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   // Sticky = "follow the bottom". Toggled off by user scrolling up,
-  // re-enabled by sending a message or pressing the down-arrow button.
+  // re-enabled by user scrolling down to the bottom or pressing the
+  // down-arrow button.
   const stickyRef = useRef(true);
-  const programmaticScrollRef = useRef(false);
   const rafPendingRef = useRef<number | null>(null);
   const activeIdRef = useRef(activeId);
+  // Track scroll direction to distinguish user input from auto-scroll.
+  const lastScrollTopRef = useRef(0);
 
   // Kill any queued RAF when component unmounts.
   useEffect(() => () => {
@@ -50,42 +52,74 @@ export function MessageList() {
     return n;
   }, [messages]);
 
-  // Smooth, coalesced scroll-to-bottom. Uses a single rAF guard so multiple
-  // triggers inside one frame only schedule one scroll. During active streaming
-  // we use `behavior: "auto"` for instant tracking; manual clicks use smooth.
+  // Coalesced scroll-to-bottom. While sticky, snaps to bottom on every
+  // content tick using behavior:"auto" for instant tracking with no
+  // animation overhead.
   const doScrollToBottom = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
-    // Coalesce: if a scroll is already scheduled for this frame, bail —
-    // the pending rAF will pick up the latest scrollHeight.
     if (rafPendingRef.current !== null) return;
     rafPendingRef.current = requestAnimationFrame(() => {
       rafPendingRef.current = null;
       if (!stickyRef.current) return;
       const currentEl = listRef.current;
       if (!currentEl) return;
-      // Bail if the user scrolled up since this rAF was queued —
-      // guard with ground-truth scroll position, not just the flag.
+      // Tight check — user scrolling up breaks stickiness immediately
+      // in handleScroll, so by the time we reach here we're either
+      // stuck to the bottom or the user has disengaged.
       const dist = currentEl.scrollHeight - currentEl.scrollTop - currentEl.clientHeight;
-      if (dist > 160) return;
-      programmaticScrollRef.current = true;
+      if (dist > 200) return;
+      lastScrollTopRef.current = currentEl.scrollTop;
       currentEl.scrollTo({ top: currentEl.scrollHeight, behavior: "auto" });
-      requestAnimationFrame(() => {
-        programmaticScrollRef.current = false;
-      });
     });
   }, []);
 
-  // ── Send: when the user message count grows, that's a fresh send. Pin. ──
+  const scrollToBottom = useCallback(() => {
+    stickyRef.current = true;
+    if (rafPendingRef.current !== null) {
+      cancelAnimationFrame(rafPendingRef.current);
+      rafPendingRef.current = null;
+    }
+    const el = listRef.current;
+    if (!el) return;
+    // Use current scrollTop (which is increasing during the animation)
+    // so the direction detector sees "scrolling down" and keeps sticky.
+    lastScrollTopRef.current = el.scrollTop;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setShowScrollBtn(false);
+  }, []);
+
+  // ── Send: when the user message count grows, that's a fresh send. ──
   const lastUserCountRef = useRef(userMsgCount);
   useEffect(() => {
     if (userMsgCount > lastUserCountRef.current) {
-      stickyRef.current = true;
-      doScrollToBottom();
-      setShowScrollBtn(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToBottom();
+        });
+      });
     }
     lastUserCountRef.current = userMsgCount;
-  }, [userMsgCount, doScrollToBottom]);
+  }, [userMsgCount, scrollToBottom]);
+
+  // ── Stream start: when streaming begins, snap to bottom on the first
+  //     content tick so the user sees the assistant bubble appear. ──
+  const streamStartedRef = useRef(false);
+  useEffect(() => {
+    if (isStreaming && !streamStartedRef.current) {
+      streamStartedRef.current = true;
+      // contentSignal is already the freshest value here — the send effect
+      // above already triggered scrollToBottom. But if we're resuming from
+      // a sticky-ref=false state (user scrolled up during a previous send),
+      // the first content tick should force them back down.
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+    if (!isStreaming) {
+      streamStartedRef.current = false;
+    }
+  }, [isStreaming, scrollToBottom]);
 
   // ── Stream: while sticky, keep snapping to bottom on every content tick. ──
   useEffect(() => {
@@ -99,10 +133,6 @@ export function MessageList() {
     if (!list || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
       if (!stickyRef.current) return;
-      const el = listRef.current;
-      if (!el) return;
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (dist > 160) return;
       doScrollToBottom();
     });
     ro.observe(list);
@@ -115,19 +145,15 @@ export function MessageList() {
     if (prev === activeId) return;
     if (prev && listRef.current) saveScrollPosition(prev, listRef.current.scrollTop);
     activeIdRef.current = activeId;
-    // Reset send tracker so the first observed user message in the new chat
-    // doesn't trigger a phantom snap.
     lastUserCountRef.current = userMsgCount;
     requestAnimationFrame(() => {
       const el = listRef.current;
       if (!el || !activeId) return;
       const savedPos = scrollPositions[activeId];
       if (savedPos !== undefined) {
-        programmaticScrollRef.current = true;
         el.scrollTop = savedPos;
         const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
         stickyRef.current = distFromBottom < 80;
-        requestAnimationFrame(() => { programmaticScrollRef.current = false; });
       } else {
         stickyRef.current = true;
         doScrollToBottom();
@@ -136,46 +162,35 @@ export function MessageList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
-  // ── User scroll: break or restore stickiness based on position. ──
+  // ── User scroll: break stickiness on upward scroll, re-engage on
+  //     downward scroll when the user reaches the bottom. ──
   const handleScroll = useCallback(() => {
     const el = listRef.current;
     if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = distFromBottom < 80;
+    const st = el.scrollTop;
+    const prev = lastScrollTopRef.current;
+    lastScrollTopRef.current = st;
 
-    // Always break stickiness when scrolling up — the user's intent to
-    // disengage must win. Only guard re-enabling stickiness against
-    // programmatic scrolls (which would look like a user scrolling to bottom).
-    if (!nearBottom) {
+    const distFromBottom = el.scrollHeight - st - el.clientHeight;
+    const scrollingUp = st < prev;
+
+    if (scrollingUp) {
+      // User is scrolling up — immediately disengage auto-follow.
       stickyRef.current = false;
       if (rafPendingRef.current !== null) {
         cancelAnimationFrame(rafPendingRef.current);
         rafPendingRef.current = null;
       }
-    } else if (!programmaticScrollRef.current) {
+    } else if (distFromBottom < 40 && !scrollingUp && st > prev) {
+      // User scrolled down to the bottom — re-engage.
       stickyRef.current = true;
     }
-    setShowScrollBtn(!nearBottom && el.scrollHeight > el.clientHeight + 200);
-    const id = activeIdRef.current;
-    if (id) saveScrollPosition(id, el.scrollTop);
-  }, [saveScrollPosition]);
 
-  const scrollToBottom = useCallback(() => {
-    stickyRef.current = true;
-    // Flush any pending auto-scroll before doing a manual smooth one.
-    if (rafPendingRef.current !== null) {
-      cancelAnimationFrame(rafPendingRef.current);
-      rafPendingRef.current = null;
-    }
-    const el = listRef.current;
-    if (!el) return;
-    programmaticScrollRef.current = true;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    requestAnimationFrame(() => {
-      programmaticScrollRef.current = false;
-    });
-    setShowScrollBtn(false);
-  }, []);
+    setShowScrollBtn(distFromBottom > 80 && el.scrollHeight > el.clientHeight + 200);
+
+    const id = activeIdRef.current;
+    if (id) saveScrollPosition(id, st);
+  }, [saveScrollPosition]);
 
   if (messages.length === 0) return null;
 
@@ -184,7 +199,13 @@ export function MessageList() {
       <div
         ref={listRef}
         className="h-full overflow-y-auto"
-        style={{ overscrollBehavior: "contain", scrollbarGutter: "stable", scrollBehavior: "smooth", contain: "layout style" }}
+        style={{
+          overscrollBehavior: "contain",
+          scrollbarGutter: "stable",
+          transform: "translateZ(0)",
+          willChange: "transform",
+          overflowAnchor: "none",
+        }}
         onScroll={handleScroll}
         role="log"
         aria-label="Conversation messages"
