@@ -16,6 +16,7 @@ import { fetchNewUrlsFromProse } from "../lib/url-fetch";
 import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
+import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
 
 /**
  * Per-conversation cache of high-quality LLM-generated summaries. We swap
@@ -846,6 +847,26 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       logToolResult(convId!, tr.toolCallId, tr.toolName, tr.output);
     };
 
+    // Start jjagent isolation change if enabled and workspace is a jj repo.
+    const jjagentEnabled = useChatStore.getState().jjagent;
+    if (jjagentEnabled && currentWorkspace && (isAgentMode || isDesignMode)) {
+      const historyMsgs = useChatStore.getState().messages[convId!];
+      const turnIndex = (historyMsgs ?? []).filter((m) => m.role === "user").length;
+      const session = await startJjAgentSession(currentWorkspace, convId!, turnIndex);
+      if (session) {
+        useChatStore.getState().setJjAgentChangeId(session.changeId);
+      }
+    }
+
+    const endJjAgentSessionIfNeeded = () => {
+      const changeId = useChatStore.getState().jjagentChangeId;
+      const ws = useChatStore.getState().workspacePath;
+      if (changeId && ws) {
+        endJjAgentSession(ws, { changeId, startedAt: Date.now() });
+        useChatStore.getState().setJjAgentChangeId(null);
+      }
+    };
+
     await streamChat(llmMessages, systemPrompt, llmConfig, {
       onToken: (chunk) => {
         appendToMessage(convId!, assistantMsg.id, chunk);
@@ -894,6 +915,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (!finalContent.trim() && !hasToolActivity) {
           deleteMessage(convId!, assistantMsg.id);
           stopStreaming(convId!);
+          endJjAgentSessionIfNeeded();
           return;
         }
 
@@ -917,6 +939,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (latestConv && latestConv.isGeneratingTitle && latestConv.title !== "New Conversation") {
           setTitleGenerating(convId!, false);
         }
+        // Squash jjagent change back into parent now that the turn is complete.
+        endJjAgentSessionIfNeeded();
       },
       onError: (err) => {
         // If the user aborted, don't surface an error — onDone has already
@@ -933,10 +957,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             updateMessage(convId!, assistantMsg.id, { content: currentContent, isStreaming: false });
           }
           stopStreaming(convId!);
+          endJjAgentSessionIfNeeded();
           return;
         }
         finalizeStuckToolCalls(convId!, assistantMsg.id);
         finalizeStreamingArtifacts(convId!, assistantMsg.id);
+        endJjAgentSessionIfNeeded();
         // Context-overflow gets dedicated UX: instead of a raw error string,
         // we surface a friendly banner with quick-action buttons. The model
         // dropdown still shows everything, but we steer the user toward
@@ -954,6 +980,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         stopStreaming(convId!);
         logError(convId!, err.message, "streaming");
         setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
+        endJjAgentSessionIfNeeded();
       },
     }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : undefined });
   }, [value, files, isStreaming, activeId, selectedModelId,

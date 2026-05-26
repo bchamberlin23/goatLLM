@@ -13,6 +13,7 @@ import { SystemPromptSection } from "./settings/SystemPromptSection";
 import { DenylistSection } from "./settings/DenylistSection";
 import { SkillsSection } from "./settings/SkillsSection";
 import { McpSettingsSection } from "./settings/McpSettingsSection";
+import { JjAgentToggleRow } from "./settings/JjAgentToggleRow";
 
 const CLOUD_PROVIDERS = [
   { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com" },
@@ -67,6 +68,8 @@ function SettingsContent() {
   const setAutoArtifacts = useChatStore((s) => s.setAutoArtifacts);
   const officeArtifacts = useChatStore((s) => s.officeArtifacts);
   const setOfficeArtifacts = useChatStore((s) => s.setOfficeArtifacts);
+  const jjagent = useChatStore((s) => s.jjagent);
+  const setJjAgent = useChatStore((s) => s.setJjAgent);
 
   return (
     <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-8">
@@ -173,6 +176,14 @@ function SettingsContent() {
           dimmedWhen={!autoArtifacts}
           dimmedHint={!autoArtifacts ? "Auto-render is off, so office formats render inline either way." : undefined}
         />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">Version Control</h3>
+        <p className="text-[13px] text-[#8e8e8e] leading-relaxed mb-2">
+          Isolate agent file edits into their own jj change for easy review and rollback. Each turn, a fresh change is created; when the turn finishes, it's squashed back so your working copy stays clean.
+        </p>
+        <JjAgentToggleRow enabled={jjagent} onToggle={setJjAgent} />
       </section>
 
       <section className="flex flex-col gap-2">

@@ -524,6 +524,19 @@ interface ChatStore {
   setDesignMode: (enabled: boolean) => void;
   toggleDesignMode: () => void;
 
+  // jjagent — isolate agent file edits into their own jj change per turn.
+  // Toggleable via Settings. Requires jj to be installed and the workspace
+  // to be a jj repo. When off (default), agent edits land in the working copy
+  // as usual (no jj interaction). When on, each agent turn spawns a fresh jj
+  // change that gets squashed back into the parent when the turn completes.
+  jjagent: boolean;
+  setJjAgent: (enabled: boolean) => void;
+  // Runtime-only — the change ID for the current turn's jj isolation change.
+  // Set when a turn starts (if jjagent is enabled + workspace is a jj repo),
+  // cleared when the turn ends (squashed or on error). Not persisted.
+  jjagentChangeId: string | null;
+  setJjAgentChangeId: (id: string | null) => void;
+
   // Design-mode question-form submissions need to trigger a send from
   // outside the InputBar (the form renders inside MessageBubble). Setting
   // this asks the InputBar to consume the text on the next render.
@@ -829,6 +842,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       _hydrated: false,
       agentMode: false,
       designMode: false,
+      jjagent: false,
+      jjagentChangeId: null,
       pendingFormSubmission: null,
       activeSkillId: null,
       activeDesignSystemId: null,
@@ -1863,6 +1878,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         }
       },
 
+      setJjAgent: (enabled) => {
+        set({ jjagent: enabled });
+        try { localStorage.setItem("goatllm-jjagent", String(enabled)); } catch {}
+      },
+
+      setJjAgentChangeId: (id) => set({ jjagentChangeId: id }),
+
       setPendingFormSubmission: (payload) => set({ pendingFormSubmission: payload }),
 
       setActiveSkill: (id) => {
@@ -2616,6 +2638,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
           const agentMode = localStorage.getItem("goatllm-agent-mode") === "true";
           const designMode = !agentMode && localStorage.getItem("goatllm-design-mode") === "true";
+          const jjagent = localStorage.getItem("goatllm-jjagent") === "true";
           const activeSkillId = localStorage.getItem("goatllm-active-skill") || null;
           const activeDesignSystemId = localStorage.getItem("goatllm-active-design-system") || null;
           const activeDirectionId = localStorage.getItem("goatllm-active-direction") || null;
@@ -2662,6 +2685,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             artifacts: restoredArtifacts,
             agentMode,
             designMode,
+            jjagent,
             activeSkillId,
             activeDesignSystemId,
             activeDirectionId,

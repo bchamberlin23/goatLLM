@@ -6,6 +6,7 @@ use tauri::Manager;
 
 mod ollama;
 mod mcp;
+mod jj;
 
 const WORKSPACES_DIR: &str = "workspaces";
 const WORKSPACES_FILE: &str = "workspaces.json";
@@ -2863,6 +2864,12 @@ pub fn run() {
             mcp::mcp_stdio_spawn,
             mcp::mcp_stdio_send,
             mcp::mcp_stdio_disconnect,
+            jj::is_jj_installed,
+            jj::is_jj_repo,
+            jj::jj_new,
+            jj::jj_squash,
+            jj::jj_describe,
+            jj::jj_abandon,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
