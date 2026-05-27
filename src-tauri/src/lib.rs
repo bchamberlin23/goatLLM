@@ -1250,24 +1250,32 @@ fn strip_workspace_prefix(path: &str, workspace: &str) -> String {
             result = result[workspace.len()..].trim_start_matches('/').to_string();
             continue;
         }
-        // Handle "Users/bench/Desktop/project/src/file.ts" (no leading slash)
+        // Handle "Users/bench/Desktop/project/src/file.ts" (no leading slash).
+        // No length guard — when result equals ws_no_slash the model has
+        // embedded the workspace name as the entire remaining path;
+        // stripping to "" is correct (the file goes at workspace root).
         let ws_no_slash = workspace.trim_start_matches('/');
         let with_slash_no = format!("{}/", ws_no_slash);
         if result.starts_with(&with_slash_no) {
             result = result[with_slash_no.len()..].to_string();
             continue;
         }
-        if result.starts_with(ws_no_slash) && result.len() > ws_no_slash.len() {
+        if result.starts_with(ws_no_slash) {
             result = result[ws_no_slash.len()..].trim_start_matches('/').to_string();
             continue;
         }
     }
 
-    // Belt and suspenders — strip workspace if embedded deeper in the path
+    // Belt and suspenders — catch workspace embedded deeper in the path
+    // or sitting at the start without a leading slash.
     let ws_no_slash = workspace.trim_start_matches('/');
-    let needle = format!("/{}/", ws_no_slash);
-    while let Some(idx) = result.find(&needle) {
-        result = result[idx + needle.len()..].to_string();
+    let start_needle = format!("{}/", ws_no_slash);
+    if result.starts_with(&start_needle) {
+        result = result[start_needle.len()..].to_string();
+    }
+    let mid_needle = format!("/{}/", ws_no_slash);
+    while let Some(idx) = result.find(&mid_needle) {
+        result = result[idx + mid_needle.len()..].to_string();
     }
 
     // Remove leading slash for safety
