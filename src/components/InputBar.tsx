@@ -399,7 +399,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const models = getModels();
     const selectedModel = models.find((m) => m.id === selectedModelId);
     if (!selectedModel) { setError("Selected model not found."); return; }
-    if (!llmConfig.apiKey) {
+    if (!llmConfig.apiKey && selectedModel.providerId !== "ollama" && selectedModel.providerId !== "lmstudio") {
       setError(`No API key configured for ${selectedModel.providerId}. Add one in Settings.`);
       return;
     }
