@@ -7,6 +7,8 @@ import { ContextMeter } from "./ContextMeter";
 export function TopBar() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const activeId = useChatStore((s) => s.activeId);
+  const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
   const conversations = useChatStore((s) => s.conversations);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -163,7 +165,7 @@ export function TopBar() {
       <div className="flex-1" data-tauri-drag-region />
 
       {/* Right-side assets menu (artifacts + uploaded files) */}
-      {activeId && <ChatAssetsMenu />}
+      {(activeId || agentMode || designMode) && <ChatAssetsMenu />}
     </div>
   );
 }
@@ -177,7 +179,9 @@ function ChatAssetsMenu() {
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const setActiveAttachment = useChatStore((s) => s.setActiveAttachment);
   const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
   const workspacePath = useChatStore((s) => s.workspacePath);
+  const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
 
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -196,7 +200,7 @@ function ChatAssetsMenu() {
     return result;
   }, [messages]);
 
-  const hasContent = (artifacts && artifacts.length > 0) || attachments.length > 0 || (agentMode && !!workspacePath);
+  const hasContent = (artifacts && artifacts.length > 0) || attachments.length > 0 || (agentMode && !!workspacePath) || (designMode && !!designWorkspacePath);
 
   useEffect(() => {
     if (!open) return;
@@ -229,8 +233,18 @@ function ChatAssetsMenu() {
 
       {open && (
         <div className="absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease]">
-          {/* Workspace file tree (agent mode only) — shows files the agent created/modified */}
+          {/* Workspace file tree (agent mode) — shows files the agent created/modified */}
           {agentMode && (
+            <>
+              <WorkspaceFileTree onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }} />
+              {(artifacts && artifacts.length > 0 || attachments.length > 0) && (
+                <div className="h-px bg-white/5 mx-2" />
+              )}
+            </>
+          )}
+
+          {/* Design workspace file tree */}
+          {designMode && designWorkspacePath && (
             <>
               <WorkspaceFileTree onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }} />
               {(artifacts && artifacts.length > 0 || attachments.length > 0) && (

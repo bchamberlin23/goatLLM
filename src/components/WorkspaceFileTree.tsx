@@ -114,7 +114,9 @@ interface WorkspaceFileTreeProps {
 }
 
 export function WorkspaceFileTree({ onOpenFile }: WorkspaceFileTreeProps) {
-  const workspacePath = useChatStore((s) => s.workspacePath);
+  const workspacePath = useChatStore((s) =>
+    s.designMode ? s.designWorkspacePath : s.workspacePath
+  );
   const [roots, setRoots] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
