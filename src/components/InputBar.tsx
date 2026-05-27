@@ -1375,7 +1375,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             </button>
             )}
 
-            {designMode ? <DesignPills /> : <AgentPill />}
+            {designMode ? (!activeId && <DesignPills />) : <AgentPill />}
             {agentMode && planMode && (
               <button
                 type="button"

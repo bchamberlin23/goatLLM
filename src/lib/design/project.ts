@@ -83,24 +83,15 @@ export async function saveProject(project: DesignProject): Promise<void> {
 async function saveProjectToDisk(project: DesignProject): Promise<void> {
   if (!project.workspacePath) return;
   
-  const projectDir = `${project.workspacePath}/${project.conversationId}`;
-  
   try {
-    // Create project directory
-    await invoke("create_dir", { path: projectDir });
-    
-    // Write each file
+    // Write each file - the Rust backend will create parent directories automatically
     for (const [filename, contents] of Object.entries(project.files)) {
-      const filePath = `${projectDir}/${filename}`;
-      
-      // Create parent directories if needed (e.g., "assets/logo.svg")
-      const lastSlash = filename.lastIndexOf("/");
-      if (lastSlash > 0) {
-        const parentDir = `${projectDir}/${filename.slice(0, lastSlash)}`;
-        await invoke("create_dir", { path: parentDir });
-      }
-      
-      await invoke("write_file", { path: filePath, contents });
+      const relativePath = `${project.conversationId}/${filename}`;
+      await invoke("write_file", { 
+        workspace: project.workspacePath, 
+        path: relativePath, 
+        content: contents 
+      });
     }
     
     // Write metadata file
@@ -113,8 +104,9 @@ async function saveProjectToDisk(project: DesignProject): Promise<void> {
       files: Object.keys(project.files),
     };
     await invoke("write_file", {
-      path: `${projectDir}/.goatllm-project.json`,
-      contents: JSON.stringify(metadata, null, 2),
+      workspace: project.workspacePath,
+      path: `${project.conversationId}/.goatllm-project.json`,
+      content: JSON.stringify(metadata, null, 2),
     });
   } catch (error) {
     console.warn("Failed to save project to disk:", error);

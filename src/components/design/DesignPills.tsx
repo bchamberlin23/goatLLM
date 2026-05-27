@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Palette, Compass, Check, X } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 import {
+  DESIGN_SYSTEMS,
   listDesignSystemsByCategory,
   type DesignSystem,
   type DesignSystemCategory,
@@ -135,7 +136,7 @@ function DesignSystemPopover({
               Pick a design system
             </h1>
             <p className="mt-1 text-[12px] text-[#a0a0a0]">
-              18 curated design systems with palettes, type scales, and motion tokens.
+              {DESIGN_SYSTEMS.length} curated design systems with palettes, type scales, and motion tokens.
             </p>
           </div>
           <button
