@@ -691,6 +691,11 @@ interface ChatStore {
   officeArtifacts: boolean;
   setOfficeArtifacts: (enabled: boolean) => void;
 
+  /** When true, the 5-dim critique scores are shown in design mode messages.
+   *  When false (default), they are stripped from the UI. */
+  showDesignCritique: boolean;
+  setShowDesignCritique: (enabled: boolean) => void;
+
   // ── Skills ──
   /** Extra skill directories configured by the user. Persisted. */
   skillPaths: string[];
@@ -931,6 +936,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       webSearchCount: 0,
       autoArtifacts: true,
       officeArtifacts: true,
+      showDesignCritique: false,
       // ── Skills ──
       skillPaths: [] as string[],
       disabledSkills: new Set<string>(),
@@ -2219,6 +2225,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-office-artifacts", enabled ? "true" : "false"); } catch {}
       },
 
+      setShowDesignCritique: (enabled) => {
+        set({ showDesignCritique: enabled });
+        try { localStorage.setItem("goatllm-show-design-critique", enabled ? "true" : "false"); } catch {}
+      },
+
       // ── Skills ──
       setSkillPaths: (paths) => {
         set({ skillPaths: paths });
@@ -2693,6 +2704,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // Artifact toggles: default on. Only an explicit "false" disables them.
         const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
+        const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
         try {
           const data = await loadAllFromDb();
           const providerConfigs = loadProviderConfigs();
@@ -2866,6 +2878,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearchToken,
             autoArtifacts,
             officeArtifacts,
+            showDesignCritique,
             permissionMode: savedMode,
             autoApprove: savedMode === "yolo",
             artifacts: restoredArtifacts,
@@ -2946,6 +2959,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearchToken,
             autoArtifacts,
             officeArtifacts,
+            showDesignCritique,
             permissionMode: savedMode,
             agentMode,
             designMode,

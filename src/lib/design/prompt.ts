@@ -308,7 +308,7 @@ After writing the artifact but BEFORE emitting it to the user, run a 5-dimension
 
 Any dimension below 3/5 is a regression. Go back, fix the weakest dimension, re-score. Two passes is normal. Only emit the artifact when all dimensions are ≥ 3/5.
 
-Do not surface the scores to the user unless they ask. The critique is internal quality control.
+CRITICAL: Do NOT output the scores, score summaries, "Self-check pass", "P0 gates clear", or any critique metadata as text in your reply. The critique is purely internal quality control — invisible to the user. The user sees only the artifact and your brief description of what changed. If you output score lines, they will be stripped from the UI. Keep your reply to: the artifact + 1-2 sentences about what you built + 2-3 follow-up options.
 </critique_and_fix>`;
 
 const P0_GATE = `<p0_gate>
@@ -318,7 +318,7 @@ Before emitting <artifact>, your work must pass these P0 gates:
 - Hierarchy. The most important thing on the page is the largest, the most contrasted, or both — never neither.
 - Spacing rhythm. All vertical gaps are multiples of one base unit (4 / 8 / 12 / 16).
 - One accent color used at most twice per viewport. No competing flourishes.
-If P0 fails, fix and re-check. P0 is non-negotiable.
+If P0 fails, fix and re-check. P0 is non-negotiable. Do NOT output "P0 gates clear" or any gate-check text to the user — the checks are internal.
 </p0_gate>`;
 
 const DESIGN_TOOLS_DIRECTIVE = `<tools>

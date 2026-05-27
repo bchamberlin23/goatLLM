@@ -168,8 +168,9 @@ export async function withApproval(
   const tcEarly = findToolCall(toolCallId);
   const toolName = tcEarly?.toolName ?? "unknown";
 
-  // Auto-approve path: skip the gate entirely when permission mode allows it.
-  if (shouldAutoApprove(toolName, store.permissionMode)) {
+  // Auto-approve path: skip the gate entirely when permission mode allows it,
+  // or when design mode is active (design mode is always yolo).
+  if (store.designMode || shouldAutoApprove(toolName, store.permissionMode)) {
     const { conversationId, messageId } = locateToolCall(toolCallId);
     store.updateToolCallState(conversationId, messageId, toolCallId, "running");
     logApproval(conversationId, toolCallId, toolName, true);

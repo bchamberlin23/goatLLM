@@ -431,12 +431,26 @@ function UserMessageContent({ message }: { message: Message }) {
 // `DesignAwareText` is the design-mode wrapper: it splits the text on
 // any `<question-form>` block and renders it as a native form. When the
 // user isn't in design mode, this is just a passthrough to MarkdownRenderer.
+// Strip internal critique output the model shouldn't surface.
+// Matches "Self-check pass. Philosophy 5 / Hierarchy 5 / ..." and similar.
+const CRITIQUE_FILTER = /^(?:Self[- ]check\s*(?:pass|fail|clear)?\.?\s*(?:Philosophy|Hierarchy|Execution|Specificity|Restraint)\s*\d\s*\/\s*\d.*)$/gim;
+// Strip malformed JSON expression blocks that leak from model output
+// (e.g. {"expression": "1+1"} from exec_eval tool call text leakage).
+const JSON_EXPR_FILTER = /\{\s*"expression"\s*:\s*[^}]*\}/g;
+
 function DesignAwareText({ text, messageId }: { text: string; messageId: string }) {
   const designMode = useChatStore((s) => s.designMode);
+  const showCritique = useChatStore((s) => s.showDesignCritique);
   const conversationId = useChatStore((s) => s.activeId);
+  const cleaned = useMemo(() => {
+    if (!designMode) return text;
+    let out = text.replace(JSON_EXPR_FILTER, "");
+    if (!showCritique) out = out.replace(CRITIQUE_FILTER, "");
+    return out.trim();
+  }, [designMode, showCritique, text]);
   const segments = useMemo(
-    () => (designMode ? splitByQuestionForm(text) : null),
-    [designMode, text],
+    () => (designMode ? splitByQuestionForm(cleaned) : null),
+    [designMode, cleaned],
   );
   if (!segments) return <MarkdownRenderer content={text} />;
   return (

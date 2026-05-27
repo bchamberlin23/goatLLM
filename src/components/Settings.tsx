@@ -70,6 +70,8 @@ function SettingsContent() {
   const setOfficeArtifacts = useChatStore((s) => s.setOfficeArtifacts);
   const jjagent = useChatStore((s) => s.jjagent);
   const setJjAgent = useChatStore((s) => s.setJjAgent);
+  const showDesignCritique = useChatStore((s) => s.showDesignCritique);
+  const setShowDesignCritique = useChatStore((s) => s.setShowDesignCritique);
 
   return (
     <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-8">
@@ -175,6 +177,19 @@ function SettingsContent() {
           description="On: docx / pptx / xlsx fences render as real documents you can download. Off: those formats are removed from the model's instructions and any office fences fall back to inline code."
           dimmedWhen={!autoArtifacts}
           dimmedHint={!autoArtifacts ? "Auto-render is off, so office formats render inline either way." : undefined}
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">Design Mode</h3>
+        <p className="text-[13px] text-[#8e8e8e] leading-relaxed mb-2">
+          Settings for the design artifact workflow. Design mode runs in yolo — all tool calls (file writes, edits) auto-execute without approval.
+        </p>
+        <ArtifactToggleRow
+          enabled={showDesignCritique}
+          onToggle={setShowDesignCritique}
+          title="Show critique scores in messages"
+          description="On: the 5-dim critique output (Philosophy, Hierarchy, Execution, Specificity, Restraint) is visible in design messages. Off (default): scores are stripped from the UI for a cleaner experience."
         />
       </section>
 
