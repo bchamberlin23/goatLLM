@@ -29,8 +29,16 @@ function isExternalOrData(path: string): boolean {
   if (trimmed.startsWith("/")) return true;
   // Fragment-only
   if (trimmed.startsWith("#")) return true;
-  // Node modules / package imports (don't try to resolve these)
-  if (/^[@a-zA-Z]/.test(trimmed) && !trimmed.startsWith("./") && !trimmed.startsWith("../")) return true;
+  // Package imports (no file extension, no ./ or ../ prefix) like "react", "lodash", "@scope/pkg"
+  // But NOT file references like "style.css", "app.js", "image.png"
+  if (/^[@a-zA-Z]/.test(trimmed) && !trimmed.startsWith("./") && !trimmed.startsWith("../")) {
+    // Check if it looks like a file (has a common file extension)
+    const fileExtRegex = /\.(css|js|jsx|ts|tsx|mjs|json|html|htm|svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf|eot|mp3|mp4|webm)(\?|#|$)/i;
+    if (!fileExtRegex.test(trimmed)) {
+      // No file extension - likely a package import
+      return true;
+    }
+  }
   return false;
 }
 
@@ -144,16 +152,23 @@ interface Reference {
  */
 function findCssLinks(html: string): Reference[] {
   const results: Reference[] = [];
-  // Match both orderings of rel and href attributes
-  const regex = /<link\s+[^>]*?(?:rel\s*=\s*["']stylesheet["'][^>]*?href\s*=\s*["']([^"']+)["']|href\s*=\s*["']([^"']+)["'][^>]*?rel\s*=\s*["']stylesheet["'])[^>]*>/gi;
 
+  // Find all link tags with rel=stylesheet
+  const linkRegex = /<link[^>]+>/gi;
   let match;
-  while ((match = regex.exec(html)) !== null) {
-    const href = match[1] || match[2];
-    if (href && !isExternalOrData(href)) {
-      results.push({ original: match[0], path: href });
+
+  while ((match = linkRegex.exec(html)) !== null) {
+    const tag = match[0];
+    // Check if it's a stylesheet
+    if (!/rel\s*=\s*["']stylesheet["']/i.test(tag)) continue;
+
+    // Extract href
+    const hrefMatch = tag.match(/href\s*=\s*["']([^"']+)["']/i);
+    if (hrefMatch && hrefMatch[1] && !isExternalOrData(hrefMatch[1])) {
+      results.push({ original: tag, path: hrefMatch[1] });
     }
   }
+
   return results;
 }
 
@@ -162,11 +177,12 @@ function findCssLinks(html: string): Reference[] {
  */
 function findScriptSrcs(html: string): Reference[] {
   const results: Reference[] = [];
-  // External scripts: <script src="...">
-  const externalRegex = /<script\s+[^>]*?src\s*=\s*["']([^"']+)["'][^>]*>[\s]*<\/script>/gi;
 
+  // External scripts: <script src="...">
+  const scriptRegex = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
   let match;
-  while ((match = externalRegex.exec(html)) !== null) {
+
+  while ((match = scriptRegex.exec(html)) !== null) {
     const src = match[1];
     if (src && !isExternalOrData(src)) {
       results.push({ original: match[0], path: src });
@@ -193,7 +209,7 @@ function findImageSrcs(html: string): Reference[] {
   const results: Reference[] = [];
 
   // <img src="...">
-  const imgRegex = /<img\s+[^>]*?src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const imgRegex = /<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
   let match;
   while ((match = imgRegex.exec(html)) !== null) {
     const src = match[1];
@@ -203,7 +219,7 @@ function findImageSrcs(html: string): Reference[] {
   }
 
   // <source src="...">
-  const sourceRegex = /<source\s+[^>]*?src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const sourceRegex = /<source[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
   while ((match = sourceRegex.exec(html)) !== null) {
     const src = match[1];
     if (src && !isExternalOrData(src)) {
@@ -212,7 +228,7 @@ function findImageSrcs(html: string): Reference[] {
   }
 
   // <video poster="...">
-  const videoRegex = /<video\s+[^>]*?poster\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const videoRegex = /<video[^>]+poster\s*=\s*["']([^"']+)["'][^>]*>/gi;
   while ((match = videoRegex.exec(html)) !== null) {
     const poster = match[1];
     if (poster && !isExternalOrData(poster)) {
@@ -230,7 +246,7 @@ function findSvgRefs(html: string): Reference[] {
   const results: Reference[] = [];
 
   // <use href="..."> or <use xlink:href="...">
-  const useRegex = /<use\s+[^>]*?(?:xlink:)?href\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const useRegex = /<use[^>]+(?:xlink:)?href\s*=\s*["']([^"']+)["'][^>]*>/gi;
   let match;
   while ((match = useRegex.exec(html)) !== null) {
     const href = match[1];
@@ -240,7 +256,7 @@ function findSvgRefs(html: string): Reference[] {
   }
 
   // <image href="..."> (SVG image element)
-  const imageRegex = /<image\s+[^>]*?(?:xlink:)?href\s*=\s*["']([^"']+)["'][^>]*>/gi;
+  const imageRegex = /<image[^>]+(?:xlink:)?href\s*=\s*["']([^"']+)["'][^>]*>/gi;
   while ((match = imageRegex.exec(html)) !== null) {
     const href = match[1];
     if (href && !isExternalOrData(href)) {
