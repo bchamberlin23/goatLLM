@@ -163,9 +163,13 @@ export async function agentLoop(
       system: systemPrompt ?? undefined,
       messages: mapMessagesForProvider(messages) as any,
       ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
-      stopWhen: effectiveTools
-        ? stepCountIs(options?.maxToolRounds ?? 10)
-        : stepCountIs(1),
+      // Only cap tool rounds when explicitly requested (e.g. research/design modes).
+      // Default is unlimited — the agent loops until it finishes or context overflows.
+      ...(options?.maxToolRounds != null
+        ? { stopWhen: stepCountIs(options.maxToolRounds) }
+        : effectiveTools
+          ? {}
+          : { stopWhen: stepCountIs(1) }),
       abortSignal: effectiveSignal,
       ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
       ...(providerOptions ? { providerOptions: providerOptions as any } : {}),

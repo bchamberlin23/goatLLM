@@ -31,6 +31,7 @@ import {
   officeFilename,
   officeMimeType,
 } from "../lib/office-artifacts";
+import { resolveArtifactReferences } from "../lib/artifact-resolver";
 
 const MonacoEditor = lazy(() =>
   import("@monaco-editor/react").then((m) => ({ default: m.default })),
@@ -105,6 +106,9 @@ function ArtifactContent({
 }) {
   const activeId = useChatStore((s) => s.activeId);
   const updateArtifact = useChatStore((s) => s.updateArtifact);
+  const workspacePath = useChatStore((s) =>
+    s.designMode ? s.designWorkspacePath : s.workspacePath
+  );
   const editorRef = useRef<any>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -114,11 +118,14 @@ function ArtifactContent({
   const [pyError, setPyError] = useState<string | null>(null);
   const [officeHtml, setOfficeHtml] = useState<string | null>(null);
   const [officeError, setOfficeError] = useState<string | null>(null);
+  const [resolvedHtml, setResolvedHtml] = useState<string | null>(null);
+  const [resolvingHtml, setResolvingHtml] = useState(false);
 
   useEffect(() => {
     setPdfDataUrl(null); setPdfError(null);
     setPyOutput(null); setPyError(null);
     setOfficeHtml(null); setOfficeError(null);
+    setResolvedHtml(null); setResolvingHtml(false);
     autoFollowRef.current = true;
   }, [artifact.id]);
 
@@ -144,6 +151,38 @@ function ArtifactContent({
     })();
     return () => { cancelled = true; };
   }, [artifact.id, artifact.kind, artifact.code, artifact.title]);
+
+  // Resolve external file references (CSS, JS, images) for HTML artifacts.
+  // This inlines referenced files so the preview works without a web server.
+  useEffect(() => {
+    if (artifact.kind !== "html") return;
+    let cancelled = false;
+    setResolvingHtml(true);
+    setResolvedHtml(null);
+
+    // Build a pseudo-path for the artifact to resolve relative references
+    const artifactPath = artifact.title
+      ? `${artifact.title.toLowerCase().replace(/[^\w.-]+/g, "-")}.html`
+      : "index.html";
+
+    (async () => {
+      try {
+        const processed = await resolveArtifactReferences(
+          artifact.code,
+          artifactPath,
+          workspacePath,
+        );
+        if (!cancelled) setResolvedHtml(processed);
+      } catch (e) {
+        // Fall back to original HTML on error
+        console.warn("[ArtifactPanel] HTML resolution failed:", e);
+        if (!cancelled) setResolvedHtml(artifact.code);
+      } finally {
+        if (!cancelled) setResolvingHtml(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [artifact.id, artifact.kind, artifact.code, workspacePath]);
 
   // Auto-compile LaTeX whenever the code or active version changes.
   useEffect(() => {
@@ -269,6 +308,9 @@ function ArtifactContent({
         ? "allow-same-origin allow-popups"
         : "allow-scripts allow-same-origin allow-popups";
 
+      // Use resolved HTML if available, otherwise show loading or original
+      const htmlToRender = resolvedHtml ?? artifact.code;
+
       // Inject <base target="_blank"> so links open externally instead of
       // navigating the iframe to a goatLLM instance. A click-interception
       // script is also injected as a belt-and-suspenders measure when
@@ -280,8 +322,29 @@ function ArtifactContent({
         `{e.preventDefault();e.stopPropagation();window.open(a.href,'_blank','noopener,noreferrer')}},!0)</script>`;
 
       const preppedHtml = isDesignArtifact
-        ? baseInjection + artifact.code
-        : baseInjection + artifact.code + clickScript;
+        ? baseInjection + htmlToRender
+        : baseInjection + htmlToRender + clickScript;
+
+      // Show loading indicator while resolving external references
+      if (resolvingHtml) {
+        return (
+          <div className="flex-1 relative">
+            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
+              <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
+                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                <span className="text-[11px]">Resolving references…</span>
+              </div>
+            </div>
+            <iframe
+              key={htmlReloadKey}
+              className="flex-1 w-full border-none bg-white"
+              srcDoc={preppedHtml}
+              sandbox={sandboxAttr}
+              title={artifact.title}
+            />
+          </div>
+        );
+      }
 
       return (
         <iframe
@@ -359,8 +422,31 @@ function ArtifactContent({
     case "deck":
     case "mini-app": {
       // Deck and mini-app render as HTML with scripts enabled
+      // Use resolved HTML if available for these kinds too
+      const htmlToRender = resolvedHtml ?? artifact.code;
       const baseInjection = '<base target="_blank">\n';
-      const preppedHtml = baseInjection + artifact.code;
+      const preppedHtml = baseInjection + htmlToRender;
+
+      if (resolvingHtml) {
+        return (
+          <div className="flex-1 relative">
+            <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
+              <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
+                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                <span className="text-[11px]">Resolving references…</span>
+              </div>
+            </div>
+            <iframe
+              key={htmlReloadKey}
+              className="flex-1 w-full border-none bg-white"
+              srcDoc={preppedHtml}
+              sandbox="allow-scripts allow-same-origin allow-popups"
+              title={artifact.title}
+            />
+          </div>
+        );
+      }
+
       return (
         <iframe
           key={htmlReloadKey}
