@@ -78,9 +78,6 @@ function ThinkingBlock({ content, elapsed, running }: {
             Thought for {elapsed}
           </span>
         )}
-        {hasContent && !expanded && (
-          <span className="text-[10.5px] text-[#666] ml-auto">tap to expand</span>
-        )}
       </button>
       {expanded && hasContent && (
         <div
