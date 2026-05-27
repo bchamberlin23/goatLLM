@@ -59,6 +59,9 @@ export interface StreamCallbacks {
   /** Called when a single tool invocation fails. Stream continues; this is
    * not a fatal error and should not be surfaced as a user-facing error. */
   onToolError?: (info: ToolErrorInfo) => void;
+  /** Called when the model produces thinking/reasoning content (e.g. Claude
+   *  extended thinking, DeepSeek R1). Chunks arrive incrementally. */
+  onThinking?: (chunk: string) => void;
   onDone: (fullText: string) => void;
   onError: (error: Error) => void;
 }

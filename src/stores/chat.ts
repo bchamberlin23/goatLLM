@@ -85,6 +85,10 @@ export interface Message {
   content: string;
   createdAt: number;
   isStreaming?: boolean;
+  /** Thinking/reasoning content from the model (e.g. Claude extended
+   *  thinking, DeepSeek R1). Stored separately from content so it can
+   *  be rendered in a collapsible section. */
+  thinkingContent?: string;
   /** True for assistant messages that were streaming when the app closed.
    *  Set during hydrate when we find an `isStreaming: true` row with no live
    *  abort controller. The UI shows a "Continue" affordance so the user can
@@ -449,6 +453,7 @@ interface ChatStore {
   addMessage: (message: Omit<Message, "id" | "createdAt">) => Message;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<Message>) => void;
   appendToMessage: (conversationId: string, messageId: string, chunk: string) => void;
+  appendToThinking: (conversationId: string, messageId: string, chunk: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   removeMessagesAfter: (conversationId: string, messageId: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
@@ -1246,6 +1251,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const msg = get().messages[conversationId]?.find((m) => m.id === messageId);
           if (msg) persistMessage(msg);
         }
+      },
+
+      appendToThinking: (conversationId, messageId, chunk) => {
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          const updatedMessages = convMessages.map((m) =>
+            m.id === messageId ? { ...m, thinkingContent: (m.thinkingContent ?? "") + chunk } : m
+          );
+          return { messages: { ...state.messages, [conversationId]: updatedMessages } };
+        });
       },
 
       finalizeStreamingMessage: (conversationId, messageId) => {

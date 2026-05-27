@@ -179,6 +179,10 @@ export async function agentLoop(
           callbacks.onToken(chunk.text);
           break;
 
+        case "reasoning-delta":
+          callbacks.onThinking?.((chunk as Record<string, unknown>).text as string ?? "");
+          break;
+
         case "tool-call":
           callbacks.onToolCall?.({
             toolCallId: chunk.toolCallId,

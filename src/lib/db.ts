@@ -160,6 +160,7 @@ interface DbMessage {
   attachments: string | null;
   created_at: number;
   pinned?: boolean;
+  thinking_content?: string | null;
 }
 
 interface AllData {
@@ -200,6 +201,7 @@ function fromDbMessage(d: DbMessage): Message {
     toolCalls: d.tool_calls ? JSON.parse(d.tool_calls) : undefined,
     attachments: d.attachments ? JSON.parse(d.attachments) : undefined,
     pinned: d.pinned ? true : undefined,
+    thinkingContent: d.thinking_content || undefined,
   };
 }
 
@@ -361,6 +363,7 @@ async function invokeSaveMessage(m: Message): Promise<void> {
     attachments: m.attachments ? JSON.stringify(m.attachments) : null,
     createdAt: m.createdAt,
     pinned: m.pinned ?? false,
+    thinkingContent: m.thinkingContent ?? null,
   });
 }
 

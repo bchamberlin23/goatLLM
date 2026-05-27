@@ -5,7 +5,7 @@ import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
 import { Shimmer, WorkingHeader, useElapsedLabel } from "./ThinkingIndicator";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -40,6 +40,59 @@ function stripMarkdown(md: string): string {
 }
 
 interface MessageBubbleProps { message: Message; }
+
+/**
+ * Expandable thinking/reasoning block. Shows a "Thinking · Xs" header that
+ * toggles open to reveal the model's reasoning content. Follows DESIGN.md
+ * tokens: sunken surface, tertiary text, hairline borders.
+ */
+function ThinkingBlock({ content, elapsed, running }: {
+  content?: string;
+  elapsed: string;
+  running: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasContent = !!content && content.trim().length > 0;
+
+  return (
+    <div className="my-1.5">
+      <button
+        type="button"
+        onClick={() => hasContent && setExpanded((v) => !v)}
+        className={`flex items-center gap-1.5 w-full text-left group/think ${hasContent ? "cursor-pointer" : "cursor-default"}`}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Collapse thinking" : "Expand thinking"}
+      >
+        {hasContent && (
+          <ChevronRight
+            size={12}
+            strokeWidth={2}
+            className={`text-[#888] shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+            aria-hidden
+          />
+        )}
+        {running ? (
+          <Shimmer text={`Thinking · ${elapsed}`} className="text-[12px] font-medium" />
+        ) : (
+          <span className="text-[12px] font-medium text-[#888]">
+            Thought for {elapsed}
+          </span>
+        )}
+        {hasContent && !expanded && (
+          <span className="text-[10.5px] text-[#666] ml-auto">tap to expand</span>
+        )}
+      </button>
+      {expanded && hasContent && (
+        <div
+          className="mt-1.5 ml-4 max-h-[320px] overflow-y-auto rounded-lg bg-[#161618] border border-white/[0.06] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words animate-[fadeIn_180ms_ease]"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
@@ -207,13 +260,26 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           />
         ) : null}
         {hasToolCalls && isAssistant && isStreaming && message.content.length === 0 && (
-          <Shimmer text={`Thinking · ${thinkingElapsed}`} className="thinking-line" />
+          <ThinkingBlock
+            content={message.thinkingContent}
+            elapsed={thinkingElapsed}
+            running={true}
+          />
         )}
         {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
           <span className="streaming-cursor" />
         )}
         {hasToolCalls && isAssistant && !isStreaming && (
           <FallbackArtifactCards messageId={message.id} />
+        )}
+
+        {/* Thinking block for completed messages with reasoning content */}
+        {isAssistant && !isStreaming && message.thinkingContent && message.thinkingContent.trim().length > 0 && (
+          <ThinkingBlock
+            content={message.thinkingContent}
+            elapsed={thinkingElapsed}
+            running={false}
+          />
         )}
 
         {/* Plain assistant text (no tool calls) + user messages */}
@@ -231,7 +297,11 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             ) : isUser ? (
               <UserMessageContent message={message} />
             ) : message.content.length === 0 && isWorking ? (
-              <Shimmer text={`Thinking · ${thinkingElapsed}`} className="thinking-line" />
+              <ThinkingBlock
+                content={message.thinkingContent}
+                elapsed={thinkingElapsed}
+                running={true}
+              />
             ) : (
               <>
                 <StreamingSegmentedText

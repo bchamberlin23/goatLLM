@@ -164,6 +164,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const appendToMessage = useChatStore((s) => s.appendToMessage);
+  const appendToThinking = useChatStore((s) => s.appendToThinking);
   const createConversation = useChatStore((s) => s.createConversation);
   const selectedModelId = useChatStore((s) => s.selectedModelId);
   const getActiveMessages = useChatStore((s) => s.getActiveMessages);
@@ -959,6 +960,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           }
         }
       },
+      onThinking: (chunk) => {
+        appendToThinking(convId!, assistantMsg.id, chunk);
+      },
       onToolCall: handleToolCall,
       onToolResult: handleToolResult,
       onDone: (fullText) => {
@@ -1046,7 +1050,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       },
     }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 25 : undefined });
   }, [value, files, isStreaming, activeId, selectedModelId,
-    addMessage, startStreaming, stopStreaming, appendToMessage, updateMessage,
+    addMessage, startStreaming, stopStreaming, appendToMessage, appendToThinking, updateMessage,
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,
     renameConversation, setTitleGenerating, conversations,
     addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
