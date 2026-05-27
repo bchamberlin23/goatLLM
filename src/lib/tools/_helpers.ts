@@ -18,18 +18,36 @@ export function getWorkspace(): string {
 /** Normalize a path to be relative to the workspace root. Strips the workspace
  * prefix if the model accidentally passes an absolute path, and removes leading slashes. */
 export function normalizePath(path: string): string {
-  const ws = getWorkspace();
-  if (path.startsWith(ws + "/")) {
-    path = path.slice(ws.length + 1);
-  } else if (path.startsWith(ws)) {
-    path = path.slice(ws.length);
+  const ws = getWorkspace().replace(/\/+$/, "");
+
+  // Strip exact workspace prefix (with or without trailing slash)
+  if (path === ws) return "";
+  for (const prefix of [ws + "/", ws]) {
+    if (path.startsWith(prefix)) {
+      path = path.slice(prefix.length);
+      break;
+    }
   }
+
+  // Strip workspace prefix without leading slashes
   const wsNoSlash = ws.replace(/^\/+/, "");
-  if (path.startsWith(wsNoSlash + "/")) {
-    path = path.slice(wsNoSlash.length + 1);
-  } else if (path.startsWith(wsNoSlash)) {
-    path = path.slice(wsNoSlash.length);
+  if (path !== wsNoSlash) {
+    for (const prefix of [wsNoSlash + "/", wsNoSlash]) {
+      if (path.startsWith(prefix)) {
+        path = path.slice(prefix.length);
+        break;
+      }
+    }
   }
+
+  // Belt and suspenders — check if the path accidentally embeds
+  // the workspace deeper in (model hallucinated a full nested path).
+  const needle = "/" + wsNoSlash + "/";
+  const idx = path.indexOf(needle);
+  if (idx >= 0) {
+    path = path.slice(idx + needle.length);
+  }
+
   path = path.replace(/^\/+/, "");
   return path;
 }
