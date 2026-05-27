@@ -89,6 +89,10 @@ export interface Message {
    *  thinking, DeepSeek R1). Stored separately from content so it can
    *  be rendered in a collapsible section. */
   thinkingContent?: string;
+  /** Parent message id for tree-structured sessions. Enables branching:
+   *  when the user edits a message and resends, the new message points
+   *  to the original as its parent, creating a branch. null = root. */
+  parentId?: string | null;
   /** True for assistant messages that were streaming when the app closed.
    *  Set during hydrate when we find an `isStreaming: true` row with no live
    *  abort controller. The UI shows a "Continue" affordance so the user can
@@ -467,6 +471,17 @@ interface ChatStore {
   /** Set or clear the conversation-scoped active skills. */
   setConversationSkills: (id: string, skillNames: string[]) => void;
   setActiveConversation: (id: string | null) => void;
+
+  /** Per-message branch management for tree-structured sessions. */
+  /** Get the active branch (messages from root to current leaf). */
+  getActiveBranch: (conversationId: string) => Message[];
+  /** Fork: create a new branch from a specific message. Returns the new
+   *  leaf message id. */
+  forkBranch: (conversationId: string, fromMessageId: string) => string;
+  /** Get all branch tips (leaf messages) for a conversation. */
+  getBranchTips: (conversationId: string) => Message[];
+  /** Navigate to a different branch tip. */
+  navigateToBranch: (conversationId: string, tipMessageId: string) => void;
 
   // Message actions
   addMessage: (message: Omit<Message, "id" | "createdAt">) => Message;
@@ -1199,6 +1214,65 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             }
           }).catch(() => {});
         }
+      },
+
+      // ── Branch management ──
+
+      getActiveBranch: (conversationId: string) => {
+        const msgs = get().messages[conversationId] ?? [];
+        if (msgs.length === 0) return [];
+
+        // Build a map of parentId → children
+        const childrenOf = new Map<string | null | undefined, Message[]>();
+        for (const m of msgs) {
+          const key = m.parentId ?? null;
+          if (!childrenOf.has(key)) childrenOf.set(key, []);
+          childrenOf.get(key)!.push(m);
+        }
+
+        // Walk from root following the most recent child at each step
+        const branch: Message[] = [];
+        let current: string | null | undefined = null;
+        while (true) {
+          const children: Message[] = childrenOf.get(current) ?? [];
+          if (children.length === 0) break;
+          // Pick the most recent child (last by createdAt)
+          const sorted = children.sort((a: Message, b: Message) => a.createdAt - b.createdAt);
+          const next: Message = sorted[sorted.length - 1];
+          branch.push(next);
+          current = next.id;
+        }
+        return branch;
+      },
+
+      forkBranch: (conversationId: string, fromMessageId: string) => {
+        // Find the message to fork from
+        const msgs = get().messages[conversationId] ?? [];
+        const fromMsg = msgs.find((m) => m.id === fromMessageId);
+        if (!fromMsg) return fromMessageId;
+
+        // The next user message after this point will have parentId = fromMessageId
+        // We don't create a new message here — the caller should add the new
+        // user message with parentId set to fromMessageId.
+        return fromMessageId;
+      },
+
+      getBranchTips: (conversationId: string) => {
+        const msgs = get().messages[conversationId] ?? [];
+        if (msgs.length === 0) return [];
+
+        // A tip is a message that has no children
+        const childIds = new Set(msgs.map((m) => m.parentId).filter(Boolean));
+        return msgs.filter((m) => !childIds.has(m.id));
+      },
+
+      navigateToBranch: (_conversationId: string, _tipMessageId: string) => {
+        // The active branch is determined by which tip the user is viewing.
+        // We store the active tip on the conversation so getActiveBranch can
+        // use it. For now, this is a no-op — the branch is determined by
+        // recency. A full implementation would store activeTipId on the
+        // conversation and have getActiveBranch use it.
+        // TODO: store activeTipId on Conversation for explicit branch switching
       },
 
       addMessage: (messageData: Omit<Message, "id" | "createdAt">) => {
