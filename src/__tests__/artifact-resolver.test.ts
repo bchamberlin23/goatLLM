@@ -13,22 +13,22 @@ describe("hasResolvableReferences", () => {
         </head>
       </html>
     `;
-    expect(hasResolvableReferences(html)).toBe(true);
+    expect(hasResolvableReferences(html, "html")).toBe(true);
   });
 
   it("detects CSS link with rel after href", () => {
     const html = `<link href="main.css" rel="stylesheet">`;
-    expect(hasResolvableReferences(html)).toBe(true);
+    expect(hasResolvableReferences(html, "html")).toBe(true);
   });
 
   it("detects script src references", () => {
     const html = `<script src="app.js"></script>`;
-    expect(hasResolvableReferences(html)).toBe(true);
+    expect(hasResolvableReferences(html, "html")).toBe(true);
   });
 
   it("detects image src references", () => {
     const html = `<img src="logo.png" alt="Logo">`;
-    expect(hasResolvableReferences(html)).toBe(true);
+    expect(hasResolvableReferences(html, "html")).toBe(true);
   });
 
   it("ignores external URLs", () => {
@@ -37,7 +37,7 @@ describe("hasResolvableReferences", () => {
       <script src="http://example.com/app.js"></script>
       <img src="https://example.com/image.png">
     `;
-    expect(hasResolvableReferences(html)).toBe(false);
+    expect(hasResolvableReferences(html, "html")).toBe(false);
   });
 
   it("ignores data URIs", () => {
@@ -45,7 +45,7 @@ describe("hasResolvableReferences", () => {
       <img src="data:image/png;base64,iVBOR...">
       <link rel="stylesheet" href="data:text/css;base64,...">
     `;
-    expect(hasResolvableReferences(html)).toBe(false);
+    expect(hasResolvableReferences(html, "html")).toBe(false);
   });
 
   it("ignores absolute paths", () => {
@@ -53,22 +53,47 @@ describe("hasResolvableReferences", () => {
       <link rel="stylesheet" href="/assets/style.css">
       <script src="/js/app.js"></script>
     `;
-    expect(hasResolvableReferences(html)).toBe(false);
+    expect(hasResolvableReferences(html, "html")).toBe(false);
   });
 
   it("ignores inline scripts", () => {
     const html = `<script>console.log('hello');</script>`;
-    expect(hasResolvableReferences(html)).toBe(false);
+    expect(hasResolvableReferences(html, "html")).toBe(false);
   });
 
   it("returns false for HTML with no references", () => {
     const html = `<html><body><h1>Hello</h1></body></html>`;
-    expect(hasResolvableReferences(html)).toBe(false);
+    expect(hasResolvableReferences(html, "html")).toBe(false);
+  });
+
+  it("detects CSS @import references", () => {
+    const css = `@import "reset.css";\n@import url("typography.css");`;
+    expect(hasResolvableReferences(css, "css")).toBe(true);
+  });
+
+  it("detects CSS url() references", () => {
+    const css = `.bg { background: url("images/bg.png"); }`;
+    expect(hasResolvableReferences(css, "css")).toBe(true);
+  });
+
+  it("detects JS import statements", () => {
+    const js = `import { foo } from "./utils.js";\nimport bar from '../lib/bar.js';`;
+    expect(hasResolvableReferences(js, "js")).toBe(true);
+  });
+
+  it("detects JS require statements", () => {
+    const js = `const helper = require("./helper.js");`;
+    expect(hasResolvableReferences(js, "js")).toBe(true);
+  });
+
+  it("detects SVG use href references", () => {
+    const svg = `<svg><use href="icons.svg#icon-1"></use></svg>`;
+    expect(hasResolvableReferences(svg, "svg")).toBe(true);
   });
 });
 
 describe("getReferenceSummary", () => {
-  it("extracts all reference types", () => {
+  it("extracts all reference types from HTML", () => {
     const html = `
       <html>
         <head>
@@ -84,10 +109,10 @@ describe("getReferenceSummary", () => {
       </html>
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toEqual(["reset.css", "main.css"]);
-    expect(summary.jsFiles).toEqual(["vendor.js", "app.js"]);
+    expect(summary.stylesheets).toEqual(["reset.css", "main.css"]);
+    expect(summary.scripts).toEqual(["vendor.js", "app.js"]);
     expect(summary.images).toEqual(["logo.png", "hero.jpg"]);
   });
 
@@ -102,10 +127,10 @@ describe("getReferenceSummary", () => {
       <img src="data:image/svg+xml,...">
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toEqual(["local.css"]);
-    expect(summary.jsFiles).toEqual(["local.js"]);
+    expect(summary.stylesheets).toEqual(["local.css"]);
+    expect(summary.scripts).toEqual(["local.js"]);
     expect(summary.images).toEqual(["local.png"]);
   });
 
@@ -116,10 +141,10 @@ describe("getReferenceSummary", () => {
       <img src="assets/images/logo.svg">
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toEqual(["css/components/button.css"]);
-    expect(summary.jsFiles).toEqual(["js/utils/helpers.js"]);
+    expect(summary.stylesheets).toEqual(["css/components/button.css"]);
+    expect(summary.scripts).toEqual(["js/utils/helpers.js"]);
     expect(summary.images).toEqual(["assets/images/logo.svg"]);
   });
 
@@ -129,10 +154,10 @@ describe("getReferenceSummary", () => {
       <script src="../../vendor/lib.js"></script>
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toEqual(["../shared/styles.css"]);
-    expect(summary.jsFiles).toEqual(["../../vendor/lib.js"]);
+    expect(summary.stylesheets).toEqual(["../shared/styles.css"]);
+    expect(summary.scripts).toEqual(["../../vendor/lib.js"]);
   });
 
   it("handles different quote styles", () => {
@@ -143,12 +168,12 @@ describe("getReferenceSummary", () => {
       <script src="double.js"></script>
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toContain("single.css");
-    expect(summary.cssFiles).toContain("double.css");
-    expect(summary.jsFiles).toContain("single.js");
-    expect(summary.jsFiles).toContain("double.js");
+    expect(summary.stylesheets).toContain("single.css");
+    expect(summary.stylesheets).toContain("double.css");
+    expect(summary.scripts).toContain("single.js");
+    expect(summary.scripts).toContain("double.js");
   });
 
   it("handles mixed attribute order in link tags", () => {
@@ -158,30 +183,47 @@ describe("getReferenceSummary", () => {
       <link media="print" href="third.css" rel="stylesheet">
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toContain("first.css");
-    expect(summary.cssFiles).toContain("second.css");
-    expect(summary.cssFiles).toContain("third.css");
+    expect(summary.stylesheets).toContain("first.css");
+    expect(summary.stylesheets).toContain("second.css");
+    expect(summary.stylesheets).toContain("third.css");
   });
 
   it("returns empty arrays for HTML with no references", () => {
     const html = `<html><body><h1>Hello</h1></body></html>`;
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(html, "html");
 
-    expect(summary.cssFiles).toEqual([]);
-    expect(summary.jsFiles).toEqual([]);
+    expect(summary.stylesheets).toEqual([]);
+    expect(summary.scripts).toEqual([]);
     expect(summary.images).toEqual([]);
   });
 
-  it("ignores fragment identifiers and query strings", () => {
-    const html = `
-      <img src="image.png?v=123">
-      <img src="icon.svg#logo">
+  it("extracts CSS @import references", () => {
+    const css = `
+      @import "reset.css";
+      @import url("typography.css");
+      .bg { background: url("images/bg.png"); }
     `;
 
-    const summary = getReferenceSummary(html);
+    const summary = getReferenceSummary(css, "css");
 
-    expect(summary.images).toEqual(["image.png?v=123", "icon.svg#logo"]);
+    expect(summary.imports).toContain("reset.css");
+    expect(summary.imports).toContain("typography.css");
+    expect(summary.images).toContain("images/bg.png");
+  });
+
+  it("extracts JS import statements", () => {
+    const js = `
+      import { foo } from "./utils.js";
+      import bar from '../lib/bar.js';
+      const helper = require("./helper.js");
+    `;
+
+    const summary = getReferenceSummary(js, "js");
+
+    expect(summary.imports).toContain("./utils.js");
+    expect(summary.imports).toContain("../lib/bar.js");
+    expect(summary.imports).toContain("./helper.js");
   });
 });

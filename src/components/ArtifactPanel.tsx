@@ -935,10 +935,6 @@ export function ArtifactPanel() {
 
   // Check if workspace file can be previewed (HTML, SVG, Markdown, CSS)
   const wsFileIsPreviewable = wsFile && /\.(html?|htm|svg|md|markdown|css)$/i.test(wsFile.name);
-  const wsFileIsHtml = wsFile && /\.(html?|htm)$/i.test(wsFile.name);
-  const wsFileIsSvg = wsFile && /\.svg$/i.test(wsFile.name);
-  const wsFileIsMd = wsFile && /\.(md|markdown)$/i.test(wsFile.name);
-  const wsFileIsCss = wsFile && /\.css$/i.test(wsFile.name);
 
   useEffect(() => {
     if (!wsFile || !wsFileIsPreviewable) {

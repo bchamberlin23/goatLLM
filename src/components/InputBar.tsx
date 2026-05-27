@@ -1067,7 +1067,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
         endJjAgentSessionIfNeeded();
       },
-    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 25 : undefined });
+    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined });
   }, [value, files, isStreaming, activeId, selectedModelId,
     addMessage, startStreaming, stopStreaming, appendToMessage, appendToThinking, updateMessage,
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,

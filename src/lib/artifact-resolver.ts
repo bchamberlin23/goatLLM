@@ -158,24 +158,6 @@ function findCssLinks(html: string): Reference[] {
 }
 
 /**
- * Find ALL link href references (preload, prefetch, icon, etc.)
- */
-function findLinkHrefs(html: string): Reference[] {
-  const results: Reference[] = [];
-  const regex = /<link\s+[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>/gi;
-
-  let match;
-  while ((match = regex.exec(html)) !== null) {
-    const href = match[1];
-    // Skip stylesheet links (handled separately) and external
-    if (href && !isExternalOrData(href) && !match[0].includes('rel="stylesheet"') && !match[0].includes("rel='stylesheet'")) {
-      results.push({ original: match[0], path: href });
-    }
-  }
-  return results;
-}
-
-/**
  * Find script src references in HTML.
  */
 function findScriptSrcs(html: string): Reference[] {
@@ -478,7 +460,7 @@ export async function resolveArtifactReferences(
   } else if (["js", "jsx", "ts", "tsx", "mjs"].includes(ext)) {
     // JavaScript/TypeScript - inline relative imports
     for (const ref of findJsImports(content)) {
-      await inlineReference(ref, (jsContent, jsPath) => {
+      await inlineReference(ref, (jsContent) => {
         // For JS, we'd ideally bundle but for preview we can inline simple cases
         // This is a simplified approach - just comment out the import and add the code
         return `/* inlined from ${ref.path} */\n${jsContent}\n/* end inlined */`;
