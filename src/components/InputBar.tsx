@@ -379,16 +379,17 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const isResend = !!overrides;
     if (!rawTrimmed && currentFiles.length === 0) return;
 
-    // Agent mode: enqueue instead of blocking while streaming
+    // Agent/Design mode: enqueue instead of blocking while streaming
     if (isStreaming) {
       const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
-      if (useChatStore.getState().agentMode && rawTrimmed && activeId) {
+      const state = useChatStore.getState();
+      if ((state.agentMode || state.designMode) && rawTrimmed && activeId) {
         enqueueMessage(activeId, rawTrimmed);
         clearDraft(k);
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         return;
       }
-      // Non-agent mode: block
+      // Chat mode: block
       return;
     }
 
@@ -1215,7 +1216,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           onPaste={handlePaste}
           rows={1}
           aria-label="Message input"
-          placeholder={speech.listening ? "Listening…" : isStreaming ? (agentMode ? "Agent is working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
+          placeholder={speech.listening ? "Listening…" : isStreaming ? ((agentMode || designMode) ? "Working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
           className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
         />
 

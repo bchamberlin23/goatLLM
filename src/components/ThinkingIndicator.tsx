@@ -39,9 +39,13 @@ export function WorkingHeader({
     <div className="flex flex-col gap-2 my-1 mb-3 w-full">
       {running ? (
         <Shimmer text={`${label} for ${elapsed}`} className="text-[13.5px] font-medium" />
-      ) : (
+      ) : elapsed !== "0s" ? (
         <span className="text-[13.5px] font-medium text-[#8e8e8e]">
           {label === "Working" ? "Worked" : `${label.replace(/ing$/, "ed")}`} for {elapsed}
+        </span>
+      ) : (
+        <span className="text-[13.5px] font-medium text-[#8e8e8e]">
+          {label === "Working" ? "Done" : label.replace(/ing$/, "ed")}
         </span>
       )}
       <div className="h-px bg-white/5 w-full" />

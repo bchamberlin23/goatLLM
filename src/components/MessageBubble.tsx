@@ -73,9 +73,13 @@ function ThinkingBlock({ content, elapsed, running }: {
         )}
         {running ? (
           <Shimmer text={`Thinking · ${elapsed}`} className="text-[12px] font-medium" />
-        ) : (
+        ) : elapsed !== "0s" ? (
           <span className="text-[12px] font-medium text-[#888]">
             Thought for {elapsed}
+          </span>
+        ) : (
+          <span className="text-[12px] font-medium text-[#888]">
+            Thoughts
           </span>
         )}
       </button>
@@ -229,7 +233,31 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           </div>
         </div>
 
+        {/* Active skills badges */}
+        {message.activeSkillNames && message.activeSkillNames.length > 0 && (
+          <div className={`flex items-center gap-1 flex-wrap ${isUser ? "justify-end" : ""}`}>
+            {message.activeSkillNames.map((skillName) => (
+              <span
+                key={skillName}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/15"
+              >
+                <Sparkles size={9} strokeWidth={2} />
+                {skillName}
+              </span>
+            ))}
+          </div>
+        )}
+
         {showWorkingHeader && <WorkingHeader startedAt={startedAt} running={headerRunning} label="Working" />}
+
+        {/* Thinking block — shown at the TOP of the message */}
+        {isAssistant && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
+          <ThinkingBlock
+            content={message.thinkingContent}
+            elapsed={thinkingElapsed}
+            running={isStreaming && message.content.length === 0}
+          />
+        )}
 
         {isAssistant && isStreaming && (() => {
           const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
@@ -256,27 +284,11 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             messageId={message.id}
           />
         ) : null}
-        {hasToolCalls && isAssistant && isStreaming && message.content.length === 0 && (
-          <ThinkingBlock
-            content={message.thinkingContent}
-            elapsed={thinkingElapsed}
-            running={true}
-          />
-        )}
         {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
           <span className="streaming-cursor" />
         )}
         {hasToolCalls && isAssistant && !isStreaming && (
           <FallbackArtifactCards messageId={message.id} />
-        )}
-
-        {/* Thinking block for completed messages with reasoning content */}
-        {isAssistant && !isStreaming && message.thinkingContent && message.thinkingContent.trim().length > 0 && (
-          <ThinkingBlock
-            content={message.thinkingContent}
-            elapsed={thinkingElapsed}
-            running={false}
-          />
         )}
 
         {/* Plain assistant text (no tool calls) + user messages */}
@@ -294,11 +306,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             ) : isUser ? (
               <UserMessageContent message={message} />
             ) : message.content.length === 0 && isWorking ? (
-              <ThinkingBlock
-                content={message.thinkingContent}
-                elapsed={thinkingElapsed}
-                running={true}
-              />
+              <div className="text-[12px] text-[#a0a0a0]">Thinking…</div>
             ) : (
               <>
                 <StreamingSegmentedText

@@ -8,7 +8,7 @@ import { ArtifactPanel } from "./ArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
-import { Settings as SettingsIcon, ArrowRight, Upload, Folder } from "lucide-react";
+import { Settings as SettingsIcon, ArrowRight, Upload, Folder, Sparkles, X } from "lucide-react";
 import { SubagentPanel } from "./SubagentPanel";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
@@ -32,6 +32,46 @@ const FOLDER_SKIP_EXTS = new Set([
 ]);
 
 const FOLDER_DROP_MAX_FILES = 100;
+
+/** Small bar showing active skills for the current conversation. */
+function ActiveSkillsBar() {
+  const activeId = useChatStore((s) => s.activeId);
+  const conversations = useChatStore((s) => s.conversations);
+  const setConversationSkills = useChatStore((s) => s.setConversationSkills);
+
+  const activeSkillNames = activeId
+    ? conversations.find((c) => c.id === activeId)?.activeSkillNames ?? []
+    : [];
+
+  if (activeSkillNames.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap w-full max-w-[720px] px-1 mb-1.5 animate-[fadeIn_150ms_ease]">
+      <span className="text-[10.5px] text-[#888] mr-0.5">Skills:</span>
+      {activeSkillNames.map((skillName) => (
+        <span
+          key={skillName}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[11px] text-[#f59e42] border border-[#f59e42]/20"
+        >
+          <Sparkles size={10} strokeWidth={2} />
+          {skillName}
+          <button
+            onClick={() => {
+              if (activeId) {
+                const next = activeSkillNames.filter((n) => n !== skillName);
+                setConversationSkills(activeId, next);
+              }
+            }}
+            className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
+            aria-label={`Remove ${skillName} skill`}
+          >
+            <X size={9} strokeWidth={2} />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 /** Recursively walk a webkit FileSystemEntry tree and collect File objects.
  *  Skips vendor directories and binary file types so dropping a project
@@ -310,6 +350,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               </>
             )}
           </div>
+          <ActiveSkillsBar />
           <InputBar onOpenSettings={onOpenSettings} />
           <div className="flex items-center flex-wrap gap-1.5 w-full max-w-[720px] px-1">
             <ModeToggle />

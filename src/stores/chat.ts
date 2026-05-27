@@ -99,6 +99,9 @@ export interface Message {
   toolCalls?: ToolCallEntry[];
   /** Pinned messages survive context-manager compaction. */
   pinned?: boolean;
+  /** Skills that were active when this message was sent (for user messages)
+   *  or received (for assistant messages). Shown as badges in the UI. */
+  activeSkillNames?: string[];
 }
 
 export interface Conversation {
@@ -1014,7 +1017,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         delete newQueue[id];
         let newActiveId = activeId;
         if (activeId === id) {
-          newActiveId = remaining.length > 0 ? remaining[0].id : null;
+          // Show the new-chat hero in the current mode instead of jumping
+          // to a random conversation that might be in a different mode.
+          newActiveId = null;
         }
         set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts, messageQueue: newQueue });
         deleteConversationFromDb(id);
@@ -1197,7 +1202,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       addMessage: (messageData: Omit<Message, "id" | "createdAt">) => {
-        const message: Message = { ...messageData, id: generateId(), createdAt: nextCreatedAt() };
+        // Capture active skills from the conversation at message creation time
+        const conv = get().conversations.find((c) => c.id === messageData.conversationId);
+        const activeSkillNames = conv?.activeSkillNames;
+
+        const message: Message = {
+          ...messageData,
+          id: generateId(),
+          createdAt: nextCreatedAt(),
+          // Only store skills if there are any (save space)
+          activeSkillNames: activeSkillNames && activeSkillNames.length > 0 ? activeSkillNames : undefined,
+        };
         set((state) => {
           const convMessages = state.messages[message.conversationId] ?? [];
           const updatedMessages = [...convMessages, message];
