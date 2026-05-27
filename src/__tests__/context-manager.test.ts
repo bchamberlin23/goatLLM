@@ -87,7 +87,7 @@ describe("compactMessages", () => {
     expect(r.summarizedCount).toBeGreaterThan(0);
     // First message should be the system summary
     expect(r.messages[0].role).toBe("system");
-    expect(typeof r.messages[0].content === "string" && r.messages[0].content).toMatch(/Earlier conversation summary/);
+    expect(typeof r.messages[0].content === "string" && r.messages[0].content).toMatch(/## Goal/);
   });
 
   it("preserves system messages across compaction", () => {

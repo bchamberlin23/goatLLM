@@ -62,6 +62,8 @@ export interface StreamCallbacks {
   /** Called when the model produces thinking/reasoning content (e.g. Claude
    *  extended thinking, DeepSeek R1). Chunks arrive incrementally. */
   onThinking?: (chunk: string) => void;
+  /** Called once at the end of a stream with token usage stats. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheRead?: number; cacheWrite?: number }) => void;
   onDone: (fullText: string) => void;
   onError: (error: Error) => void;
 }

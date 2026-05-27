@@ -405,10 +405,39 @@ export async function agentLoop(
       // ── Simple single-call path ──
       // Used when maxToolRounds is explicitly set (research/design modes)
       // or when there are no tools (chat mode).
+
+      // ── Anthropic prompt caching ──
+      // Mark the first user message with cache_control so Anthropic caches
+      // the system prompt + early messages across turns. Design mode's
+      // system prompt (~10K tokens) benefits enormously.
+      const isAnthropic = config.provider === "anthropic";
+      let messagesForStream = mapMessagesForProvider(messages);
+
+      if (isAnthropic) {
+        const firstUserIdx = messagesForStream.findIndex((m) => m.role === "user");
+        if (firstUserIdx >= 0) {
+          messagesForStream = messagesForStream.map((m, i) => {
+            if (i === firstUserIdx) {
+              return {
+                ...m,
+                providerOptions: {
+                  anthropic: { cacheControl: { type: "ephemeral" } },
+                },
+              } as ModelMessage;
+            }
+            return m;
+          });
+        }
+      }
+
+      const mergedProviderOptions = isAnthropic && systemPrompt
+        ? { ...(providerOptions ?? {}), anthropic: { ...(providerOptions?.anthropic ?? {}), cacheControl: { type: "ephemeral" } } }
+        : providerOptions;
+
       const result = streamText({
         model,
         system: systemPrompt ?? undefined,
-        messages: mapMessagesForProvider(messages) as any,
+        messages: messagesForStream as any,
         ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
         ...(hasExplicitCap
           ? { stopWhen: stepCountIs(options!.maxToolRounds!) }
@@ -417,7 +446,7 @@ export async function agentLoop(
             : { stopWhen: stepCountIs(1) }),
         abortSignal: effectiveSignal,
         ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-        ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+        ...(mergedProviderOptions ? { providerOptions: mergedProviderOptions as any } : {}),
       });
 
       let fullText = "";
@@ -466,7 +495,18 @@ export async function agentLoop(
             return;
 
           case "finish":
-            // stream complete
+            // stream complete — emit usage stats for cache tracking
+            try {
+              const usage = await result.usage;
+              if (usage) {
+                callbacks.onUsage?.({
+                  inputTokens: usage.inputTokens ?? 0,
+                  outputTokens: usage.outputTokens ?? 0,
+                  cacheRead: (usage as any).cacheReadTokens ?? undefined,
+                  cacheWrite: (usage as any).cacheWriteTokens ?? undefined,
+                });
+              }
+            } catch { /* usage not available */ }
             break;
         }
       }
@@ -494,6 +534,54 @@ export async function agentLoop(
       /(context.*length|maximum.*context|too\s+(long|many)\s+tokens|prompt\s+is\s+too\s+long|exceeds.*tokens|context\s+window|input.*too\s+long)/i.test(msg) ||
       /token\s*limit/i.test(msg)
     ) {
+      // Auto-retry with compaction: if we have the original messages,
+      // compact them and retry once. This mirrors pi's auto-compaction
+      // on context overflow.
+      const originalMsgs = (error as any).__originalMessages as ModelMessage[] | undefined;
+      if (originalMsgs && originalMsgs.length > 4) {
+        const contextWindow = getContextWindow(config.provider, config.modelId);
+        const target = contextWindow > 0 ? Math.floor(contextWindow * 0.45) : 40_000;
+        const compacted = compactModelMessages(originalMsgs, target);
+        if (compacted.length < originalMsgs.length) {
+          console.log(`[agentLoop] Auto-compacting on overflow: ${originalMsgs.length} → ${compacted.length} messages`);
+          // Retry once with compacted messages
+          try {
+            const retryResult = streamText({
+              model,
+              system: systemPrompt ?? undefined,
+              messages: compacted as any,
+              abortSignal: effectiveSignal,
+              ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
+              ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+            });
+            let retryText = "";
+            for await (const chunk of retryResult.fullStream) {
+              if (chunk.type === "text-delta") {
+                retryText += chunk.text;
+                callbacks.onToken(chunk.text);
+              } else if (chunk.type === "reasoning-delta") {
+                callbacks.onThinking?.((chunk as Record<string, unknown>).text as string ?? "");
+              } else if (chunk.type === "tool-call") {
+                callbacks.onToolCall?.({ toolCallId: chunk.toolCallId, toolName: chunk.toolName, input: (chunk as Record<string, unknown>).input } satisfies ToolCallInfo);
+              } else if (chunk.type === "tool-result") {
+                callbacks.onToolResult?.({ toolCallId: chunk.toolCallId, toolName: chunk.toolName, input: (chunk as Record<string, unknown>).input, output: (chunk as Record<string, unknown>).output } satisfies ToolResultInfo);
+              } else if (chunk.type === "tool-error") {
+                callbacks.onToolError?.({ toolCallId: (chunk as Record<string, unknown>).toolCallId as string, toolName: chunk.toolName, error: (chunk as Record<string, unknown>).error } satisfies ToolErrorInfo);
+              } else if (chunk.type === "error") {
+                callbacks.onError((chunk as Record<string, unknown>).error as Error);
+                return;
+              } else if (chunk.type === "abort") {
+                callbacks.onDone(retryText);
+                return;
+              }
+            }
+            callbacks.onDone(retryText);
+            return;
+          } catch {
+            // Retry also failed — fall through to original error
+          }
+        }
+      }
       const overflow = new Error(
         `This request is too long for the active model. You can switch to a longer-context model or trim earlier messages.\n\nDetails: ${msg.slice(0, 240)}`,
       );

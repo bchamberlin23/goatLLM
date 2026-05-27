@@ -288,32 +288,66 @@ function compareByCreated(a: Message, b: Message): number {
  * are summarized more aggressively.
  */
 function buildSummary(messages: Message[]): string {
-  const parts: string[] = ["[Earlier conversation summary]"];
+  const parts: string[] = [];
+
+  // Track files from tool calls (pi-style cumulative file tracking)
+  const readFiles = new Set<string>();
+  const modifiedFiles = new Set<string>();
+
+  parts.push("## Goal");
+  // Extract goal from first user message
+  const firstUser = messages.find((m) => m.role === "user");
+  if (firstUser) {
+    parts.push(firstUser.content.slice(0, 200) + (firstUser.content.length > 200 ? "…" : ""));
+  }
+
+  parts.push("");
+  parts.push("## Progress");
+  parts.push("### Done");
 
   for (const msg of messages) {
     if (msg.role === "user") {
-      const content = msg.content.slice(0, 200);
-      parts.push(`User: ${content}${msg.content.length > 200 ? "…" : ""}`);
+      parts.push(`- User: ${msg.content.slice(0, 120)}${msg.content.length > 120 ? "…" : ""}`);
     } else if (msg.role === "assistant") {
-      // Summarize assistant responses: first sentence or first 150 chars
-      const firstSentence = msg.content.split(/[.!?]\s/)[0] || "";
-      const snippet =
-        firstSentence.length > 10
-          ? firstSentence.slice(0, 150)
-          : msg.content.slice(0, 150);
-      parts.push(
-        `Assistant: ${snippet}${msg.content.length > 150 ? "…" : ""}`
-      );
+      const snippet = msg.content.slice(0, 150);
+      if (snippet.trim()) parts.push(`- ${snippet}${msg.content.length > 150 ? "…" : ""}`);
 
-      // Mention tool calls briefly
-      if (msg.toolCalls && msg.toolCalls.length > 0) {
-        const toolNames = msg.toolCalls.map((tc) => tc.toolName).join(", ");
-        parts.push(`  [Used tools: ${toolNames}]`);
+      // Track files from tool calls
+      if (msg.toolCalls) {
+        for (const tc of msg.toolCalls) {
+          const input = tc.input as Record<string, unknown> | undefined;
+          const path = input?.path as string | undefined;
+          if (tc.toolName === "read_file" || tc.toolName === "read_pdf" || tc.toolName === "list_dir") {
+            if (path) readFiles.add(path);
+          } else if (tc.toolName === "write_file" || tc.toolName === "edit_file") {
+            if (path) modifiedFiles.add(path);
+          }
+          parts.push(`  - [Used ${tc.toolName}${path ? `: ${path}` : ""}]`);
+        }
       }
     }
   }
 
-  parts.push("[/Earlier conversation summary]");
+  // File tracking section (pi-style)
+  if (readFiles.size > 0 || modifiedFiles.size > 0) {
+    parts.push("");
+    parts.push("## Files touched");
+    if (readFiles.size > 0) {
+      parts.push("<read-files>");
+      for (const f of readFiles) parts.push(f);
+      parts.push("</read-files>");
+    }
+    if (modifiedFiles.size > 0) {
+      parts.push("<modified-files>");
+      for (const f of modifiedFiles) parts.push(f);
+      parts.push("</modified-files>");
+    }
+  }
+
+  parts.push("");
+  parts.push("## Next steps");
+  parts.push("Continue from where the conversation left off.");
+
   return parts.join("\n");
 }
 
@@ -357,23 +391,46 @@ const LLM_SUMMARY_PROMPT = `You are a context-compaction assistant. The user is 
 
 Produce a structured summary that preserves enough state for the agent to resume seamlessly. Use this exact format:
 
-## Summary
+## Goal
 <2-4 sentences: what the user was trying to do, current status, and any decisions made>
 
+## Constraints & Preferences
+- <requirements mentioned by user>
+
+## Progress
+### Done
+- [x] <completed tasks>
+
+### In Progress
+- [ ] <current work>
+
+### Blocked
+- <issues, if any>
+
+## Key Decisions
+- **<Decision>**: <rationale>
+
 ## Files touched
-<bulleted list of file paths read, written, or edited, each with a one-line note>
+<read-files>
+path/to/file1.ts
+path/to/file2.ts
+</read-files>
 
-## Tools used
-<bulleted list of tool names with a count and one-line note about why>
+<modified-files>
+path/to/changed.ts
+</modified-files>
 
-## Open questions / next steps
-<bulleted list, or "None" if everything was resolved>
+## Next Steps
+1. <what should happen next>
+
+## Critical Context
+- <data needed to continue>
 
 Rules:
 - Stay under 500 words.
 - Quote exact identifiers (function names, file paths, error messages).
 - Do NOT speculate beyond what's in the transcript.
-- Do NOT include any preamble like "Here's the summary" — start with the ## Summary heading.`;
+- Do NOT include any preamble like "Here's the summary" — start with the ## Goal heading.`;
 
 /**
  * Render a list of messages into a compact transcript suitable for feeding
