@@ -368,7 +368,7 @@ export function buildDesignSystemPrompt(input: DesignPromptInput): string {
 
   parts.push(SPECIALIST_PERSONAS);
 
-  if (input.isFirstTurn && skill) {
+  if (input.isFirstTurn) {
     parts.push(DISCOVERY_DIRECTIVES);
   }
   if (skill) {

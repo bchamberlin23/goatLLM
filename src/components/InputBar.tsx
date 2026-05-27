@@ -844,7 +844,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       const currentContent = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)?.content || "";
       const entry: ToolCallEntry = {
         toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input,
-        state: writeTool ? "pending_approval" : "running",
+        state: writeTool && !isDesignMode ? "pending_approval" : "running",
         contentAtInvocation: currentContent.length,
       };
       // Suppress web_search pills beyond the hard cap — the tool returns an

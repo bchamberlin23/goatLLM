@@ -44,7 +44,7 @@ describe("buildDesignSystemPrompt", () => {
     expect(prompt).toContain("<identity>");
   });
 
-  it("no skill selected skips skill block and discovery directives", () => {
+  it("no skill selected still includes discovery directives on first turn", () => {
     const prompt = buildDesignSystemPrompt({
       skillId: null,
       systemId: null,
@@ -53,8 +53,8 @@ describe("buildDesignSystemPrompt", () => {
     });
 
     expect(prompt).not.toContain("<active_skill");
-    expect(prompt).not.toContain('<question-form id="discovery"');
-    expect(prompt).not.toContain("<discovery>");
+    expect(prompt).toContain('<question-form id="discovery"');
+    expect(prompt).toContain("<discovery>");
     expect(prompt).toContain("<identity>");
     expect(prompt).toContain("<p0_gate>");
   });
