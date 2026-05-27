@@ -493,6 +493,9 @@ interface ChatStore {
   /** Jump the version pointer to an arbitrary index. Used by the history menu. */
   restoreArtifactVersion: (conversationId: string, artifactId: string, versionIndex: number) => void;
   clearArtifacts: (conversationId: string) => void;
+  /** Design mode: upsert artifact from a file write so the preview panel
+   *  stays in sync with files on disk. */
+  upsertDesignArtifact: (conversationId: string, title: string, code: string) => void;
 
   // Attachment viewer (non-persisted) — opens an attachment from a message bubble
   // in the same side panel slot as artifacts. Mutually exclusive with the
@@ -1875,6 +1878,45 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const next = { ...state.artifacts };
           delete next[conversationId];
           return { artifacts: next, activeArtifactId: null, artifactPanelOpen: false };
+        });
+      },
+
+      upsertDesignArtifact: (conversationId, title, code) => {
+        const normalizedTitle = normalizeTitle(title);
+        set((state) => {
+          const existing = state.artifacts[conversationId] ?? [];
+          const idx = existing.findIndex(
+            (a) => a.kind === "html" && normalizeTitle(a.title) === normalizedTitle,
+          );
+          const now = Date.now();
+          if (idx >= 0) {
+            const next = [...existing];
+            const art = { ...next[idx] };
+            const versions = [...(art.versions ?? [])];
+            const activeIdx = art.activeVersionIndex ?? versions.length - 1;
+            const last = versions[activeIdx];
+            if (last && last.code === code) return {};
+            const newVersion: ArtifactVersion = { code, title, createdAt: now, source: "agent" };
+            versions.push(newVersion);
+            art.versions = versions;
+            art.activeVersionIndex = versions.length - 1;
+            art.code = code;
+            art.title = title;
+            art.createdAt = now;
+            next[idx] = art;
+            return { artifacts: { ...state.artifacts, [conversationId]: next }, activeArtifactId: art.id };
+          }
+          const id = `design-html-${now}`;
+          const newVersion: ArtifactVersion = { code, title, createdAt: now, source: "agent" };
+          const art: Artifact = {
+            id, kind: "html", title, code, messageId: "", createdAt: now,
+            versions: [newVersion], activeVersionIndex: 0,
+          };
+          return {
+            artifacts: { ...state.artifacts, [conversationId]: [...existing, art] },
+            activeArtifactId: id,
+            artifactPanelOpen: true,
+          };
         });
       },
 

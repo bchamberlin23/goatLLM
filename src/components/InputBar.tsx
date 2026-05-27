@@ -17,6 +17,7 @@ import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Per-conversation cache of high-quality LLM-generated summaries. We swap
@@ -282,11 +283,18 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (pendingFormSubmission.conversationId !== activeId) return;
     const text = pendingFormSubmission.text;
     setPendingFormSubmission(null);
+    // Persist the form submission as a user message so the model sees the
+    // answers and so the turn counter increments (isFirstTurn → false).
+    addMessage({
+      conversationId: activeId,
+      role: "user",
+      content: text,
+    });
     // Defer one tick so the state-clearing reaches the form before send.
     setTimeout(() => {
       handleSendRef.current?.({ content: text });
     }, 0);
-  }, [pendingFormSubmission, activeId, setPendingFormSubmission]);
+  }, [pendingFormSubmission, activeId, setPendingFormSubmission, addMessage]);
 
   useEffect(() => {
     if (pendingDroppedFiles.length > 0) {
@@ -573,6 +581,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     const history = getActiveMessages();
     const currentWorkspace = useChatStore.getState().workspacePath;
+    const designWorkspace = useChatStore.getState().designWorkspacePath;
     const isAgentMode = useChatStore.getState().agentMode;
     const isDesignMode = useChatStore.getState().designMode;
     const isPlanMode = isAgentMode && useChatStore.getState().planMode;
@@ -596,7 +605,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const { ATTACHMENT_TOOLS, CODE_EXEC_TOOLS } = await import("../lib/tools");
     const chatCodeExec = useChatStore.getState().chatCodeExec;
     // Agent mode → full workspace tool set, OR read-only plan subset when
-    // plan mode is on. Chat + research → web tools (+ attachment tools).
+    // plan mode is on. Design mode with a workspace → full tools so the
+    // design agent can read/write/edit files and run commands.
+    // Chat + research → web tools (+ attachment tools).
     // Plain chat with web backend → web_search + attachment tools.
     // Plain chat without web → attachment tools only when there's something
     // cached to navigate. Code-exec tools are mixed in for chat mode when the
@@ -604,14 +615,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     let activeTools: ToolSet | undefined =
       isAgentMode && currentWorkspace
         ? (isPlanMode ? PLAN_TOOLS : ALL_TOOLS)
-        : isResearchMode
-          ? RESEARCH_TOOLS
-          : hasWebSearch
-            ? CHAT_TOOLS
-            : hasAttachmentCache
-              ? ATTACHMENT_TOOLS
-              : undefined;
-    if (!isAgentMode && chatCodeExec) {
+        : isDesignMode && designWorkspace
+          ? ALL_TOOLS
+          : isResearchMode
+            ? RESEARCH_TOOLS
+            : hasWebSearch
+              ? CHAT_TOOLS
+              : hasAttachmentCache
+                ? ATTACHMENT_TOOLS
+                : undefined;
+    if (!isAgentMode && !isDesignMode && chatCodeExec) {
       activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
     }
 
@@ -621,7 +634,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     // extraction — give it room so a single paper doesn't trigger compaction
     // and lose the body. Sized for the lowest model the user targets (200K
     // context): 180K tokens leaves headroom for system prompt + reply.
-    const maxTokens = isAgentMode ? 8000 : 180_000;
+    const maxTokens = (isAgentMode || (isDesignMode && designWorkspace)) ? 8000 : 180_000;
     const compaction = compactMessages(history, maxTokens, { stripTools: !activeTools });
     const { compacted, summarizedCount, truncatedCount, toolsInlinedCount, droppedMessages } = compaction;
 
@@ -705,7 +718,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     // these are small and the read tool itself caches at the FS layer.
     const projectContextFiles = isAgentMode && currentWorkspace
       ? await loadProjectContext(currentWorkspace).catch(() => [])
-      : [];
+      : (isDesignMode && designWorkspace)
+        ? await loadProjectContext(designWorkspace).catch(() => [])
+        : [];
 
     // If skills are bound to this conversation, fetch each SKILL.md so they
     // can be injected into the system prompt for this turn (and every turn
@@ -767,6 +782,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             directionId: s.activeDirectionId,
             isFirstTurn: turns <= 1,
             userPrompt,
+            hasWorkspace: !!designWorkspace,
           });
         })()
       : isAgentMode
@@ -850,17 +866,48 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       logToolCall(convId!, tc.toolCallId, tc.toolName, tc.input);
     };
 
-    const handleToolResult = (tr: ToolResultInfo) => {
+    const handleToolResult = async (tr: ToolResultInfo) => {
       completeToolCall(convId!, assistantMsg.id, tr.toolCallId, tr.output);
       logToolResult(convId!, tr.toolCallId, tr.toolName, tr.output);
+
+      // Design mode: when an HTML file is written/edited, sync it as an
+      // artifact so the preview panel shows it live.
+      if (
+        isDesignMode &&
+        designWorkspace &&
+        (tr.toolName === "write_file" || tr.toolName === "edit_file")
+      ) {
+        const input = tr.input as { path?: string } | undefined;
+        const filePath =
+          typeof input?.path === "string" ? input.path : "";
+        if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
+          try {
+            const content = await invoke<string>("read_file", {
+              workspace: designWorkspace,
+              path: filePath,
+            });
+            const title =
+              filePath
+                .replace(/\.html?$/, "")
+                .split("/")
+                .pop() || filePath;
+            useChatStore
+              .getState()
+              .upsertDesignArtifact(convId!, title, content);
+          } catch {
+            /* file read failed, skip */
+          }
+        }
+      }
     };
 
     // Start jjagent isolation change if enabled and workspace is a jj repo.
     const jjagentEnabled = useChatStore.getState().jjagent;
-    if (jjagentEnabled && currentWorkspace && (isAgentMode || isDesignMode)) {
+    const jjWs = isDesignMode ? designWorkspace : currentWorkspace;
+    if (jjagentEnabled && jjWs && (isAgentMode || isDesignMode)) {
       const historyMsgs = useChatStore.getState().messages[convId!];
       const turnIndex = (historyMsgs ?? []).filter((m) => m.role === "user").length;
-      const session = await startJjAgentSession(currentWorkspace, convId!, turnIndex);
+      const session = await startJjAgentSession(jjWs, convId!, turnIndex);
       if (session) {
         useChatStore.getState().setJjAgentChangeId(session.changeId);
       }
@@ -868,10 +915,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     const endJjAgentSessionIfNeeded = () => {
       const changeId = useChatStore.getState().jjagentChangeId;
-      const ws = useChatStore.getState().workspacePath;
+      const s = useChatStore.getState();
+      const ws = s.designMode ? s.designWorkspacePath : s.workspacePath;
       if (changeId && ws) {
         endJjAgentSession(ws, { changeId, startedAt: Date.now() });
-        useChatStore.getState().setJjAgentChangeId(null);
+        s.setJjAgentChangeId(null);
       }
     };
 

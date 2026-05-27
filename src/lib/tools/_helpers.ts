@@ -9,7 +9,8 @@
 import { useChatStore } from "../../stores/chat";
 
 export function getWorkspace(): string {
-  const ws = useChatStore.getState().workspacePath;
+  const s = useChatStore.getState();
+  const ws = s.designMode ? s.designWorkspacePath : s.workspacePath;
   if (!ws) throw new Error("No workspace selected");
   return ws;
 }

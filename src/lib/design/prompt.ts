@@ -36,6 +36,8 @@ export interface DesignPromptInput {
   isFirstTurn: boolean;
   /** Free-form supplemental user prompt (the project's systemPrompt field). */
   userPrompt?: string;
+  /** When true, include file-tool directives and workspace context. */
+  hasWorkspace?: boolean;
 }
 
 const IDENTITY_CHARTER = `<identity>
@@ -113,7 +115,7 @@ The form is the entire turn. End your reply after the closing </question-form> t
 
 const DISCOVERY_DIRECTIVES_FOLLOWUP = `<discovery turn="2+">
 - If the user has not yet picked a direction AND said "no brand" or "pick a direction", emit a single <question-form id="direction"> with the 5 directions as radio cards (editorial / modern-minimal / tech-utility / brutalist / soft-warm). End the reply after the closing tag.
-- If the user pasted brand assets (hex list, screenshot description, or brand name), extract the brand identity from the user's text alone — design mode has no file tools:
+- If the user pasted brand assets (hex list, screenshot description, or brand name), extract the brand identity from the user's text:
   1. Parse the hex list if provided, or recall the brand's known palette from your training data.
   2. List bg / surface / accent / fg as concrete hex values (no more than 5).
   3. Name display / body / mono type families. If the user only named a brand, name the typefaces that brand actually uses from your knowledge, not a guess.
@@ -133,6 +135,16 @@ Before emitting <artifact>, your work must pass these P0 gates:
 - Spacing rhythm. All vertical gaps are multiples of one base unit (4 / 8 / 12 / 16).
 If P0 fails, fix and re-check. P0 is non-negotiable.
 </p0_gate>`;
+
+const DESIGN_TOOLS_DIRECTIVE = `<tools>
+You have full file-system access in the workspace: read_file, write_file, edit_file, read_directory, grep, glob, bash/exec_command, and git operations. Use them.
+
+File writes are the source of truth. When you produce an HTML artifact:
+1. Write the file to the workspace first (e.g., write_file("index.html", html)).
+2. Also emit <artifact kind="html" title="…">…</artifact> so the preview panel updates.
+
+Edits should use edit_file for small targeted changes instead of re-writing entire files. The artifact tag is for live preview — the file is the deliverable.
+</tools>`;
 
 export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   const skill = getSkill(input.skillId);
@@ -169,6 +181,9 @@ export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   }
   if (skill) {
     parts.push(DISCOVERY_DIRECTIVES_FOLLOWUP);
+  }
+  if (input.hasWorkspace) {
+    parts.push(DESIGN_TOOLS_DIRECTIVE);
   }
   parts.push(P0_GATE);
 

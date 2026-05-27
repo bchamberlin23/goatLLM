@@ -373,6 +373,11 @@ function StreamingSegmentedText({
 function UserMessageContent({ message }: { message: Message }) {
   const cleaned = useMemo(() => stripAttachmentMarkers(message.content), [message.content]);
   const hasAttachments = !!message.attachments && message.attachments.length > 0;
+
+  // Design-mode form submissions are opaque payloads like "[form: discovery]\nsurface: ...".
+  // Render a subtle indicator instead of the raw text.
+  const isFormSubmission = /^\[form:/.test(cleaned);
+
   // Render LaTeX math the user typed/pasted (e.g. `$\int_0^1 x^2 dx$`,
   // `$$\sum_{i=1}^n i$$`). We sniff for paired `$` or `$$` delimiters before
   // routing through MarkdownRenderer so plain prose with stray `$` (prices,
@@ -397,7 +402,12 @@ function UserMessageContent({ message }: { message: Message }) {
   return (
     <div className="flex flex-col">
       {hasAttachments && <AttachmentChips attachments={message.attachments!} />}
-      {cleaned.length > 0 && (
+      {isFormSubmission ? (
+        <div className="flex items-center gap-1.5 text-[12px] text-[#888] italic">
+          <ListChecks size={13} strokeWidth={1.6} className="text-[#666]" />
+          Form submitted
+        </div>
+      ) : cleaned.length > 0 && (
         useRichRender ? (
           <div className="text-[14px] leading-relaxed text-[#ececec] select-text">
             <MarkdownRenderer content={cleaned} />
