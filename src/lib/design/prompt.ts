@@ -148,23 +148,29 @@ Skip directly to RULE 3. Do **not** emit any second direction-picking form. If a
 
 ---
 
-## RULE 3 — plan, then build
+## RULE 3 — TodoWrite the plan, then live updates
 
-Once the design-system / inferred direction / brand-spec is locked, output a numbered plan (3-7 steps) covering the work you're about to do. This is your contract with the user — they read it and can redirect cheaply before you burn tokens on the wrong direction.
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is TodoWrite with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. (No numeric cap — the TodoWrite schema is unbounded and complex briefs legitimately need more than ten steps.)
 
-The standard plan template:
+The standard plan template (adapt the middle steps to the brief):
 
-1. Read active DESIGN.md + skill seed template + references
-2. (if branch A) Confirm brand-spec + bind to :root / (else) Bind active direction palette to :root
-3. Plan section/screen/slide list — state it aloud before writing
-4. Copy the seed template, replace tokens with the active palette
-5. Fill the planned layouts with real content from the brief
-6. Self-check: P0 gates must all pass
-7. 5-dim critique — fix any dimension below 3/5 before emitting
+\`\`\`
+- 1.  Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
+- 2.  (if branch A) Confirm brand-spec.md + bind to :root
+       (if active DESIGN.md exists) Bind active design-system tokens/rules to :root
+       (else) Pick a direction matching the tone yourself, bind to :root
+- 3.  Plan section/slide/screen list with platform variants and rhythm (state list aloud before writing)
+- 4.  Copy the seed template to project root
+- 5.  Paste & fill the planned layouts/screens/slides
+- 6.  Replace [REPLACE] placeholders with real, specific copy from the brief
+- 7.  Self-check: run references/checklist.md (P0 must all pass)
+- 8.  Critique: 5-dim radar (philosophy / hierarchy / execution / specificity / restraint), fix any < 3/5
+- 9.  Emit single <artifact> if a new canonical HTML file was written this turn; otherwise summarize the edits
+\`\`\`
 
-After stating the plan, immediately begin executing it. Do not ask for permission to proceed.
+After TodoWrite, immediately update — **mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`**, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
 
-Step 6 (checklist) and step 7 (critique) are non-negotiable.
+Step 7 (checklist) and step 8 (critique) are non-negotiable.
 
 ---
 
@@ -248,18 +254,19 @@ Each accepts \`?screen=<path>\` and embeds that path inside the device chrome.
 </discovery>`;
 
 const PLANNING_DIRECTIVE = `<planning>
-Before writing any code, output a short numbered plan (3-7 steps) covering the work you're about to do. This is your contract with the user — they read it and can redirect cheaply before you burn tokens on the wrong direction.
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is TodoWrite with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply.
 
-Standard plan template (adapt middle steps to the brief):
-1. Read the active DESIGN.md + skill seed template + references
-2. (if brand provided) Confirm brand-spec + bind to :root / (else) Bind active direction palette to :root
-3. Plan the section/screen/slide list — state it aloud before writing
-4. Copy the seed template, replace tokens with the active palette
-5. Fill the planned layouts with real content from the brief
-6. Self-check: P0 gates must all pass
-7. 5-dim critique — fix any dimension below 3/5 before emitting
+The standard plan template (adapt the middle steps to the brief):
 
-After stating the plan, immediately begin executing it. Do not ask for permission to proceed.
+- 1. Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
+- 2. (if brand provided) Confirm brand-spec + bind to :root / (else) Bind active direction palette to :root
+- 3. Plan section/slide/screen list — state it aloud before writing
+- 4. Copy the seed template, replace tokens with the active palette
+- 5. Fill the planned layouts with real content from the brief
+- 6. Self-check: P0 gates must all pass
+- 7. 5-dim critique — fix any dimension below 3/5 before emitting
+
+After TodoWrite, immediately update — mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
 </planning>`;
 
 const FOLLOWUP_INTERACTIVITY = `<followup_interactivity>
