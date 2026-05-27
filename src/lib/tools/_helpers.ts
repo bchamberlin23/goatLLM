@@ -20,32 +20,38 @@ export function getWorkspace(): string {
 export function normalizePath(path: string): string {
   const ws = getWorkspace().replace(/\/+$/, "");
 
-  // Strip exact workspace prefix (with or without trailing slash)
-  if (path === ws) return "";
-  for (const prefix of [ws + "/", ws]) {
-    if (path.startsWith(prefix)) {
-      path = path.slice(prefix.length);
-      break;
-    }
-  }
-
-  // Strip workspace prefix without leading slashes
-  const wsNoSlash = ws.replace(/^\/+/, "");
-  if (path !== wsNoSlash) {
-    for (const prefix of [wsNoSlash + "/", wsNoSlash]) {
+  // Repeatedly strip workspace prefix (model may embed it multiple times)
+  let prev = "";
+  while (prev !== path) {
+    prev = path;
+    // Strip exact workspace prefix (with or without trailing slash)
+    if (path === ws) { path = ""; break; }
+    for (const prefix of [ws + "/", ws]) {
       if (path.startsWith(prefix)) {
         path = path.slice(prefix.length);
         break;
+      }
+    }
+    // Strip workspace prefix without leading slashes
+    const wsNoSlash = ws.replace(/^\/+/, "");
+    if (path !== wsNoSlash) {
+      for (const prefix of [wsNoSlash + "/", wsNoSlash]) {
+        if (path.startsWith(prefix)) {
+          path = path.slice(prefix.length);
+          break;
+        }
       }
     }
   }
 
   // Belt and suspenders — check if the path accidentally embeds
   // the workspace deeper in (model hallucinated a full nested path).
+  const wsNoSlash = ws.replace(/^\/+/, "");
   const needle = "/" + wsNoSlash + "/";
-  const idx = path.indexOf(needle);
-  if (idx >= 0) {
+  let idx = path.indexOf(needle);
+  while (idx >= 0) {
     path = path.slice(idx + needle.length);
+    idx = path.indexOf(needle);
   }
 
   path = path.replace(/^\/+/, "");

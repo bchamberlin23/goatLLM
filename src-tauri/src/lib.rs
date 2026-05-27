@@ -1234,25 +1234,44 @@ fn resolve_path(workspace: &str, relative: &str) -> Result<PathBuf, String> {
 
 /// Strip workspace prefix from a path if the model accidentally passed an absolute path.
 fn strip_workspace_prefix(path: &str, workspace: &str) -> String {
-    // Handle "/Users/bench/Desktop/project/src/file.ts"
-    let with_slash = format!("{}/", workspace);
-    if path.starts_with(&with_slash) {
-        return path[with_slash.len()..].to_string();
+    let mut result = path.to_string();
+
+    // Repeatedly strip workspace prefix (model may embed it multiple times)
+    let mut prev = String::new();
+    while prev != result {
+        prev = result.clone();
+        // Handle "/Users/bench/Desktop/project/src/file.ts"
+        let with_slash = format!("{}/", workspace);
+        if result.starts_with(&with_slash) {
+            result = result[with_slash.len()..].to_string();
+            continue;
+        }
+        if result.starts_with(workspace) && result.len() > workspace.len() {
+            result = result[workspace.len()..].trim_start_matches('/').to_string();
+            continue;
+        }
+        // Handle "Users/bench/Desktop/project/src/file.ts" (no leading slash)
+        let ws_no_slash = workspace.trim_start_matches('/');
+        let with_slash_no = format!("{}/", ws_no_slash);
+        if result.starts_with(&with_slash_no) {
+            result = result[with_slash_no.len()..].to_string();
+            continue;
+        }
+        if result.starts_with(ws_no_slash) && result.len() > ws_no_slash.len() {
+            result = result[ws_no_slash.len()..].trim_start_matches('/').to_string();
+            continue;
+        }
     }
-    if path.starts_with(workspace) && path.len() > workspace.len() {
-        return path[workspace.len()..].trim_start_matches('/').to_string();
-    }
-    // Handle "Users/bench/Desktop/project/src/file.ts" (no leading slash)
+
+    // Belt and suspenders — strip workspace if embedded deeper in the path
     let ws_no_slash = workspace.trim_start_matches('/');
-    let with_slash_no = format!("{}/", ws_no_slash);
-    if path.starts_with(&with_slash_no) {
-        return path[with_slash_no.len()..].to_string();
+    let needle = format!("/{}/", ws_no_slash);
+    while let Some(idx) = result.find(&needle) {
+        result = result[idx + needle.len()..].to_string();
     }
-    if path.starts_with(ws_no_slash) && path.len() > ws_no_slash.len() {
-        return path[ws_no_slash.len()..].trim_start_matches('/').to_string();
-    }
+
     // Remove leading slash for safety
-    path.trim_start_matches('/').to_string()
+    result.trim_start_matches('/').to_string()
 }
 
 /// Resolve a path for writing. Does NOT require the file to exist yet.
