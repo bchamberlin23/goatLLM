@@ -333,6 +333,17 @@ Edits should use edit_file for small targeted changes instead of re-writing enti
 CRITICAL — never work silently. Before your first tool call each turn, emit a brief status line so the user sees progress (e.g., "Planning the layout…", "Reading the design system…", "Writing the HTML…"). Do not go more than 2 tool rounds without emitting text — the user sees only "Thinking" until you speak.
 </tools>`;
 
+const STATUS_DIRECTIVE = `<status_updates>
+Never work silently. Before every tool call, emit a short status line so the user sees what you're doing. Examples:
+- "Reading the design system…" before read_file
+- "Planning the layout…" before any planning
+- "Writing the HTML…" before write_file
+- "Editing the hero section…" before edit_file
+- "Running the checklist…" before self-check
+
+Keep each status to one line, 3-8 words. End with an ellipsis. The user sees this as live progress — without it, they stare at "Thinking" with no idea what's happening.
+</status_updates>`;
+
 export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   const skill = getSkill(input.skillId);
   const system = getDesignSystem(input.systemId);
@@ -369,6 +380,7 @@ export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   }
 
   parts.push(SPECIALIST_PERSONAS);
+  parts.push(STATUS_DIRECTIVE);
 
   if (input.isFirstTurn) {
     parts.push(DISCOVERY_DIRECTIVES);

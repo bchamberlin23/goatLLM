@@ -355,11 +355,27 @@ export function extractArtifactBlocks(
   }
 
   // ── Pass 2: XML <artifact> tags (design-mode contract) ─────────────
+  // Some models emit <artifact> </artifact> with the actual content after
+  // the closing tag. We handle this by falling back to trailing text when
+  // the inner content is empty/whitespace.
   const xmlRe = /<artifact\b([^>]*)>([\s\S]*?)<\/artifact>/gi;
   while ((m = xmlRe.exec(content)) !== null) {
     const attrs = m[1] ?? "";
-    const code = (m[2] ?? "").trim();
-    if (code.length === 0) continue;
+    let code = (m[2] ?? "").trim();
+    const matchEnd = m.index + m[0].length;
+
+    // Fallback: if the artifact body is empty/whitespace, grab the text
+    // after </artifact> up to the next <artifact or end of string.
+    if (code.length === 0) {
+      const after = content.slice(matchEnd);
+      const nextArtifact = after.search(/<artifact\b/i);
+      const trailing = (nextArtifact >= 0 ? after.slice(0, nextArtifact) : after).trim();
+      if (trailing.length > 0) {
+        code = trailing;
+      } else {
+        continue;
+      }
+    }
 
     const kindMatch = attrs.match(/\bkind\s*=\s*"([^"]+)"/i);
     const kindRaw = (kindMatch ? kindMatch[1] : "html").toLowerCase();
