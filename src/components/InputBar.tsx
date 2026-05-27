@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect, KeyboardEvent, ClipboardEvent
 import type { ToolSet } from "ai";
 import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type ToolCallEntry } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
-import { ALL_TOOLS, DESIGN_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
+import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
 import { classifyCommand } from "../lib/command-safety";
 import { buildAgentSystemPrompt, buildChatSystemPrompt } from "../lib/system-prompt";
 import { buildDesignSystemPrompt } from "../lib/design/prompt";
@@ -616,7 +616,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       isAgentMode && currentWorkspace
         ? (isPlanMode ? PLAN_TOOLS : ALL_TOOLS)
         : isDesignMode && designWorkspace
-          ? DESIGN_TOOLS
+          ? ALL_TOOLS
           : isResearchMode
             ? RESEARCH_TOOLS
             : hasWebSearch
