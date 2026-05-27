@@ -152,18 +152,20 @@ function ArtifactContent({
     return () => { cancelled = true; };
   }, [artifact.id, artifact.kind, artifact.code, artifact.title]);
 
-  // Resolve external file references (CSS, JS, images) for HTML artifacts.
+  // Resolve external file references (CSS, JS, images) for HTML-like artifacts.
   // This inlines referenced files so the preview works without a web server.
+  const HTML_LIKE_KINDS = new Set(["html", "deck", "mini-app"]);
   useEffect(() => {
-    if (artifact.kind !== "html") return;
+    if (!HTML_LIKE_KINDS.has(artifact.kind)) return;
     let cancelled = false;
     setResolvingHtml(true);
     setResolvedHtml(null);
 
     // Build a pseudo-path for the artifact to resolve relative references
+    const ext = artifact.kind === "html" ? "html" : "html";
     const artifactPath = artifact.title
-      ? `${artifact.title.toLowerCase().replace(/[^\w.-]+/g, "-")}.html`
-      : "index.html";
+      ? `${artifact.title.toLowerCase().replace(/[^\w.-]+/g, "-")}.${ext}`
+      : `index.${ext}`;
 
     (async () => {
       try {

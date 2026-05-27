@@ -9,17 +9,6 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-interface ResolvedReference {
-  /** Original attribute value (href/src) */
-  original: string;
-  /** Resolved workspace-relative path */
-  resolvedPath: string;
-  /** File content or data URI */
-  content: string;
-  /** How to inline this resource */
-  type: "css" | "js" | "image";
-}
-
 /**
  * Extract file extension from a path or URL.
  */
