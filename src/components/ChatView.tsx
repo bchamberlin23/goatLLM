@@ -287,6 +287,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <TodoWidget />
                 <MessageList />
                 <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
+                  <ActiveSkillsBar />
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>
