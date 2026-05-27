@@ -16,11 +16,20 @@
  *   (T4) so future tool-result decorations (subagent transcripts, danger
  *   labels) don't leak into the serialized history.
  *
+ * Context compaction:
+ * - When tools are active and no explicit maxToolRounds cap is set, the
+ *   loop runs in batches (BATCH_SIZE steps per API call).
+ * - After each batch, actual token usage is checked against the model's
+ *   context window. If usage exceeds CONTEXT_PRESSURE_THRESHOLD (80%),
+ *   the oldest non-pinned messages are dropped and a summary is inserted.
+ * - This lets the agent run indefinitely without hitting context overflow.
+ *
  * streamChat is now a thin wrapper that calls agentLoop with depth=0 and
  * no parentSignal — preserving every existing import-site contract.
  */
-import { streamText, stepCountIs, type ToolSet } from "ai";
+import { streamText, stepCountIs, type ToolSet, type ModelMessage } from "ai";
 import { createModel } from "./model-factory";
+import { getContextWindow } from "./context-window";
 import type {
   LlmConfig,
   LlmMessage,
@@ -41,6 +50,17 @@ export interface AgentLoopOptions {
   tools?: ToolSet;
   maxToolRounds?: number;
 }
+
+// ── Context compaction constants ──
+
+/** Steps per API call when running the unbounded agent loop. */
+const BATCH_SIZE = 10;
+
+/** Trigger compaction when input tokens exceed this fraction of context window. */
+const CONTEXT_PRESSURE_THRESHOLD = 0.8;
+
+/** Target token budget after compaction — aim for 50% of context window. */
+const COMPACTION_TARGET = 0.5;
 
 /**
  * Combine an inner abort signal with an optional parent signal so abort
@@ -73,18 +93,12 @@ function combineSignals(
 /**
  * Map LlmMessage[] into the shape the AI SDK expects, dropping any
  * goatLLM-internal decorations that should not leak to the provider.
- *
- * Today the only decorations live on tool calls (dangerLevel, danger
- * reason, contentAtInvocation) — those never appear on the message
- * objects passed in, so the mapping here is a structural pass-through.
- * The hook is in place for PR2's subagentTranscript, which will live
- * alongside output but must NOT be serialized to the model.
  */
-export function mapMessagesForProvider(messages: LlmMessage[]): unknown[] {
+export function mapMessagesForProvider(messages: LlmMessage[]): ModelMessage[] {
   return messages.map((m) => {
     const role = m.role as "user" | "assistant" | "system";
     if (typeof m.content === "string") {
-      return { role, content: m.content };
+      return { role, content: m.content } as ModelMessage;
     }
     return {
       role,
@@ -94,8 +108,107 @@ export function mapMessagesForProvider(messages: LlmMessage[]): unknown[] {
           return { type: "file" as const, data: part.data, mediaType: part.mimeType };
         return { type: "image" as const, image: part.image, mimeType: part.mimeType };
       }),
-    };
+    } as ModelMessage;
   });
+}
+
+/**
+ * Estimate token count for a ModelMessage array. Rough: ~4 chars per token.
+ */
+function estimateMessageTokens(msgs: ModelMessage[]): number {
+  let tokens = 0;
+  for (const m of msgs) {
+    if (typeof m.content === "string") {
+      tokens += Math.ceil(m.content.length / 4);
+    } else if (Array.isArray(m.content)) {
+      for (const part of m.content) {
+        if ("text" in part && part.text) tokens += Math.ceil(part.text.length / 4);
+        if ("data" in part && part.data) tokens += Math.ceil(String(part.data).length / 4);
+        if ("image" in part && part.image) tokens += Math.ceil(String(part.image).length / 8);
+      }
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Build a readable summary of the AI SDK's ResponseMessage array.
+ * Used when dropping old messages during mid-loop compaction.
+ */
+function summarizeResponseMessages(msgs: ModelMessage[]): string {
+  const parts: string[] = ["[Earlier conversation summary]"];
+  for (const msg of msgs) {
+    if (msg.role === "user") {
+      const text = typeof msg.content === "string" ? msg.content : "";
+      parts.push(`User: ${text.slice(0, 200)}${text.length > 200 ? "…" : ""}`);
+    } else if (msg.role === "assistant") {
+      if (typeof msg.content === "string") {
+        parts.push(`Assistant: ${msg.content.slice(0, 150)}${msg.content.length > 150 ? "…" : ""}`);
+      } else if (Array.isArray(msg.content)) {
+        const texts = msg.content
+          .filter((p: any) => p.type === "text")
+          .map((p: any) => p.text)
+          .join(" ");
+        const toolCalls = msg.content.filter((p: any) => p.type === "tool-call");
+        if (texts) parts.push(`Assistant: ${texts.slice(0, 150)}${texts.length > 150 ? "…" : ""}`);
+        if (toolCalls.length > 0) {
+          const names = toolCalls.map((tc: any) => tc.toolName).join(", ");
+          parts.push(`  [Used tools: ${names}]`);
+        }
+      }
+    }
+    // Skip tool messages — they're transient
+  }
+  parts.push("[/Earlier conversation summary]");
+  return parts.join("\n");
+}
+
+/**
+ * Compact an array of ModelMessages by dropping older messages and
+ * inserting a summary. Preserves system messages and recent context.
+ *
+ * @param msgs - The full message array (system + user + assistant + tool)
+ * @param targetTokens - Desired token count after compaction
+ * @returns Compacted message array
+ */
+function compactModelMessages(msgs: ModelMessage[], targetTokens: number): ModelMessage[] {
+  const systemMsgs = msgs.filter((m) => m.role === "system");
+  const nonSystem = msgs.filter((m) => m.role !== "system");
+
+  if (nonSystem.length <= 2) return msgs; // Don't compact tiny conversations
+
+  // Keep the most recent messages, drop older ones
+  const kept: ModelMessage[] = [];
+  let keptTokens = estimateMessageTokens(systemMsgs);
+
+  // Always keep the last message (it's likely the user's latest request)
+  if (nonSystem.length > 0) {
+    const last = nonSystem[nonSystem.length - 1];
+    kept.unshift(last);
+    keptTokens += estimateMessageTokens([last]);
+  }
+
+  // Walk backwards, keeping messages until we hit our budget
+  for (let i = nonSystem.length - 2; i >= 0; i--) {
+    const msgTokens = estimateMessageTokens([nonSystem[i]]);
+    if (keptTokens + msgTokens <= targetTokens) {
+      kept.unshift(nonSystem[i]);
+      keptTokens += msgTokens;
+    } else {
+      break;
+    }
+  }
+
+  const dropped = nonSystem.slice(0, nonSystem.length - kept.length);
+  if (dropped.length === 0) return msgs; // Nothing to drop
+
+  const summary = summarizeResponseMessages(dropped);
+  const summaryMsg: ModelMessage = {
+    role: "system",
+    content: summary,
+  } as ModelMessage;
+
+  return [...systemMsgs, summaryMsg, ...kept];
 }
 
 /**
@@ -158,79 +271,208 @@ export async function agentLoop(
       };
     }
 
-    const result = streamText({
-      model,
-      system: systemPrompt ?? undefined,
-      messages: mapMessagesForProvider(messages) as any,
-      ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
-      // Only cap tool rounds when explicitly requested (e.g. research/design modes).
-      // Default is unlimited — the agent loops until it finishes or context overflows.
-      ...(options?.maxToolRounds != null
-        ? { stopWhen: stepCountIs(options.maxToolRounds) }
-        : effectiveTools
-          ? {}
-          : { stopWhen: stepCountIs(1) }),
-      abortSignal: effectiveSignal,
-      ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-      ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
-    });
+    // ── Determine if we need the batched + compaction loop ──
+    // When tools are active and no explicit maxToolRounds is set, we run
+    // in batches and check context pressure between each batch.
+    const hasExplicitCap = options?.maxToolRounds != null;
+    const needsCompactionLoop = effectiveTools && !hasExplicitCap;
 
-    let fullText = "";
-    for await (const chunk of result.fullStream) {
-      switch (chunk.type) {
-        case "text-delta":
-          fullText += chunk.text;
-          callbacks.onToken(chunk.text);
-          break;
+    if (needsCompactionLoop) {
+      // ── Batched loop with mid-loop compaction ──
+      // Run in batches of BATCH_SIZE steps. After each batch, check token
+      // usage and compact if approaching the context window limit.
+      let workingMessages = mapMessagesForProvider(messages);
+      let totalSteps = 0;
+      const contextWindow = getContextWindow(config.provider, config.modelId);
+      const pressureLimit = contextWindow > 0
+        ? Math.floor(contextWindow * CONTEXT_PRESSURE_THRESHOLD)
+        : Infinity;
+      const compactionTarget = contextWindow > 0
+        ? Math.floor(contextWindow * COMPACTION_TARGET)
+        : 0;
+      let fullText = "";
 
-        case "reasoning-delta":
-          callbacks.onThinking?.((chunk as Record<string, unknown>).text as string ?? "");
-          break;
-
-        case "tool-call":
-          callbacks.onToolCall?.({
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: (chunk as Record<string, unknown>).input,
-          } satisfies ToolCallInfo);
-          break;
-
-        case "tool-result":
-          callbacks.onToolResult?.({
-            toolCallId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            input: (chunk as Record<string, unknown>).input,
-            output: (chunk as Record<string, unknown>).output,
-          } satisfies ToolResultInfo);
-          break;
-
-        case "tool-error":
-          // A failing tool is recoverable — the model can react to it on the
-          // next step. Don't escalate to onError (which trashes the message
-          // and shows a toast). Just notify so the UI can mark the pill as
-          // errored, and let the stream continue.
-          callbacks.onToolError?.({
-            toolCallId: (chunk as Record<string, unknown>).toolCallId as string,
-            toolName: chunk.toolName,
-            error: (chunk as Record<string, unknown>).error,
-          } satisfies ToolErrorInfo);
-          break;
-
-        case "error":
-          callbacks.onError((chunk as Record<string, unknown>).error as Error);
-          return;
-
-        case "abort":
+      while (true) {
+        if (effectiveSignal?.aborted) {
           callbacks.onDone(fullText);
           return;
+        }
 
-        case "finish":
-          // stream complete
-          break;
+        const result = streamText({
+          model,
+          system: systemPrompt ?? undefined,
+          messages: workingMessages as any,
+          tools: effectiveTools,
+          toolChoice: "auto" as const,
+          stopWhen: stepCountIs(BATCH_SIZE),
+          abortSignal: effectiveSignal,
+          ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
+          ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+        });
+
+        let batchText = "";
+        let finished = false;
+
+        for await (const chunk of result.fullStream) {
+          switch (chunk.type) {
+            case "text-delta":
+              batchText += chunk.text;
+              fullText += chunk.text;
+              callbacks.onToken(chunk.text);
+              break;
+
+            case "reasoning-delta":
+              callbacks.onThinking?.((chunk as Record<string, unknown>).text as string ?? "");
+              break;
+
+            case "tool-call":
+              callbacks.onToolCall?.({
+                toolCallId: chunk.toolCallId,
+                toolName: chunk.toolName,
+                input: (chunk as Record<string, unknown>).input,
+              } satisfies ToolCallInfo);
+              break;
+
+            case "tool-result":
+              callbacks.onToolResult?.({
+                toolCallId: chunk.toolCallId,
+                toolName: chunk.toolName,
+                input: (chunk as Record<string, unknown>).input,
+                output: (chunk as Record<string, unknown>).output,
+              } satisfies ToolResultInfo);
+              break;
+
+            case "tool-error":
+              callbacks.onToolError?.({
+                toolCallId: (chunk as Record<string, unknown>).toolCallId as string,
+                toolName: chunk.toolName,
+                error: (chunk as Record<string, unknown>).error,
+              } satisfies ToolErrorInfo);
+              break;
+
+            case "error":
+              callbacks.onError((chunk as Record<string, unknown>).error as Error);
+              return;
+
+            case "abort":
+              callbacks.onDone(fullText);
+              return;
+
+            case "finish":
+              finished = true;
+              break;
+          }
+        }
+
+        // Accumulate the response messages for the next batch.
+        // result.response.messages contains assistant + tool messages in
+        // the AI SDK's native format — exactly what streamText expects.
+        const responseMessages = await result.response.then(r => r.messages);
+        workingMessages = [...workingMessages, ...responseMessages];
+
+        // Count steps from this batch.
+        const stepResults = await result.steps;
+        totalSteps += stepResults.length;
+
+        // Check if the model is done (no tool calls in the last step).
+        const lastStep = stepResults[stepResults.length - 1];
+        const modelIsDone = !lastStep?.toolCalls?.length;
+
+        if (modelIsDone || finished) {
+          callbacks.onDone(fullText);
+          return;
+        }
+
+        // ── Context pressure check ──
+        // Use actual token usage from the provider if available.
+        const usage = await result.usage;
+        const inputTokens = usage?.inputTokens ?? estimateMessageTokens(workingMessages);
+
+        if (contextWindow > 0 && inputTokens > pressureLimit) {
+          // We're at 80%+ of the context window. Compact.
+          const before = workingMessages.length;
+          workingMessages = compactModelMessages(workingMessages, compactionTarget);
+          const dropped = before - workingMessages.length;
+          if (dropped > 0) {
+            console.log(
+              `[agentLoop] Context compaction: ${before} → ${workingMessages.length} messages ` +
+              `(~${inputTokens} tokens → target ${compactionTarget})`
+            );
+          }
+        }
       }
-    }
+    } else {
+      // ── Simple single-call path ──
+      // Used when maxToolRounds is explicitly set (research/design modes)
+      // or when there are no tools (chat mode).
+      const result = streamText({
+        model,
+        system: systemPrompt ?? undefined,
+        messages: mapMessagesForProvider(messages) as any,
+        ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
+        ...(hasExplicitCap
+          ? { stopWhen: stepCountIs(options!.maxToolRounds!) }
+          : effectiveTools
+            ? {}
+            : { stopWhen: stepCountIs(1) }),
+        abortSignal: effectiveSignal,
+        ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
+        ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+      });
 
-    callbacks.onDone(fullText);
+      let fullText = "";
+      for await (const chunk of result.fullStream) {
+        switch (chunk.type) {
+          case "text-delta":
+            fullText += chunk.text;
+            callbacks.onToken(chunk.text);
+            break;
+
+          case "reasoning-delta":
+            callbacks.onThinking?.((chunk as Record<string, unknown>).text as string ?? "");
+            break;
+
+          case "tool-call":
+            callbacks.onToolCall?.({
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              input: (chunk as Record<string, unknown>).input,
+            } satisfies ToolCallInfo);
+            break;
+
+          case "tool-result":
+            callbacks.onToolResult?.({
+              toolCallId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              input: (chunk as Record<string, unknown>).input,
+              output: (chunk as Record<string, unknown>).output,
+            } satisfies ToolResultInfo);
+            break;
+
+          case "tool-error":
+            callbacks.onToolError?.({
+              toolCallId: (chunk as Record<string, unknown>).toolCallId as string,
+              toolName: chunk.toolName,
+              error: (chunk as Record<string, unknown>).error,
+            } satisfies ToolErrorInfo);
+            break;
+
+          case "error":
+            callbacks.onError((chunk as Record<string, unknown>).error as Error);
+            return;
+
+          case "abort":
+            callbacks.onDone(fullText);
+            return;
+
+          case "finish":
+            // stream complete
+            break;
+        }
+      }
+
+      callbacks.onDone(fullText);
+    }
   } catch (error) {
     // Treat any throw as a clean stop when the caller (or parent) aborted us.
     if (

@@ -686,6 +686,192 @@ function HistoryMenu({
   );
 }
 
+// ── Workspace file preview renderer ──
+
+function renderWorkspacePreview(
+  wsFile: { path: string; name: string; content: string },
+  resolvedContent: string | null,
+) {
+  const content = resolvedContent ?? wsFile.content;
+  const ext = wsFile.name.split(".").pop()?.toLowerCase() || "";
+
+  if (["html", "htm"].includes(ext)) {
+    // HTML - render with scripts enabled
+    return (
+      <iframe
+        key={`${wsFile.path}-${content.length}`}
+        className="flex-1 w-full border-none bg-white"
+        srcDoc={`<base target="_blank">\n${content}`}
+        sandbox="allow-scripts allow-same-origin allow-popups"
+        title={wsFile.name}
+      />
+    );
+  }
+
+  if (ext === "svg") {
+    // SVG - render in a wrapper HTML
+    const svgHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+    svg { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>${content}</body>
+</html>`;
+    return (
+      <iframe
+        key={`${wsFile.path}-${content.length}`}
+        className="flex-1 w-full border-none bg-white"
+        srcDoc={svgHtml}
+        sandbox=""
+        title={wsFile.name}
+      />
+    );
+  }
+
+  if (["md", "markdown"].includes(ext)) {
+    // Markdown - render as HTML
+    const markdownHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 32px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    code { background: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
+    pre { background: #f6f8fa; padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; border-radius: 3px; }
+    pre code { background: transparent; padding: 0; }
+    blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
+    table { border-spacing: 0; border-collapse: collapse; margin-top: 0; margin-bottom: 16px; }
+    table th, table td { padding: 6px 13px; border: 1px solid #dfe2e5; }
+    table th { font-weight: 600; background: #f6f8fa; }
+    img { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    const md = ${JSON.stringify(content)};
+    document.getElementById('content').innerHTML = marked.parse(md);
+  </script>
+</body>
+</html>`;
+    return (
+      <iframe
+        key={`${wsFile.path}-${content.length}`}
+        className="flex-1 w-full border-none bg-white"
+        srcDoc={markdownHtml}
+        sandbox=""
+        title={wsFile.name}
+      />
+    );
+  }
+
+  if (ext === "css") {
+    // CSS - show a preview by applying styles to sample HTML
+    const cssPreviewHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: #f5f5f5;
+    }
+    .preview-section {
+      background: white;
+      padding: 20px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .preview-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      margin-bottom: 12px;
+    }
+  </style>
+  <style id="user-css">${content}</style>
+</head>
+<body>
+  <div class="preview-section">
+    <div class="preview-label">Typography</div>
+    <h1>Heading 1</h1>
+    <h2>Heading 2</h2>
+    <h3>Heading 3</h3>
+    <p>Paragraph text with <strong>bold</strong> and <em>italic</em> styles. <a href="#">Link example</a></p>
+  </div>
+  <div class="preview-section">
+    <div class="preview-label">Lists</div>
+    <ul>
+      <li>Unordered list item</li>
+      <li>Another item</li>
+    </ul>
+    <ol>
+      <li>Ordered list item</li>
+      <li>Another item</li>
+    </ol>
+  </div>
+  <div class="preview-section">
+    <div class="preview-label">Buttons & Forms</div>
+    <button>Button</button>
+    <input type="text" placeholder="Input field">
+    <select><option>Select</option></select>
+  </div>
+  <div class="preview-section">
+    <div class="preview-label">Table</div>
+    <table>
+      <thead><tr><th>Header 1</th><th>Header 2</th></tr></thead>
+      <tbody><tr><td>Cell 1</td><td>Cell 2</td></tr></tbody>
+    </table>
+  </div>
+  <div class="preview-section">
+    <div class="preview-label">Custom Elements</div>
+    <div class="card">Card example</div>
+    <div class="container">Container example</div>
+    <div class="box">Box example</div>
+  </div>
+</body>
+</html>`;
+    return (
+      <iframe
+        key={`${wsFile.path}-${content.length}`}
+        className="flex-1 w-full border-none"
+        srcDoc={cssPreviewHtml}
+        sandbox=""
+        title={wsFile.name}
+      />
+    );
+  }
+
+  // Fallback - should not reach here
+  return (
+    <div className="flex-1 min-h-0 overflow-auto bg-[#161618]">
+      <pre className="p-4 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words font-mono">
+        {content}
+      </pre>
+    </div>
+  );
+}
+
 // ── Full panel ──
 
 export function ArtifactPanel() {
@@ -742,16 +928,20 @@ export function ArtifactPanel() {
     if (completedToolCount > 0) setFileRefreshKey((k) => k + 1);
   }, [completedToolCount]);
 
-  // Resolve external references for workspace HTML files
+  // Resolve external references for workspace files
   const [resolvedWsHtml, setResolvedWsHtml] = useState<string | null>(null);
   const [resolvingWsFile, setResolvingWsFile] = useState(false);
   const [wsFileView, setWsFileView] = useState<"preview" | "code">("preview");
 
-  // Check if workspace file is HTML-like and can be previewed
+  // Check if workspace file can be previewed (HTML, SVG, Markdown, CSS)
+  const wsFileIsPreviewable = wsFile && /\.(html?|htm|svg|md|markdown|css)$/i.test(wsFile.name);
   const wsFileIsHtml = wsFile && /\.(html?|htm)$/i.test(wsFile.name);
+  const wsFileIsSvg = wsFile && /\.svg$/i.test(wsFile.name);
+  const wsFileIsMd = wsFile && /\.(md|markdown)$/i.test(wsFile.name);
+  const wsFileIsCss = wsFile && /\.css$/i.test(wsFile.name);
 
   useEffect(() => {
-    if (!wsFile || !wsFileIsHtml) {
+    if (!wsFile || !wsFileIsPreviewable) {
       setResolvedWsHtml(null);
       return;
     }
@@ -1137,8 +1327,8 @@ export function ArtifactPanel() {
                 <span className="text-[13px] font-medium text-[#ececec] truncate">{wsFile.name}</span>
                 <span className="text-[10px] text-[#666] truncate">{wsFile.path}</span>
                 <div className="flex-1" />
-                {/* View toggle for HTML files */}
-                {wsFileIsHtml && (
+                {/* View toggle for previewable files */}
+                {wsFileIsPreviewable && (
                   <ViewToggle
                     view={wsFileView}
                     onChange={setWsFileView}
@@ -1152,8 +1342,9 @@ export function ArtifactPanel() {
                   <X size={13} strokeWidth={1.75} />
                 </button>
               </div>
-              {/* HTML preview or code view */}
-              {wsFileIsHtml && wsFileView === "preview" ? (
+
+              {/* Render based on file type and view mode */}
+              {wsFileIsPreviewable && wsFileView === "preview" ? (
                 resolvingWsFile ? (
                   <div className="flex-1 relative">
                     <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
@@ -1162,21 +1353,10 @@ export function ArtifactPanel() {
                         <span className="text-[11px]">Resolving references…</span>
                       </div>
                     </div>
-                    <iframe
-                      className="flex-1 w-full border-none bg-white"
-                      srcDoc={`<base target="_blank">\n${wsFile.content}`}
-                      sandbox="allow-scripts allow-same-origin allow-popups"
-                      title={wsFile.name}
-                    />
+                    {renderWorkspacePreview(wsFile, resolvedWsHtml)}
                   </div>
                 ) : (
-                  <iframe
-                    key={`${wsFile.path}-${wsFile.content.length}`}
-                    className="flex-1 w-full border-none bg-white"
-                    srcDoc={`<base target="_blank">\n${resolvedWsHtml ?? wsFile.content}`}
-                    sandbox="allow-scripts allow-same-origin allow-popups"
-                    title={wsFile.name}
-                  />
+                  renderWorkspacePreview(wsFile, resolvedWsHtml)
                 )
               ) : (
                 <div className="flex-1 min-h-0 overflow-auto bg-[#161618]">
