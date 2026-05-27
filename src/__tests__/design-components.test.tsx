@@ -60,14 +60,12 @@ describe("DesignHero", () => {
 });
 
 describe("DesignPills", () => {
-  it("renders all three pills", () => {
+  it("renders both pills", () => {
     render(<DesignPills />);
 
-    // SurfacePill, DesignSystemPill, and DirectionPill are rendered
-    // inside DesignPills. Buttons use truncated display text.
+    // SurfacePill and VisualStylePill are the two pills.
     expect(screen.getByText("Pick a surface")).toBeInTheDocument();
-    expect(screen.getByText("Design system")).toBeInTheDocument();
-    expect(screen.getByText("Direction")).toBeInTheDocument();
+    expect(screen.getByText("Visual style")).toBeInTheDocument();
   });
 });
 
