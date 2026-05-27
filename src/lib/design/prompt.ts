@@ -148,27 +148,23 @@ Skip directly to RULE 3. Do **not** emit any second direction-picking form. If a
 
 ---
 
-## RULE 3 — Create a task plan with todo_create, then live updates
+## RULE 3 — Get to work
 
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task — the schema is unbounded and complex briefs legitimately need more than ten steps.
+Once the design-system / inferred direction / brand-spec is locked, start building immediately. State your plan in one short paragraph (what you'll build, in what order), then begin writing code.
 
-The standard plan template (adapt the middle steps to the brief):
+The standard workflow (adapt to the brief — skip steps where the asset doesn't exist):
 
-\`\`\`
-- 1.  Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
-- 2.  (if branch A) Confirm brand-spec.md + bind to :root
-       (if active DESIGN.md exists) Bind active design-system tokens/rules to :root
-       (else) Pick a direction matching the tone yourself, bind to :root
-- 3.  Plan section/slide/screen list with platform variants and rhythm (state list aloud before writing)
-- 4.  Copy the seed template to project root
-- 5.  Paste & fill the planned layouts/screens/slides
-- 6.  Replace [REPLACE] placeholders with real, specific copy from the brief
-- 7.  Self-check: run references/checklist.md (P0 must all pass)
-- 8.  Critique: 5-dim radar (philosophy / hierarchy / execution / specificity / restraint), fix any < 3/5
-- 9.  Emit single <artifact> if a new canonical HTML file was written this turn; otherwise summarize the edits
-\`\`\`
-
-After creating the tasks, immediately update them with \`todo_update\` — **mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`**, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
+1. Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
+2. (if branch A) Confirm brand-spec.md + bind to :root
+   (if active DESIGN.md exists) Bind active design-system tokens/rules to :root
+   (else) Pick a direction matching the tone yourself, bind to :root
+3. Plan section/slide/screen list with platform variants and rhythm — state it aloud before writing
+4. Copy the seed template to project root
+5. Paste & fill the planned layouts/screens/slides
+6. Replace [REPLACE] placeholders with real, specific copy from the brief
+7. Self-check: run references/checklist.md (P0 must all pass)
+8. Critique: 5-dim radar (philosophy / hierarchy / execution / specificity / restraint), fix any < 3/5
+9. Emit single <artifact> if a new canonical HTML file was written this turn; otherwise summarize the edits
 
 Step 7 (checklist) and step 8 (critique) are non-negotiable.
 
@@ -252,22 +248,6 @@ Each accepts \`?screen=<path>\` and embeds that path inside the device chrome.
   - Else → plan directly; if a design system is active and no new brand/reference source was provided, use it as the visual direction without asking again.
 - **Turn 3+** — work the plan; show the user something visible early; iterate; **run checklist + 5-dim critique** before emitting; emit a single \`<artifact>\` **only if a new canonical HTML file was written this turn** (skip on edits-only).
 </discovery>`;
-
-const PLANNING_DIRECTIVE = `<planning>
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task.
-
-The standard plan template (adapt to the brief — skip steps where the asset doesn't exist):
-
-- 1. (if skill active) Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
-- 2. Bind active design system/direction palette to :root
-- 3. Plan section/slide/screen list — state it aloud before writing
-- 4. Write seed/base HTML scaffold
-- 5. Fill the planned layouts with real content from the brief
-- 6. Self-check: P0 gates must all pass
-- 7. 5-dim critique — fix any dimension below 3/5 before emitting
-
-After creating the tasks, immediately update them with \`todo_update\` — mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
-</planning>`;
 
 const FOLLOWUP_INTERACTIVITY = `<followup_interactivity>
 After every artifact, end your turn with 2-3 concrete next-step options the user can pick from. These should be specific to what you just built, not generic. Examples:
@@ -373,7 +353,6 @@ export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   if (input.isFirstTurn) {
     parts.push(DISCOVERY_DIRECTIVES);
   }
-  parts.push(PLANNING_DIRECTIVE);
   if (input.hasWorkspace) {
     parts.push(DESIGN_TOOLS_DIRECTIVE);
   }

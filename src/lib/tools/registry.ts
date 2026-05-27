@@ -20,6 +20,14 @@ import type { ToolSet } from "ai";
 
 export { READ_ONLY_TOOLS, WRITE_TOOLS };
 
+// Design-mode tool set: full workspace tools minus todo/task planning.
+// Design mode uses a different workflow (skill → form → artifact) that
+// doesn't benefit from a todo board.
+export const DESIGN_TOOLS = {
+  ...READ_ONLY_TOOLS,
+  ...WRITE_TOOLS,
+};
+
 /**
  * Render a ToolSet into the bullet list the system prompt embeds.
  *
