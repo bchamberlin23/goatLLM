@@ -2078,13 +2078,15 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       toggleAgentMode: () => {
-        set((state) => ({ agentMode: !state.agentMode }));
+        const next = !get().agentMode;
+        set({ agentMode: next });
+        try { localStorage.setItem("goatllm-agent-mode", String(next)); } catch {}
         // Same guarantee as setAgentMode.
-        if (!get().agentMode && get().planMode) {
+        if (!next && get().planMode) {
           set({ planMode: false });
           try { localStorage.setItem("goatllm-plan-mode", "false"); } catch {}
         }
-        if (get().agentMode && get().designMode) {
+        if (next && get().designMode) {
           set({ designMode: false });
           try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
         }
