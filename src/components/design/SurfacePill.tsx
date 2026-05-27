@@ -111,6 +111,8 @@ const SCENARIO_ORDER: SkillScenario[] = [
   "engineering",
   "finance",
   "hr",
+  "sales",
+  "education",
   "personal",
 ];
 
@@ -122,6 +124,8 @@ const SCENARIO_META: Record<SkillScenario, { label: string }> = {
   engineering: { label: "Engineering" },
   finance: { label: "Finance" },
   hr: { label: "HR" },
+  sales: { label: "Sales" },
+  education: { label: "Education" },
   personal: { label: "Personal" },
 };
 

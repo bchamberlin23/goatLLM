@@ -15,6 +15,8 @@ import {
   Users,
   User,
   Sparkles,
+  Tag,
+  GraduationCap,
 } from "lucide-react";
 
 /**
@@ -38,6 +40,8 @@ export function DesignHero() {
     "engineering",
     "finance",
     "hr",
+    "sales",
+    "education",
     "personal",
   ];
 
@@ -49,6 +53,8 @@ export function DesignHero() {
     engineering: { label: "Engineering", Icon: Code },
     finance: { label: "Finance", Icon: Wallet },
     hr: { label: "HR", Icon: Users },
+    sales: { label: "Sales", Icon: Tag },
+    education: { label: "Education", Icon: GraduationCap },
     personal: { label: "Personal", Icon: User },
   };
 
@@ -161,6 +167,51 @@ function SkillCard({
 function SkillPreviewSketch({ skill }: { skill: Skill }) {
   const stroke = "rgba(255,255,255,0.16)";
   const fill = "rgba(255,255,255,0.04)";
+
+  if (skill.mode === "image") {
+    return (
+      <svg width="100%" height="100%" viewBox="0 0 160 100" preserveAspectRatio="none" aria-hidden>
+        <rect x="10" y="10" width="100" height="80" rx="4" fill={fill} stroke={stroke} />
+        <circle cx="130" cy="50" r="12" fill="none" stroke={stroke} strokeWidth="1.5" />
+        <path d="M122 40l8 10h-16l4-6 4 4z" fill={stroke} />
+        <rect x="10" y="10" width="100" height="16" rx="4" fill="rgba(255,255,255,0.08)" />
+      </svg>
+    );
+  }
+
+  if (skill.mode === "video") {
+    return (
+      <svg width="100%" height="100%" viewBox="0 0 160 100" preserveAspectRatio="none" aria-hidden>
+        <rect x="20" y="16" width="120" height="68" rx="4" fill={fill} stroke={stroke} />
+        <polygon points="78,38 78,62 98,50" fill={stroke} />
+        <rect x="20" y="84" width="120" height="4" rx="1" fill="rgba(255,255,255,0.12)" />
+      </svg>
+    );
+  }
+
+  if (skill.mode === "audio") {
+    return (
+      <svg width="100%" height="100%" viewBox="0 0 160 100" preserveAspectRatio="none" aria-hidden>
+        <circle cx="80" cy="50" r="30" fill={fill} stroke={stroke} />
+        <path d="M68 38v24M74 32v36M80 28v44M86 32v36M92 38v24" fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (skill.mode === "design-system") {
+    return (
+      <svg width="100%" height="100%" viewBox="0 0 160 100" preserveAspectRatio="none" aria-hidden>
+        {[10, 56, 102].map((x) => (
+          <g key={x}>
+            <rect x={x} y="30" width="40" height="40" rx="4" fill={fill} stroke={stroke} />
+            <rect x={x + 4} y="24" width="32" height="3" fill={stroke} />
+          </g>
+        ))}
+        <rect x="6" y="76" width="60" height="8" rx="2" fill={fill} stroke={stroke} />
+        <rect x="72" y="76" width="60" height="8" rx="2" fill={fill} stroke={stroke} />
+      </svg>
+    );
+  }
 
   if (skill.preview.kind === "deck") {
     return (

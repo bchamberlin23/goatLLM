@@ -783,6 +783,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             isFirstTurn: turns <= 1,
             userPrompt,
             hasWorkspace: !!designWorkspace,
+            craftSections: ["typography", "color", "anti-ai-slop"],
           });
         })()
       : isAgentMode

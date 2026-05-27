@@ -15,8 +15,8 @@ describe("design catalog", () => {
       for (const s of skills) {
         expect(s.id).toMatch(/^[a-z][a-z0-9-]*$/);
         expect(s.name).toBeTruthy();
-        expect(s.scenario).toMatch(/^(design|marketing|operation|engineering|product|finance|hr|personal)$/);
-        expect(s.mode).toMatch(/^(prototype|deck|document)$/);
+        expect(s.scenario).toMatch(/^(design|marketing|operation|engineering|product|finance|hr|personal|sales|education)$/);
+        expect(s.mode).toMatch(/^(prototype|deck|document|image|video|audio|template|design-system)$/);
         expect(s.preview.kind).toMatch(/^(single-page|multi-frame|deck)$/);
         expect(s.description.length).toBeGreaterThan(10);
         expect(s.template).toContain("<!doctype html>");

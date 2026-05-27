@@ -18,9 +18,11 @@ export type SkillScenario =
   | "product"
   | "finance"
   | "hr"
-  | "personal";
+  | "personal"
+  | "sales"
+  | "education";
 
-export type SkillMode = "prototype" | "deck" | "document";
+export type SkillMode = "prototype" | "deck" | "document" | "image" | "video" | "audio" | "template" | "design-system";
 
 export interface Skill {
   id: string;
@@ -770,6 +772,154 @@ export const SKILLS: Skill[] = [
     ),
     references: PROTOTYPE_REFS,
   },
+  {
+    id: "image-poster",
+    name: "Image poster",
+    scenario: "marketing",
+    mode: "image",
+    preview: { kind: "single-page", aspect: "2/3" },
+    description: "Generate a poster, illustration, or infographic via image generation.",
+    template: HTML_BASE(
+      "Image",
+      `<div style="max-width:800px;margin:0 auto;padding:48px 24px;text-align:center;">
+        <h1 style="font-size:48px;font-weight:700;margin:0 0 16px;">Poster Title</h1>
+        <p style="color:var(--mute);font-size:18px;max-width:500px;margin:0 auto 32px;">Subtitle or tagline describing the visual.</p>
+        <div style="width:100%;aspect-ratio:3/4;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <p style="color:var(--mute);">Image generation area</p>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "video-shortform",
+    name: "Short-form video",
+    scenario: "marketing",
+    mode: "video",
+    preview: { kind: "single-page", aspect: "9/16" },
+    description: "Generate a short-form video or motion graphic for social media.",
+    template: HTML_BASE(
+      "Video",
+      `<div style="max-width:400px;margin:0 auto;padding:24px;text-align:center;">
+        <div style="width:100%;aspect-ratio:9/16;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <p style="color:var(--mute);">Video generation area</p>
+        </div>
+        <h2 style="font-size:20px;font-weight:600;margin:16px 0 8px;">Video Title</h2>
+        <p style="color:var(--mute);font-size:13px;">0:30 · 1080×1920</p>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "audio-jingle",
+    name: "Audio / jingle",
+    scenario: "marketing",
+    mode: "audio",
+    preview: { kind: "single-page", aspect: "16/9" },
+    description: "Generate audio — jingles, voiceovers, soundtracks, or TTS.",
+    template: HTML_BASE(
+      "Audio",
+      `<div style="max-width:600px;margin:0 auto;padding:48px 24px;text-align:center;">
+        <div style="width:100%;padding:48px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;">
+          <h1 style="font-size:28px;font-weight:600;margin:0 0 8px;">Audio Title</h1>
+          <p style="color:var(--mute);font-size:14px;margin:0 0 24px;">0:45 · Voice / Instrumental</p>
+          <div style="height:4px;background:var(--hairline);border-radius:2px;overflow:hidden;max-width:300px;margin:0 auto;">
+            <div style="height:100%;width:30%;background:var(--accent);border-radius:2px;"></div>
+          </div>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "design-system-generator",
+    name: "Design system generator",
+    scenario: "design",
+    mode: "design-system",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Generate a DESIGN.md from brand brief, screenshot, or URL.",
+    template: HTML_BASE(
+      "Design System",
+      `<div style="max-width:960px;margin:0 auto;padding:48px 24px;">
+        <h1 style="font-size:32px;font-weight:600;margin:0 0 8px;"># Design System</h1>
+        <p style="color:var(--mute);margin:0 0 32px;">Generated from brand input</p>
+        <section style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:32px;">
+          <div style="height:48px;border-radius:8px;background:var(--bg);border:1px solid var(--hairline);"></div>
+          <div style="height:48px;border-radius:8px;background:var(--surface);border:1px solid var(--hairline);"></div>
+          <div style="height:48px;border-radius:8px;background:var(--accent);"></div>
+          <div style="height:48px;border-radius:8px;background:var(--mute);"></div>
+          <div style="height:48px;border-radius:8px;background:var(--fg);"></div>
+        </section>
+        <div style="margin-bottom:24px;"><h3 style="font-size:18px;font-weight:600;margin:0 0 12px;">Typography</h3><p style="font-size:32px;font-weight:700;margin:0;">Display · Body</p><p style="font-size:16px;margin:4px 0 0;">Body text sample</p></div>
+        <div style="margin-bottom:24px;"><h3 style="font-size:18px;font-weight:600;margin:0 0 12px;">Components</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"><div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;text-align:center;font-size:13px;">Button</div><div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;text-align:center;font-size:13px;">Input</div><div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;text-align:center;font-size:13px;">Card</div></div></div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "sales-proposal",
+    name: "Sales proposal",
+    scenario: "sales",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Client proposal with pricing, timeline, and case studies.",
+    template: HTML_BASE(
+      "Proposal",
+      `<article style="max-width:800px;margin:0 auto;padding:64px 24px;">
+        <header style="margin-bottom:48px;">
+          <p style="color:var(--mute);text-transform:uppercase;font-size:11px;letter-spacing:0.12em;margin:0;">Proposal · Client name</p>
+          <h1 style="font-size:36px;font-weight:600;margin:8px 0 0;">Project proposal</h1>
+        </header>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Scope</h2>
+          <p style="line-height:1.7;margin:0;">Define the project scope and deliverables.</p>
+        </section>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Pricing</h2>
+          <div style="padding:24px;background:var(--surface);border-radius:12px;">
+            <p style="font-size:32px;font-weight:600;margin:0;">$X,XXX</p>
+            <p style="color:var(--mute);font-size:13px;margin:4px 0 0;">One-time · Net 30</p>
+          </div>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "course-outline",
+    name: "Course outline",
+    scenario: "education",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Course syllabus with modules, objectives, and schedule.",
+    template: HTML_BASE(
+      "Course",
+      `<article style="max-width:800px;margin:0 auto;padding:64px 24px;">
+        <header style="margin-bottom:48px;">
+          <h1 style="font-size:36px;font-weight:600;margin:0;">Course title</h1>
+          <p style="color:var(--mute);margin:8px 0 0;">Instructor · Term · Level</p>
+        </header>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Overview</h2>
+          <p style="line-height:1.7;margin:0;">Course description and learning objectives.</p>
+        </section>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Modules</h2>
+          <div style="display:grid;gap:16px;">
+            <div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;">
+              <p style="font-weight:600;margin:0;">Week 1: Introduction</p>
+              <p style="color:var(--mute);font-size:13px;margin:4px 0 0;">Topics covered this week.</p>
+            </div>
+            <div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;">
+              <p style="font-weight:600;margin:0;">Week 2: Core concepts</p>
+              <p style="color:var(--mute);font-size:13px;margin:4px 0 0;">Topics covered this week.</p>
+            </div>
+          </div>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
 ];
 
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s] as const));
@@ -792,6 +942,8 @@ export function listSkillsByScenario(): Record<SkillScenario, Skill[]> {
     product: [],
     finance: [],
     hr: [],
+    sales: [],
+    education: [],
     personal: [],
   };
   for (const s of SKILLS) out[s.scenario].push(s);

@@ -21,11 +21,12 @@ import { SurfacePill } from "./SurfacePill";
  */
 
 export function DesignPills() {
+  const activeSystemId = useChatStore((s) => s.activeDesignSystemId);
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       <SurfacePill />
       <DesignSystemPill />
-      <DirectionPill />
+      {!activeSystemId && <DirectionPill />}
     </div>
   );
 }

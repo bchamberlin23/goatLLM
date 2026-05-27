@@ -374,9 +374,9 @@ function UserMessageContent({ message }: { message: Message }) {
   const cleaned = useMemo(() => stripAttachmentMarkers(message.content), [message.content]);
   const hasAttachments = !!message.attachments && message.attachments.length > 0;
 
-  // Design-mode form submissions are opaque payloads like "[form: discovery]\nsurface: ...".
+  // Design-mode form submissions are opaque payloads like "[form answers — discovery]\nsurface: ...".
   // Render a subtle indicator instead of the raw text.
-  const isFormSubmission = /^\[form:/.test(cleaned);
+  const isFormSubmission = /^\[form[ :]/.test(cleaned);
 
   // Render LaTeX math the user typed/pasted (e.g. `$\int_0^1 x^2 dx$`,
   // `$$\sum_{i=1}^n i$$`). We sniff for paired `$` or `$$` delimiters before
