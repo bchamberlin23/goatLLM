@@ -63,7 +63,7 @@ describe("design catalog", () => {
       for (const s of systems) {
         expect(s.id).toMatch(/^[a-z][a-z0-9-]*$/);
         expect(s.name).toBeTruthy();
-        expect(s.category).toMatch(/^(starter|ai|devtools|productivity|fintech|media|automotive|other)$/);
+        expect(s.category).toMatch(/^(starter|ai|devtools|productivity|fintech|media|automotive|style|other)$/);
         expect(s.tagline.length).toBeGreaterThan(10);
         expect(s.swatches.length).toBe(4);
         for (const sw of s.swatches) {

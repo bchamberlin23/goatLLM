@@ -87,6 +87,7 @@ const SYSTEM_CATEGORY_LABELS: Record<DesignSystemCategory, string> = {
   fintech: "Fintech",
   media: "Media",
   automotive: "Automotive",
+  style: "Vibe & Style",
   other: "Other",
 };
 
@@ -108,6 +109,7 @@ function DesignSystemPopover({
     "fintech",
     "media",
     "automotive",
+    "style",
     "other",
   ];
 
