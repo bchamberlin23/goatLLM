@@ -1909,6 +1909,401 @@ export const SKILLS: Skill[] = [
     </div>`),
     references: PROTOTYPE_REFS,
   },
+  // ── Figma integration skills ────────────────────────────────────────
+  {
+    id: "figma-component",
+    name: "Figma component",
+    scenario: "design",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Generate Figma-ready component specs with variants and auto-layout rules.",
+    template: HTML_BASE("Figma Component", `<div style="max-width:800px;margin:0 auto;padding:48px;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 8px;">Component Spec</h1>
+      <p style="color:var(--mute);margin:0 0 32px;">Button component — ready for Figma implementation.</p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px;">
+        ${[{v:"Primary",bg:"var(--accent)",fg:"white"},{v:"Secondary",bg:"transparent",fg:"var(--fg)"},{v:"Ghost",bg:"transparent",fg:"var(--accent)"},{v:"Danger",bg:"#ef4444",fg:"white"}].map(b=>`<div style="text-align:center;padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;"><button style="padding:10px 20px;background:${b.bg};color:${b.fg};border:1px solid ${b.bg==="transparent"?"var(--hairline)":"transparent"};border-radius:6px;font-size:13px;font-weight:500;">${b.v}</button><p style="font-size:11px;color:var(--mute);margin:8px 0 0;">${b.v.toLowerCase()}</p></div>`).join("")}
+      </div>
+      <div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;font-size:13px;">
+        <p style="font-weight:600;margin:0 0 8px;">Auto-layout rules</p>
+        <p style="color:var(--mute);margin:0;">Padding: 10px 20px · Gap: 8px · Border-radius: 6px · Min-width: 80px</p>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "figma-page-layout",
+    name: "Figma page layout",
+    scenario: "design",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Generate a Figma page layout with frame structure, spacing annotations, and responsive breakpoints.",
+    template: HTML_BASE("Figma Layout", `<div style="max-width:900px;margin:0 auto;padding:48px;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 8px;">Page Layout Spec</h1>
+      <p style="color:var(--mute);margin:0 0 32px;">Frame structure and responsive breakpoints for Figma.</p>
+      <div style="padding:24px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;margin-bottom:24px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:16px;">${["Mobile\n375px","Tablet\n768px","Desktop\n1280px","Wide\n1440px"].map(b=>`<div style="text-align:center;padding:12px 16px;border:1px dashed var(--hairline);border-radius:6px;font-size:12px;white-space:pre-line;color:var(--mute);">${b}</div>`).join("")}</div>
+        <div style="height:200px;border:2px dashed var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;"><span style="font-size:14px;color:var(--accent);">Frame: 1280 × 800</span></div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "figma-design-tokens",
+    name: "Figma design tokens",
+    scenario: "design",
+    mode: "design-system",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Generate design tokens in Figma-compatible format — colors, typography, spacing, effects.",
+    template: HTML_BASE("Tokens", `<div style="max-width:800px;margin:0 auto;padding:48px;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 8px;">Design Tokens</h1>
+      <p style="color:var(--mute);margin:0 0 32px;">Figma-compatible token export.</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+        ${[{cat:"Colors",tokens:["primary/500: #6366f1","neutral/900: #1a1a2e","success/500: #22c55e"]},{cat:"Typography",tokens:["heading/xl: 48px/700","body/base: 16px/400","caption/sm: 12px/500"]},{cat:"Spacing",tokens:["space/1: 4px","space/2: 8px","space/4: 16px","space/8: 32px"]}].map(g=>`<div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;"><h3 style="font-size:14px;font-weight:600;margin:0 0 12px;color:var(--accent);">${g.cat}</h3>${g.tokens.map(t=>`<p style="font-size:12px;font-family:monospace;margin:0 0 6px;color:var(--mute);">${t}</p>`).join("")}</div>`).join("")}
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  // ── FAL media generation skills ─────────────────────────────────────
+  {
+    id: "fal-image-generate",
+    name: "FAL image generate",
+    scenario: "marketing",
+    mode: "image",
+    preview: { kind: "single-page", aspect: "1/1" },
+    description: "Generate images via FAL AI — posters, illustrations, product shots, concept art.",
+    template: HTML_BASE("FAL Image", `<div style="max-width:600px;margin:0 auto;padding:48px;text-align:center;">
+      <div style="width:100%;aspect-ratio:1/1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><p style="color:var(--mute);">FAL image generation area</p></div>
+      <h2 style="font-size:20px;font-weight:600;margin:16px 0 0;">AI Image Generation</h2>
+      <p style="color:var(--mute);font-size:14px;">Powered by FAL AI · Multiple models available</p>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "fal-image-edit",
+    name: "FAL image edit",
+    scenario: "marketing",
+    mode: "image",
+    preview: { kind: "single-page", aspect: "1/1" },
+    description: "Edit existing images via FAL AI — inpainting, outpainting, style transfer, upscaling.",
+    template: HTML_BASE("FAL Edit", `<div style="max-width:800px;margin:0 auto;padding:48px;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 8px;">Image Editor</h1>
+      <p style="color:var(--mute);margin:0 0 24px;">Edit images with AI — inpaint, outpaint, upscale, style transfer.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="aspect-ratio:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><p style="color:var(--mute);">Original</p></div>
+        <div style="aspect-ratio:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><p style="color:var(--mute);">Edited</p></div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "fal-video-generate",
+    name: "FAL video generate",
+    scenario: "marketing",
+    mode: "video",
+    preview: { kind: "single-page", aspect: "16/9" },
+    description: "Generate videos via FAL AI — text-to-video, image-to-video, motion graphics.",
+    template: HTML_BASE("FAL Video", `<div style="max-width:800px;margin:0 auto;padding:48px;text-align:center;">
+      <div style="width:100%;aspect-ratio:16/9;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><p style="color:var(--mute);">FAL video generation area</p></div>
+      <h2 style="font-size:20px;font-weight:600;margin:16px 0 0;">AI Video Generation</h2>
+      <p style="color:var(--mute);font-size:14px;">Text-to-video · Image-to-video · 15s max</p>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "fal-upscale",
+    name: "FAL upscale",
+    scenario: "design",
+    mode: "image",
+    preview: { kind: "single-page", aspect: "1/1" },
+    description: "Upscale images via FAL AI — 2x, 4x resolution enhancement with detail preservation.",
+    template: HTML_BASE("FAL Upscale", `<div style="max-width:700px;margin:0 auto;padding:48px;text-align:center;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 8px;">Image Upscaler</h1>
+      <p style="color:var(--mute);margin:0 0 24px;">Enhance resolution with AI — 2x or 4x upscaling.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="aspect-ratio:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><div><p style="color:var(--mute);font-size:13px;">Original</p><p style="font-size:11px;color:var(--mute);">512 × 512</p></div></div>
+        <div style="aspect-ratio:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;align-items:center;justify-content:center;"><div><p style="color:var(--accent);font-size:13px;">Upscaled</p><p style="font-size:11px;color:var(--mute);">2048 × 2048</p></div></div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  // ── More deck variants ──────────────────────────────────────────────
+  {
+    id: "deck-swiss",
+    name: "Swiss deck",
+    scenario: "design",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Swiss International Style deck — strict grid, Helvetica, red/black/white.",
+    template: HTML_BASE("Swiss Deck", `<div style="display:flex;height:100vh;">
+      ${[{t:"Title",d:"Swiss International Style"},{t:"Grid",d:"12-column modular grid. Every element aligns."},{t:"Typography",d:"Helvetica. One weight. One size per hierarchy level."},{t:"Color",d:"Red #e30613. Black #000000. White #ffffff. Nothing else."},{t:"Content",d:"The grid is the design. Content fills the grid."},{t:"End",d:"Less is more."}].map((s,i)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px;">
+        <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:#e30613;margin:0 0 16px;">${String(i+1).padStart(2,"0")}</p>
+        <h1 style="font-size:clamp(32px,6vw,64px);font-weight:700;margin:0 0 16px;">${s.t}</h1>
+        <p style="font-size:20px;color:#666;max-width:500px;">${s.d}</p>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
+  {
+    id: "deck-minimal",
+    name: "Minimal deck",
+    scenario: "design",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Ultra-minimal horizontal deck — one idea per slide, maximum whitespace.",
+    template: HTML_BASE("Minimal Deck", `<div style="display:flex;height:100vh;">
+      ${[{t:"Idea one",d:"The simplest version of the message."},{t:"Idea two",d:"Supporting evidence, visualized."},{t:"Idea three",d:"The call to action."}].map((s)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:80px;text-align:center;">
+        <h1 style="font-size:clamp(36px,8vw,72px);font-weight:700;margin:0 0 24px;">${s.t}</h1>
+        <p style="font-size:20px;color:var(--mute);max-width:500px;">${s.d}</p>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
+  {
+    id: "deck-editorial",
+    name: "Editorial deck",
+    scenario: "marketing",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Magazine-style editorial deck with serif typography and image-heavy slides.",
+    template: HTML_BASE("Editorial Deck", `<div style="display:flex;height:100vh;">
+      ${[{t:"The Story",d:"Every great presentation tells a story.",img:true},{t:"Chapter One",d:"The problem is clearer than the solution."},{t:"Chapter Two",d:"Data tells us what intuition misses."},{t:"The Ending",d:"What happens next is up to us."}].map((s,i)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px;${s.img?"background:var(--surface);":""}">
+        <p style="font-size:11px;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin:0 0 16px;">${String(i+1).padStart(2,"0")}</p>
+        <h1 style="font-size:clamp(32px,6vw,56px);font-weight:400;font-style:italic;margin:0 0 24px;">${s.t}</h1>
+        <p style="font-size:20px;color:var(--mute);max-width:500px;">${s.d}</p>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
+  // ── More template variants ──────────────────────────────────────────
+  {
+    id: "digital-eguide",
+    name: "Digital e-guide",
+    scenario: "marketing",
+    mode: "template",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Two-spread digital e-guide — cover + lesson spread with pull-quote and step list.",
+    template: HTML_BASE("E-Guide", `<div style="max-width:700px;margin:0 auto;padding:48px;">
+      <div style="text-align:center;padding:64px 32px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;margin-bottom:32px;">
+        <p style="font-size:11px;text-transform:uppercase;letter-spacing:0.2em;color:var(--accent);margin:0 0 16px;">Free Guide</p>
+        <h1 style="font-size:36px;font-weight:700;margin:0 0 12px;">The Complete Guide to<br/>Design Systems</h1>
+        <p style="color:var(--mute);margin:0;">By Jane Designer · 2026</p>
+      </div>
+      <div style="margin-bottom:32px;"><h2 style="font-size:24px;font-weight:600;margin:0 0 16px;">Chapter 1: Foundations</h2>
+      <p style="font-size:16px;line-height:1.7;color:var(--mute);margin:0 0 16px;">A design system is more than a component library. It's a shared language between design and engineering.</p>
+      <blockquote style="margin:24px 0;padding:20px 24px;border-left:3px solid var(--accent);font-size:18px;font-style:italic;">"The best design systems are invisible — they get out of the way."</blockquote>
+      <h3 style="font-size:18px;font-weight:600;margin:24px 0 12px;">Steps to build your system</h3>
+      ${["Audit existing UI patterns","Define design tokens","Build core components","Document usage guidelines","Establish governance"].map((s,i)=>`<div style="display:flex;gap:12px;align-items:start;margin-bottom:12px;"><div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;">${i+1}</div><p style="font-size:15px;margin:0;">${s}</p></div>`).join("")}</div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "after-hours-editorial",
+    name: "After-hours editorial",
+    scenario: "marketing",
+    mode: "template",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Dark, moody editorial template — evening/midnight aesthetic for creative content.",
+    template: HTML_BASE("After Hours", `<div style="max-width:700px;margin:0 auto;padding:64px 24px;">
+      <header style="margin-bottom:48px;"><p style="font-size:11px;text-transform:uppercase;letter-spacing:0.2em;color:var(--accent);margin:0 0 16px;">After Hours · Issue 12</p>
+      <h1 style="font-size:48px;font-weight:700;line-height:1.1;margin:0 0 16px;">Midnight<br/>Manifesto</h1>
+      <p style="font-size:18px;color:var(--mute);max-width:500px;">When the office empties, the real work begins.</p></header>
+      <div style="font-size:18px;line-height:1.8;"><p style="margin:0 0 24px;">There's a particular quality to work done after midnight. The world goes quiet, and in that silence, ideas sharpen into clarity.</p>
+      <blockquote style="margin:32px 0;padding:24px 0;border-top:1px solid var(--hairline);font-size:24px;font-style:italic;line-height:1.4;">"The night is the time when the mind wanders furthest."</blockquote>
+      <p style="margin:0;">This is not about hustle culture. This is about the creative space that opens when the day's obligations fall away.</p></div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "field-notes",
+    name: "Field notes",
+    scenario: "personal",
+    mode: "template",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Pocket field-notes template — compact, grid-lined, utilitarian.",
+    template: HTML_BASE("Field Notes", `<div style="max-width:500px;margin:0 auto;padding:32px;background:var(--bg);">
+      <div style="padding:24px;background:var(--surface);border:1px solid var(--hairline);border-radius:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--fg);"><span style="font-size:14px;font-weight:700;">FIELD NOTES</span><span style="font-size:12px;color:var(--mute);">No. 47</span></div>
+        <div style="margin-bottom:16px;"><p style="font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Observation</p><div style="height:1px;background:var(--hairline);margin-bottom:8px;"></div><div style="height:1px;background:var(--hairline);margin-bottom:8px;"></div><div style="height:1px;background:var(--hairline);margin-bottom:8px;"></div><div style="height:1px;background:var(--hairline);"></div></div>
+        <div style="margin-bottom:16px;"><p style="font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Action Items</p>${["Item 1","Item 2","Item 3"].map(()=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><div style="width:12px;height:12px;border:1px solid var(--fg);border-radius:2px;"></div><div style="flex:1;height:1px;background:var(--hairline);"></div></div>`).join("")}</div>
+        <div><p style="font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin:0 0 8px;">Notes</p><div style="height:1px;background:var(--hairline);margin-bottom:8px;"></div><div style="height:1px;background:var(--hairline);margin-bottom:8px;"></div><div style="height:1px;background:var(--hairline);"></div></div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "fintech-dashboard",
+    name: "Fintech dashboard",
+    scenario: "finance",
+    mode: "template",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Financial dashboard template with balance, transactions, charts, and accounts.",
+    template: HTML_BASE("Fintech", `<div style="max-width:1000px;margin:0 auto;padding:32px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px;">
+        ${[{l:"Total Balance",v:"$48,293.50",c:"var(--accent)"},{l:"Monthly Income",v:"$12,400.00",c:"#22c55e"},{l:"Monthly Spend",v:"$8,120.30",c:"#ef4444"},{l:"Investments",v:"$124,800",c:"var(--accent)"}].map(m=>`<div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><p style="font-size:12px;color:var(--mute);margin:0 0 8px;">${m.l}</p><p style="font-size:24px;font-weight:700;margin:0;color:${m.c};">${m.v}</p></div>`).join("")}
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+        <div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><h3 style="font-size:16px;font-weight:600;margin:0 0 16px;">Spending Trend</h3><div style="height:160px;display:flex;align-items:end;gap:4px;">${[40,55,35,60,45,70,50,65,55,80,60,75].map(h=>`<div style="flex:1;background:var(--accent);border-radius:2px 2px 0 0;height:${h}%;opacity:0.7;"></div>`).join("")}</div></div>
+        <div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><h3 style="font-size:16px;font-weight:600;margin:0 0 16px;">Recent</h3>${[{a:"-$42.50",d:"Coffee shop"},{a:"-$120.00",d:"Groceries"},{a:"+$12,400",d:"Salary"},{a:"-$89.00",d:"Subscription"}].map(t=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--hairline);font-size:13px;"><span style="color:var(--mute);">${t.d}</span><span style="font-weight:600;color:${t.a.startsWith("+")?"#22c55e":"var(--fg)"};">${t.a}</span></div>`).join("")}</div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "saas-dashboard",
+    name: "SaaS dashboard",
+    scenario: "product",
+    mode: "template",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "SaaS metrics dashboard with MRR, churn, users, and growth charts.",
+    template: HTML_BASE("SaaS", `<div style="max-width:1000px;margin:0 auto;padding:32px;">
+      <h1 style="font-size:24px;font-weight:700;margin:0 0 24px;">Dashboard</h1>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+        ${[{l:"MRR",v:"$124,500",delta:"+12%"},{l:"Active Users",v:"8,420",delta:"+8%"},{l:"Churn Rate",v:"2.1%",delta:"-0.3%"},{l:"NPS",v:"72",delta:"+5"}].map(m=>`<div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><p style="font-size:12px;color:var(--mute);margin:0 0 8px;">${m.l}</p><div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:24px;font-weight:700;">${m.v}</span><span style="font-size:12px;color:#22c55e;">${m.delta}</span></div></div>`).join("")}
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+        <div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><h3 style="font-size:16px;font-weight:600;margin:0 0 16px;">Revenue Growth</h3><div style="height:160px;display:flex;align-items:end;gap:6px;">${[30,35,40,38,45,50,55,60,58,65,70,80].map(h=>`<div style="flex:1;background:var(--accent);border-radius:2px 2px 0 0;height:${h}%;"></div>`).join("")}</div></div>
+        <div style="padding:20px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;"><h3 style="font-size:16px;font-weight:600;margin:0 0 16px;">Top Features</h3>${["Dashboard","API","Integrations","Reports","Collaboration"].map((f,i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span style="color:var(--mute);">${f}</span><span>${90-i*8}%</span></div>`).join("")}</div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  // ── More utility / marketing skills ─────────────────────────────────
+  {
+    id: "ad-creative",
+    name: "Ad creative",
+    scenario: "marketing",
+    mode: "image",
+    preview: { kind: "single-page", aspect: "1/1" },
+    description: "Generate ad creatives — social ads, display ads, banner ads.",
+    template: HTML_BASE("Ad Creative", `<div style="max-width:500px;margin:0 auto;padding:48px;text-align:center;">
+      <div style="width:100%;aspect-ratio:1/1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
+        <h2 style="font-size:28px;font-weight:700;margin:0 0 8px;">Headline Here</h2>
+        <p style="color:var(--mute);font-size:14px;margin:0 0 24px;">Compelling subtext that drives clicks.</p>
+        <button style="padding:12px 24px;background:var(--accent);color:white;border:none;border-radius:8px;font-weight:600;">Shop Now</button>
+      </div>
+      <p style="color:var(--mute);font-size:13px;margin:12px 0 0;">Ad creative generation area</p>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "creative-director",
+    name: "Creative director",
+    scenario: "marketing",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Creative brief / direction document with mood board, references, and guidelines.",
+    template: HTML_BASE("Creative Direction", `<div style="max-width:800px;margin:0 auto;padding:48px;">
+      <header style="margin-bottom:32px;"><p style="font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:0.12em;margin:0;">Creative Brief</p><h1 style="font-size:28px;font-weight:700;margin:8px 0 0;">Brand Campaign Q2 2026</h1></header>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;">${["Modern","Bold","Playful"].map(m=>`<div style="aspect-ratio:1;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">${m}</div>`).join("")}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        ${[{t:"Tone",d:"Confident, modern, approachable. Never corporate."},{t:"Audience",d:"Design-forward tech teams, 25-40."},{t:"Key Message",d:"Ship faster without sacrificing craft."},{t:"Deliverables",d:"Landing page, social ads, email, deck."}].map(s=>`<div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;"><h3 style="font-size:14px;font-weight:600;margin:0 0 8px;color:var(--accent);">${s.t}</h3><p style="font-size:14px;color:var(--mute);margin:0;">${s.d}</p></div>`).join("")}
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "landing-page-builder",
+    name: "Landing page builder",
+    scenario: "marketing",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Interactive landing page builder with drag-drop sections and real-time preview.",
+    template: HTML_BASE("Builder", `<div style="max-width:1100px;margin:0 auto;padding:32px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;"><h1 style="font-size:24px;font-weight:700;margin:0;">Landing Builder</h1><div style="display:flex;gap:8px;"><button style="padding:8px 16px;border:1px solid var(--hairline);border-radius:6px;font-size:13px;">Preview</button><button style="padding:8px 16px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:13px;">Publish</button></div></div>
+      <div style="display:flex;gap:16px;">
+        <div style="width:200px;flex-shrink:0;">
+          <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--mute);margin:0 0 12px;">Sections</p>
+          ${["Hero","Features","Pricing","Testimonials","CTA","Footer"].map(s=>`<div style="padding:8px 12px;margin-bottom:6px;background:var(--surface);border:1px solid var(--hairline);border-radius:6px;font-size:13px;cursor:grab;">${s}</div>`).join("")}
+        </div>
+        <div style="flex:1;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;padding:32px;min-height:500px;">
+          <div style="text-align:center;padding:48px;border:2px dashed var(--hairline);border-radius:8px;margin-bottom:16px;"><p style="font-size:24px;font-weight:700;margin:0 0 8px;">Hero Section</p><p style="color:var(--mute);">Your headline goes here</p></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">${["Feature 1","Feature 2","Feature 3"].map(f=>`<div style="padding:24px;border:1px dashed var(--hairline);border-radius:8px;text-align:center;font-size:14px;color:var(--mute);">${f}</div>`).join("")}</div>
+        </div>
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "social-media-kit",
+    name: "Social media kit",
+    scenario: "marketing",
+    mode: "image",
+    preview: { kind: "multi-frame", aspect: "1/1" },
+    description: "Generate a set of social media assets — profile, cover, post, story templates.",
+    template: HTML_BASE("Social Kit", `<div style="max-width:1000px;margin:0 auto;padding:32px;">
+      <h1 style="font-size:28px;font-weight:700;margin:0 0 24px;">Social Media Kit</h1>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+        ${[{t:"Profile",s:"1:1",w:"400px"},{t:"Cover",s:"3:1",w:"1200px"},{t:"Post",s:"1:1",w:"1080px"},{t:"Story",s:"9:16",w:"1080px"}].map(a=>`<div style="text-align:center;"><div style="aspect-ratio:${a.s==="3:1"?"3/1":a.s==="9:16"?"9/16":"1/1"};background:var(--surface);border:1px solid var(--hairline);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;"><span style="font-size:12px;color:var(--mute);">${a.s}</span></div><p style="font-size:13px;font-weight:500;margin:0;">${a.t}</p><p style="font-size:11px;color:var(--mute);margin:2px 0 0;">${a.w}</p></div>`).join("")}
+      </div>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "brand-identity",
+    name: "Brand identity",
+    scenario: "design",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Brand identity document — logo usage, colors, typography, voice, and guidelines.",
+    template: HTML_BASE("Brand Identity", `<div style="max-width:800px;margin:0 auto;padding:48px;">
+      <header style="margin-bottom:48px;text-align:center;"><h1 style="font-size:42px;font-weight:700;margin:0;">Brand Name</h1><p style="font-size:18px;color:var(--mute);margin:8px 0 0;">Brand identity guidelines · 2026</p></header>
+      <section style="margin-bottom:48px;"><h2 style="font-size:20px;font-weight:600;margin:0 0 16px;">Logo</h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">${["Primary","Icon","Wordmark"].map(v=>`<div style="padding:32px;background:var(--surface);border:1px solid var(--hairline);border-radius:12px;text-align:center;"><div style="width:64px;height:64px;background:var(--accent);border-radius:12px;margin:0 auto 12px;"></div><p style="font-size:13px;color:var(--mute);">${v}</p></div>`).join("")}</div></section>
+      <section style="margin-bottom:48px;"><h2 style="font-size:20px;font-weight:600;margin:0 0 16px;">Colors</h2>
+      <div style="display:flex;gap:4px;height:60px;border-radius:8px;overflow:hidden;">${["var(--accent)","#1a1a2e","#f5f5f5","#22c55e","#ef4444"].map(c=>`<div style="flex:1;background:${c};"></div>`).join("")}</div></section>
+      <section><h2 style="font-size:20px;font-weight:600;margin:0 0 16px;">Voice</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">${[{t:"Do",items:["Use active voice","Be specific","Write like you speak"]},{t:"Don't",items:["Use jargon","Be vague","Write like a corporation"]}].map(g=>`<div style="padding:16px;background:var(--surface);border:1px solid var(--hairline);border-radius:8px;"><h3 style="font-size:14px;font-weight:600;margin:0 0 12px;">${g.t}</h3>${g.items.map(i=>`<p style="font-size:14px;margin:0 0 6px;">• ${i}</p>`).join("")}</div>`).join("")}</div></section>
+    </div>`),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "pitch-deck-investor",
+    name: "Investor pitch deck",
+    scenario: "product",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Investor pitch deck — problem, solution, market, traction, team, ask.",
+    template: HTML_BASE("Investor Deck", `<div style="display:flex;height:100vh;">
+      ${[{t:"Problem",d:"$50B wasted annually on manual design workflows."},{t:"Solution",d:"AI-powered design platform that ships production artifacts in minutes."},{t:"Market",d:"TAM: $50B · SAM: $12B · SOM: $2B"},{t:"Traction",d:"10K users · $2M ARR · 30% MoM · 95% retention"},{t:"Product",d:"Live demo — from brief to deployed page in 60 seconds."},{t:"Team",d:"Ex-Stripe, ex-Linear, ex-Google. 15 engineers."},{t:"Ask",d:"Raising $10M Series A to scale globally."}].map((s,i)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px;">
+        <p style="font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin:0 0 16px;">${String(i+1).padStart(2,"0")}</p>
+        <h1 style="font-size:clamp(32px,6vw,56px);font-weight:700;margin:0 0 24px;">${s.t}</h1>
+        <p style="font-size:20px;color:var(--mute);max-width:600px;">${s.d}</p>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
+  {
+    id: "product-roadmap-deck",
+    name: "Product roadmap deck",
+    scenario: "product",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Product roadmap presentation — vision, quarters, milestones, metrics.",
+    template: HTML_BASE("Roadmap Deck", `<div style="display:flex;height:100vh;">
+      ${[{t:"Vision",d:"The platform every team uses to ship design."},{t:"Q1 2026",d:"Design system v2 · API v3 · Mobile app"},{t:"Q2 2026",d:"Team workspaces · AI features · Plugin ecosystem"},{t:"Q3 2026",d:"Enterprise SSO · Marketplace · Global CDN"},{t:"Metrics",d:"Users: 10K → 100K · ARR: $2M → $20M · NPS: 72 → 80"}].map((s,i)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px;">
+        <p style="font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin:0 0 16px;">${String(i+1).padStart(2,"0")}</p>
+        <h1 style="font-size:clamp(28px,5vw,48px);font-weight:700;margin:0 0 24px;">${s.t}</h1>
+        <p style="font-size:20px;color:var(--mute);max-width:600px;">${s.d}</p>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
+  {
+    id: "team-update-deck",
+    name: "Team update deck",
+    scenario: "operation",
+    mode: "deck",
+    preview: { kind: "deck" },
+    description: "Weekly/bi-weekly team update — wins, blockers, metrics, next week.",
+    template: HTML_BASE("Team Update", `<div style="display:flex;height:100vh;">
+      ${[{t:"Wins",items:["Shipped v2.4 on time","Closed 3 enterprise deals","Hired 2 engineers"]},{t:"Blockers",items:["CI pipeline slow","Design review backlog","API rate limits"]},{t:"Metrics",items:["MRR: $124K (+12%)","Users: 8.4K (+8%)","Churn: 2.1% (-0.3%)"]},{t:"Next Week",items:["Launch team workspaces","Start enterprise SSO","Design system audit"]}].map((s,i)=>`<section style="min-width:100vw;height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px;">
+        <p style="font-size:12px;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin:0 0 16px;">Week 21 · ${String(i+1).padStart(2,"0")}</p>
+        <h1 style="font-size:36px;font-weight:700;margin:0 0 32px;">${s.t}</h1>
+        <ul style="font-size:20px;color:var(--mute);line-height:2;list-style:none;padding:0;">${s.items.map(it=>`<li>• ${it}</li>`).join("")}</ul>
+      </section>`).join("")}
+    </div>`),
+    references: DECK_REFS,
+  },
 ];
 
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s] as const));
