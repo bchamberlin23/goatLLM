@@ -232,7 +232,6 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       )}
       <TopBar />
-      <TodoWidget />
       {!showHero && (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* Subagent panel replaces chat when active */}
@@ -245,6 +244,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${
                 artifactPanelOpen || attachmentPanelOpen ? "basis-[34%] grow-0 shrink-0" : "flex-1"
               }`}>
+                <TodoWidget />
                 <MessageList />
                 <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
                   <InputBar onOpenSettings={onOpenSettings} />

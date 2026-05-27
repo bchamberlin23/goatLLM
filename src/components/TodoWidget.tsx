@@ -39,7 +39,7 @@ export function TodoWidget() {
   const inProgressCount = visibleTasks.filter((t: any) => t.status === "in_progress").length;
 
   return (
-    <div className="fixed top-14 right-6 z-40 max-w-[320px] w-[280px] flex flex-col items-end">
+    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[320px] w-[280px] flex flex-col items-center">
       {/* Collapsed badge — always visible */}
       {!expanded && (
         <button

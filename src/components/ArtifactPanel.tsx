@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react"
 import { useChatStore, type Artifact, type ArtifactKind } from "../stores/chat";
 import { CritiqueButton } from "./design/CritiqueButton";
 import { ManualEditPanel } from "./design/ManualEditPanel";
+import { WorkspaceFileBrowser } from "./WorkspaceFileBrowser";
 import {
   Code,
   FileCode,
@@ -614,6 +615,9 @@ export function ArtifactPanel() {
   const [copied, setCopied] = useState(false);
   const [flashed, setFlashed] = useState<string | null>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
+  // Workspace file browser state
+  const [wsFile, setWsFile] = useState<{ path: string; name: string; content: string } | null>(null);
+  const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const flashTimer = useRef<number | null>(null);
   /** True when the user has manually flipped the toggle for this artifact.
    *  Once they've expressed a preference, we stop auto-switching. */
@@ -635,6 +639,22 @@ export function ArtifactPanel() {
   useEffect(() => {
     userPickedView.current = null;
   }, [activeArtifactId]);
+
+  // Refresh file browser when tool calls complete (files may have changed)
+  const toolCalls = useChatStore((s) => {
+    if (!activeId) return [] as { state: string }[];
+    const msgs = s.messages[activeId] ?? [];
+    return msgs.flatMap((m) => m.toolCalls ?? []);
+  });
+  const completedToolCount = toolCalls.filter((tc) => tc.state === "done").length;
+  useEffect(() => {
+    if (completedToolCount > 0) setFileRefreshKey((k) => k + 1);
+  }, [completedToolCount]);
+
+  // Reset wsFile when conversation changes
+  useEffect(() => {
+    setWsFile(null);
+  }, [activeId]);
 
   // Auto-switch: while the agent is streaming, pin the editor open so the
   // user watches the code being typed; once streaming finishes, snap to
@@ -936,21 +956,87 @@ export function ArtifactPanel() {
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {manualEditOpen && activeId ? (
-          <ManualEditPanel
-            conversationId={activeId}
-            artifactId={activeArtifact.id}
-            onClose={() => setManualEditOpen(false)}
-          />
-        ) : (
-          <ArtifactContent
-            artifact={activeArtifact}
-            view={view}
-            htmlReloadKey={htmlReloadKey}
-          />
-        )}
+      {/* Body: sidebar + content */}
+      <div className="flex-1 min-h-0 flex">
+        {/* Sidebar: file browser + artifact list */}
+        <div className="w-[200px] shrink-0 border-r border-white/[0.04] flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <WorkspaceFileBrowser
+              onFileContent={(path, name, content) => {
+                setWsFile({ path, name, content });
+              }}
+              refreshKey={fileRefreshKey}
+            />
+          </div>
+          {artifacts.length > 0 && (
+            <div className="border-t border-white/[0.04]">
+              <div className="px-3 py-1.5">
+                <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">Artifacts</span>
+              </div>
+              <div className="max-h-[160px] overflow-y-auto px-1 pb-1">
+                {artifacts.map((a) => {
+                  const AIcon = KIND_ICON[a.kind];
+                  const isActive = a.id === activeArtifact?.id && !wsFile;
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => {
+                        setActiveArtifact(a.id);
+                        setWsFile(null);
+                      }}
+                      className={`flex items-center gap-1.5 w-full text-left py-[3px] px-2 rounded-md text-[12px] transition-colors ${
+                        isActive
+                          ? "bg-[#f59e42]/10 text-[#f59e42]"
+                          : "text-[#b4b4b4] hover:bg-white/[0.04] hover:text-[#ececec]"
+                      }`}
+                    >
+                      <AIcon size={12} strokeWidth={1.75} className="shrink-0 text-[#666]" />
+                      <span className="truncate">{a.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Content area */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {wsFile ? (
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04] shrink-0">
+                <FileCode size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
+                <span className="text-[13px] font-medium text-[#ececec] truncate">{wsFile.name}</span>
+                <span className="text-[10px] text-[#666] truncate">{wsFile.path}</span>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setWsFile(null)}
+                  className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+                  aria-label="Close file"
+                >
+                  <X size={13} strokeWidth={1.75} />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto bg-[#161618]">
+                <pre className="p-4 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words font-mono">
+                  {wsFile.content}
+                </pre>
+              </div>
+            </div>
+          ) : manualEditOpen && activeId ? (
+            <ManualEditPanel
+              conversationId={activeId}
+              artifactId={activeArtifact.id}
+              onClose={() => setManualEditOpen(false)}
+            />
+          ) : (
+            <ArtifactContent
+              artifact={activeArtifact}
+              view={view}
+              htmlReloadKey={htmlReloadKey}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
