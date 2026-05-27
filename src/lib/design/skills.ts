@@ -389,6 +389,387 @@ export const SKILLS: Skill[] = [
     ),
     references: PROTOTYPE_REFS,
   },
+
+  // ── Additional Skills ─────────────────────────────────────────────────────
+  {
+    id: "wireframe-sketch",
+    name: "Wireframe sketch",
+    scenario: "design",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Low-fidelity wireframe with grey boxes, placeholder text, layout focus.",
+    template: HTML_BASE(
+      "Wireframe",
+      `<div style="padding:32px;border:2px dashed var(--mute);border-radius:8px;">
+        <div style="background:var(--surface);height:48px;margin-bottom:24px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:24px;">
+          <div style="background:var(--surface);height:400px;"></div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div style="background:var(--surface);height:120px;"></div>
+            <div style="background:var(--surface);height:120px;"></div>
+            <div style="background:var(--surface);flex:1;"></div>
+          </div>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "login-flow",
+    name: "Login flow",
+    scenario: "design",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Authentication screens — login, signup, forgot password.",
+    template: HTML_BASE(
+      "Login",
+      `<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;">
+        <div style="width:400px;padding:48px;background:var(--surface);border-radius:16px;">
+          <h1 style="font-size:32px;font-weight:600;margin:0 0 32px;">Sign in</h1>
+          <form style="display:flex;flex-direction:column;gap:16px;">
+            <input type="email" placeholder="Email" style="padding:12px;border:1px solid var(--hairline);border-radius:8px;" />
+            <input type="password" placeholder="Password" style="padding:12px;border:1px solid var(--hairline);border-radius:8px;" />
+            <button style="padding:12px;background:var(--accent);color:white;border:none;border-radius:8px;font-weight:600;">Sign in</button>
+          </form>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "faq-page",
+    name: "FAQ page",
+    scenario: "marketing",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Expandable FAQ with search, categories, contact CTA.",
+    template: HTML_BASE(
+      "FAQ",
+      `<header style="padding:64px 0;text-align:center;">
+        <h1 style="font-size:48px;font-weight:600;margin:0 0 16px;">Frequently asked questions</h1>
+        <p style="color:var(--mute);font-size:18px;">Can't find what you're looking for? <a href="#contact">Contact us</a>.</p>
+      </header>
+      <section style="max-width:720px;margin:0 auto;">
+        <details style="padding:24px;border-bottom:1px solid var(--hairline);">
+          <summary style="font-size:18px;font-weight:600;cursor:pointer;">Question 1?</summary>
+          <p style="color:var(--mute);margin:16px 0 0;">Answer goes here.</p>
+        </details>
+        <details style="padding:24px;border-bottom:1px solid var(--hairline);">
+          <summary style="font-size:18px;font-weight:600;cursor:pointer;">Question 2?</summary>
+          <p style="color:var(--mute);margin:16px 0 0;">Answer goes here.</p>
+        </details>
+      </section>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "mobile-onboarding",
+    name: "Mobile onboarding",
+    scenario: "design",
+    mode: "prototype",
+    preview: { kind: "multi-frame", aspect: "9/19.5" },
+    description: "Three-screen onboarding flow with illustrations and CTAs.",
+    template: HTML_BASE(
+      "Onboarding",
+      `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:32px 0;">
+        <div style="aspect-ratio:9/19.5;border:8px solid #1a1a1c;border-radius:42px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;justify-content:space-between;padding:48px 24px;">
+          <div style="background:var(--surface);aspect-ratio:1;border-radius:50%;"></div>
+          <div>
+            <h2 style="font-size:24px;font-weight:600;margin:0 0 8px;">Welcome</h2>
+            <p style="color:var(--mute);font-size:14px;margin:0;">Get started with our app.</p>
+          </div>
+          <button style="padding:16px;background:var(--accent);color:white;border:none;border-radius:12px;font-weight:600;">Next</button>
+        </div>
+        <div style="aspect-ratio:9/19.5;border:8px solid #1a1a1c;border-radius:42px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;justify-content:space-between;padding:48px 24px;">
+          <div style="background:var(--surface);aspect-ratio:1;border-radius:50%;"></div>
+          <div>
+            <h2 style="font-size:24px;font-weight:600;margin:0 0 8px;">Features</h2>
+            <p style="color:var(--mute);font-size:14px;margin:0;">Discover what you can do.</p>
+          </div>
+          <button style="padding:16px;background:var(--accent);color:white;border:none;border-radius:12px;font-weight:600;">Next</button>
+        </div>
+        <div style="aspect-ratio:9/19.5;border:8px solid #1a1a1c;border-radius:42px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;justify-content:space-between;padding:48px 24px;">
+          <div style="background:var(--surface);aspect-ratio:1;border-radius:50%;"></div>
+          <div>
+            <h2 style="font-size:24px;font-weight:600;margin:0 0 8px;">Ready?</h2>
+            <p style="color:var(--mute);font-size:14px;margin:0;">Let's get started.</p>
+          </div>
+          <button style="padding:16px;background:var(--accent);color:white;border:none;border-radius:12px;font-weight:600;">Get started</button>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "waitlist-page",
+    name: "Waitlist page",
+    scenario: "marketing",
+    mode: "prototype",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Pre-launch waitlist with email capture and social proof.",
+    template: HTML_BASE(
+      "Waitlist",
+      `<div style="display:flex;align-items:center;justify-content:center;min-height:80vh;text-align:center;">
+        <div style="max-width:560px;">
+          <h1 style="font-size:64px;font-weight:600;letter-spacing:-0.025em;margin:0 0 16px;">Something big is coming.</h1>
+          <p style="color:var(--mute);font-size:18px;margin:0 0 32px;">Join the waitlist to get early access.</p>
+          <form style="display:flex;gap:8px;max-width:400px;margin:0 auto;">
+            <input type="email" placeholder="your@email.com" style="flex:1;padding:12px 16px;border:1px solid var(--hairline);border-radius:8px;" />
+            <button style="padding:12px 24px;background:var(--accent);color:white;border:none;border-radius:8px;font-weight:600;">Join</button>
+          </form>
+          <p style="color:var(--mute);font-size:14px;margin:24px 0 0;">Join 1,234 others on the waitlist.</p>
+        </div>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "invoice",
+    name: "Invoice",
+    scenario: "finance",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Professional invoice with line items, totals, payment info.",
+    template: HTML_BASE(
+      "Invoice",
+      `<article style="max-width:720px;margin:0 auto;padding:64px 24px;">
+        <header style="display:flex;justify-content:space-between;align-items:start;margin-bottom:48px;">
+          <div>
+            <h1 style="font-size:36px;font-weight:600;margin:0;">Invoice</h1>
+            <p style="color:var(--mute);margin:8px 0 0;">#INV-2026-001</p>
+          </div>
+          <div style="text-align:right;">
+            <p style="margin:0;"><strong>Your Company</strong></p>
+            <p style="color:var(--mute);font-size:14px;margin:4px 0 0;">hello@company.com</p>
+          </div>
+        </header>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:32px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--hairline);">
+              <th style="text-align:left;padding:12px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:var(--mute);">Description</th>
+              <th style="text-align:right;padding:12px 0;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:var(--mute);">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--hairline);">
+              <td style="padding:16px 0;">Service 1</td>
+              <td style="padding:16px 0;text-align:right;">$1,000.00</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid var(--hairline);">
+              <td style="padding:16px 0;font-weight:600;">Total</td>
+              <td style="padding:16px 0;text-align:right;font-weight:600;">$1,000.00</td>
+            </tr>
+          </tfoot>
+        </table>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "meeting-notes",
+    name: "Meeting notes",
+    scenario: "operation",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Structured meeting notes with attendees, decisions, action items.",
+    template: HTML_BASE(
+      "Meeting notes",
+      `<article style="max-width:720px;margin:0 auto;padding:64px 24px;">
+        <header>
+          <p style="color:var(--mute);text-transform:uppercase;font-size:11px;letter-spacing:0.12em;margin:0;">Meeting · May 27, 2026</p>
+          <h1 style="font-size:36px;font-weight:600;margin:8px 0 0;">Weekly sync</h1>
+        </header>
+        <section style="margin:32px 0;padding:16px;background:var(--surface);border-radius:8px;">
+          <h3 style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:var(--mute);">Attendees</h3>
+          <p style="margin:0;">Alice, Bob, Charlie</p>
+        </section>
+        <section style="margin-bottom:32px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Decisions</h2>
+          <ul style="margin:0;padding-left:20px;line-height:1.8;">
+            <li>Decision 1</li>
+            <li>Decision 2</li>
+          </ul>
+        </section>
+        <section>
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Action items</h2>
+          <ul style="margin:0;padding-left:20px;line-height:1.8;">
+            <li><strong>Alice:</strong> Task 1 (by Friday)</li>
+            <li><strong>Bob:</strong> Task 2 (by next week)</li>
+          </ul>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "resume-modern",
+    name: "Resume (modern)",
+    scenario: "personal",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Clean, modern resume with sections for experience, education, skills.",
+    template: HTML_BASE(
+      "Resume",
+      `<article style="max-width:720px;margin:0 auto;padding:64px 24px;">
+        <header style="text-align:center;margin-bottom:48px;">
+          <h1 style="font-size:48px;font-weight:600;letter-spacing:-0.02em;margin:0;">Your Name</h1>
+          <p style="color:var(--mute);font-size:18px;margin:8px 0 0;">Software Engineer · San Francisco, CA</p>
+          <p style="color:var(--mute);font-size:14px;margin:8px 0 0;">email@example.com · linkedin.com/in/yourname</p>
+        </header>
+        <section style="margin-bottom:32px;">
+          <h2 style="font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--mute);margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid var(--hairline);">Experience</h2>
+          <div style="margin-bottom:24px;">
+            <h3 style="font-size:16px;font-weight:600;margin:0;">Senior Engineer · Company</h3>
+            <p style="color:var(--mute);font-size:14px;margin:4px 0;">2022 – Present</p>
+            <ul style="margin:8px 0 0;padding-left:20px;line-height:1.6;">
+              <li>Accomplishment 1</li>
+              <li>Accomplishment 2</li>
+            </ul>
+          </div>
+        </section>
+        <section>
+          <h2 style="font-size:18px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--mute);margin:0 0 16px;padding-bottom:8px;border-bottom:2px solid var(--hairline);">Education</h2>
+          <p style="margin:0;"><strong>BS Computer Science</strong> · University · 2018</p>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "brand-guidelines",
+    name: "Brand guidelines",
+    scenario: "marketing",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "16/10" },
+    description: "Brand book with logo usage, colors, typography, voice.",
+    template: HTML_BASE(
+      "Brand guidelines",
+      `<article style="max-width:960px;margin:0 auto;padding:64px 24px;">
+        <header style="margin-bottom:64px;">
+          <h1 style="font-size:56px;font-weight:600;letter-spacing:-0.025em;margin:0;">Brand guidelines</h1>
+          <p style="color:var(--mute);font-size:18px;margin:16px 0 0;">How to use our brand assets and maintain consistency.</p>
+        </header>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:28px;font-weight:600;margin:0 0 24px;">Logo</h2>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px;">
+            <div style="aspect-ratio:16/9;background:var(--surface);border-radius:12px;display:flex;align-items:center;justify-content:center;">Primary logo</div>
+            <div style="aspect-ratio:16/9;background:var(--surface);border-radius:12px;display:flex;align-items:center;justify-content:center;">Icon mark</div>
+          </div>
+        </section>
+        <section style="margin-bottom:48px;">
+          <h2 style="font-size:28px;font-weight:600;margin:0 0 24px;">Colors</h2>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+            <div style="aspect-ratio:1;background:var(--accent);border-radius:12px;"></div>
+            <div style="aspect-ratio:1;background:var(--surface);border-radius:12px;"></div>
+            <div style="aspect-ratio:1;background:var(--fg);border-radius:12px;"></div>
+            <div style="aspect-ratio:1;background:var(--mute);border-radius:12px;"></div>
+          </div>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "design-brief",
+    name: "Design brief",
+    scenario: "design",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Project brief with objectives, audience, deliverables, timeline.",
+    template: HTML_BASE(
+      "Design brief",
+      `<article style="max-width:720px;margin:0 auto;padding:64px 24px;">
+        <header>
+          <p style="color:var(--mute);text-transform:uppercase;font-size:11px;letter-spacing:0.12em;margin:0;">Brief · Draft</p>
+          <h1 style="font-size:36px;font-weight:600;margin:8px 0 0;">Project name</h1>
+        </header>
+        <section style="margin:32px 0;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Objective</h2>
+          <p style="margin:0;">What we're trying to achieve.</p>
+        </section>
+        <section style="margin-bottom:32px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Target audience</h2>
+          <p style="margin:0;">Who this is for.</p>
+        </section>
+        <section style="margin-bottom:32px;">
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Deliverables</h2>
+          <ul style="margin:0;padding-left:20px;line-height:1.8;">
+            <li>Deliverable 1</li>
+            <li>Deliverable 2</li>
+          </ul>
+        </section>
+        <section>
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Timeline</h2>
+          <p style="margin:0;">Key milestones and deadlines.</p>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "email-template",
+    name: "Email template",
+    scenario: "marketing",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Marketing email with hero, content blocks, CTA.",
+    template: HTML_BASE(
+      "Email",
+      `<div style="max-width:600px;margin:0 auto;background:white;">
+        <header style="padding:32px;text-align:center;background:var(--surface);">
+          <h1 style="font-size:32px;font-weight:600;margin:0;">Your Company</h1>
+        </header>
+        <section style="padding:48px 32px;">
+          <h2 style="font-size:28px;font-weight:600;margin:0 0 16px;">Subject line</h2>
+          <p style="color:var(--mute);line-height:1.6;margin:0 0 24px;">Preview text that appears in the inbox.</p>
+          <p style="line-height:1.6;margin:0 0 32px;">Email body content goes here. Keep it concise and scannable.</p>
+          <a href="#" style="display:inline-block;padding:12px 24px;background:var(--accent);color:white;text-decoration:none;border-radius:8px;font-weight:600;">Call to action</a>
+        </section>
+        <footer style="padding:24px 32px;text-align:center;background:var(--surface);">
+          <p style="color:var(--mute);font-size:14px;margin:0;">© 2026 Your Company. All rights reserved.</p>
+        </footer>
+      </div>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
+  {
+    id: "data-report",
+    name: "Data report",
+    scenario: "operation",
+    mode: "document",
+    preview: { kind: "single-page", aspect: "8/11" },
+    description: "Analytics report with charts, KPIs, insights.",
+    template: HTML_BASE(
+      "Data report",
+      `<article style="max-width:960px;margin:0 auto;padding:64px 24px;">
+        <header style="margin-bottom:48px;">
+          <p style="color:var(--mute);text-transform:uppercase;font-size:11px;letter-spacing:0.12em;margin:0;">Report · Q1 2026</p>
+          <h1 style="font-size:36px;font-weight:600;margin:8px 0 0;">Performance overview</h1>
+        </header>
+        <section style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:48px;">
+          <div style="padding:24px;background:var(--surface);border-radius:12px;">
+            <p style="color:var(--mute);font-size:13px;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Revenue</p>
+            <p style="font-size:32px;font-weight:600;margin:0;">$1.2M</p>
+          </div>
+          <div style="padding:24px;background:var(--surface);border-radius:12px;">
+            <p style="color:var(--mute);font-size:13px;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Users</p>
+            <p style="font-size:32px;font-weight:600;margin:0;">24.5K</p>
+          </div>
+          <div style="padding:24px;background:var(--surface);border-radius:12px;">
+            <p style="color:var(--mute);font-size:13px;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Growth</p>
+            <p style="font-size:32px;font-weight:600;margin:0;">+18%</p>
+          </div>
+        </section>
+        <section>
+          <h2 style="font-size:22px;font-weight:600;margin:0 0 16px;">Insights</h2>
+          <p style="margin:0;">Key findings and recommendations.</p>
+        </section>
+      </article>`,
+    ),
+    references: PROTOTYPE_REFS,
+  },
 ];
 
 const BY_ID = new Map(SKILLS.map((s) => [s.id, s] as const));

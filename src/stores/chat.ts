@@ -187,7 +187,21 @@ export interface MessageSearchResult {
   created_at: number;
 }
 
-export type ArtifactKind = "html" | "latex" | "python" | "docx" | "pptx" | "xlsx";
+export type ArtifactKind = 
+  | "html" 
+  | "latex" 
+  | "python" 
+  | "docx" 
+  | "pptx" 
+  | "xlsx"
+  | "deck"              // HTML-based presentation slides
+  | "react-component"   // JSX component
+  | "markdown-document" // Markdown rendered as HTML
+  | "svg"               // SVG graphic
+  | "diagram"           // Mermaid/diagram syntax
+  | "code-snippet"      // Generic code display
+  | "mini-app"          // Interactive HTML app
+  | "design-system";    // Design system documentation
 
 export interface ArtifactVersion {
   code: string;
@@ -239,6 +253,26 @@ const ARTIFACT_LANG_MAP: Record<string, ArtifactKind> = {
   xlsx: "xlsx",
   excel: "xlsx",
   spreadsheet: "xlsx",
+  deck: "deck",
+  presentation: "deck",
+  "react-component": "react-component",
+  react: "react-component",
+  jsx: "react-component",
+  tsx: "react-component",
+  "markdown-document": "markdown-document",
+  markdown: "markdown-document",
+  md: "markdown-document",
+  svg: "svg",
+  diagram: "diagram",
+  mermaid: "diagram",
+  "code-snippet": "code-snippet",
+  code: "code-snippet",
+  snippet: "code-snippet",
+  "mini-app": "mini-app",
+  app: "mini-app",
+  interactive: "mini-app",
+  "design-system": "design-system",
+  design: "design-system",
 };
 
 const ARTIFACT_KIND_LABEL: Record<ArtifactKind, string> = {
@@ -248,6 +282,14 @@ const ARTIFACT_KIND_LABEL: Record<ArtifactKind, string> = {
   docx: "Word",
   pptx: "Slides",
   xlsx: "Excel",
+  deck: "Deck",
+  "react-component": "React",
+  "markdown-document": "Markdown",
+  svg: "SVG",
+  diagram: "Diagram",
+  "code-snippet": "Code",
+  "mini-app": "App",
+  "design-system": "Design System",
 };
 
 /** Lowercase + collapse whitespace so "Resume Page" and "  resume  page  "
@@ -1606,7 +1648,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // When the user has turned auto-artifacts off, leave the chat
         // bubble's code intact and never push anything into the canvas.
         if (!flags.autoArtifacts) return;
-        const enabledKinds = new Set<ArtifactKind>(["html", "latex", "python"]);
+        const enabledKinds = new Set<ArtifactKind>([
+          "html", "latex", "python",
+          // Design mode artifact kinds
+          "deck", "react-component", "markdown-document", "svg", 
+          "diagram", "code-snippet", "mini-app", "design-system"
+        ]);
         if (flags.officeArtifacts) {
           enabledKinds.add("docx");
           enabledKinds.add("pptx");

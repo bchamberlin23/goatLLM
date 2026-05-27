@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useChatStore, type Artifact, type ArtifactKind } from "../stores/chat";
 import { CritiqueButton } from "./design/CritiqueButton";
+import { ManualEditPanel } from "./design/ManualEditPanel";
 import {
   Code,
   FileCode,
@@ -44,6 +45,15 @@ const ARTIFACT_LANG: Record<ArtifactKind, string> = {
   docx: "markdown",
   pptx: "markdown",
   xlsx: "markdown",
+  // New artifact kinds
+  deck: "html",
+  "react-component": "typescript",
+  "markdown-document": "markdown",
+  svg: "xml",
+  diagram: "plaintext",
+  "code-snippet": "plaintext",
+  "mini-app": "html",
+  "design-system": "markdown",
 };
 
 const KIND_ICON: Record<ArtifactKind, typeof Code> = {
@@ -53,6 +63,14 @@ const KIND_ICON: Record<ArtifactKind, typeof Code> = {
   docx: FileType,
   pptx: Presentation,
   xlsx: FileSpreadsheet,
+  deck: Presentation,
+  "react-component": Code,
+  "markdown-document": FileText,
+  svg: FileCode,
+  diagram: FileCode,
+  "code-snippet": Code,
+  "mini-app": FileCode,
+  "design-system": FileText,
 };
 const KIND_LABEL: Record<ArtifactKind, string> = {
   html: "HTML",
@@ -61,6 +79,14 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   docx: "Word",
   pptx: "Slides",
   xlsx: "Excel",
+  deck: "Deck",
+  "react-component": "React",
+  "markdown-document": "Markdown",
+  svg: "SVG",
+  diagram: "Diagram",
+  "code-snippet": "Code",
+  "mini-app": "App",
+  "design-system": "Design System",
 };
 
 const OFFICE_KINDS = new Set<ArtifactKind>(["docx", "pptx", "xlsx"]);
@@ -329,6 +355,110 @@ function ArtifactContent({
           title={artifact.title}
         />
       );
+    case "deck":
+    case "mini-app": {
+      // Deck and mini-app render as HTML with scripts enabled
+      const baseInjection = '<base target="_blank">\n';
+      const preppedHtml = baseInjection + artifact.code;
+      return (
+        <iframe
+          key={htmlReloadKey}
+          className="flex-1 w-full border-none bg-white"
+          srcDoc={preppedHtml}
+          sandbox="allow-scripts allow-same-origin allow-popups"
+          title={artifact.title}
+        />
+      );
+    }
+    case "svg": {
+      // Render SVG directly in an iframe
+      const svgHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+    svg { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>${artifact.code}</body>
+</html>`;
+      return (
+        <iframe
+          key={htmlReloadKey}
+          className="flex-1 w-full border-none bg-white"
+          srcDoc={svgHtml}
+          sandbox=""
+          title={artifact.title}
+        />
+      );
+    }
+    case "markdown-document":
+    case "design-system": {
+      // Render markdown as HTML
+      const markdownHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { 
+      margin: 0; 
+      padding: 32px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+    code { background: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
+    pre { background: #f6f8fa; padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; border-radius: 3px; }
+    pre code { background: transparent; padding: 0; }
+    blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
+    table { border-spacing: 0; border-collapse: collapse; margin-top: 0; margin-bottom: 16px; }
+    table th, table td { padding: 6px 13px; border: 1px solid #dfe2e5; }
+    table th { font-weight: 600; background: #f6f8fa; }
+  </style>
+</head>
+<body>
+  <div id="content"></div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    const md = ${JSON.stringify(artifact.code)};
+    document.getElementById('content').innerHTML = marked.parse(md);
+  </script>
+</body>
+</html>`;
+      return (
+        <iframe
+          key={htmlReloadKey}
+          className="flex-1 w-full border-none bg-white"
+          srcDoc={markdownHtml}
+          sandbox=""
+          title={artifact.title}
+        />
+      );
+    }
+    case "react-component":
+    case "diagram":
+    case "code-snippet": {
+      // These kinds are primarily viewed in code mode
+      return (
+        <div className="flex flex-col items-center justify-center flex-1 text-[#a0a0a0] p-8">
+          <Code size={48} strokeWidth={1.5} className="mb-4 text-[#666]" />
+          <p className="text-[13px] text-center mb-2">
+            {artifact.kind === "react-component" && "React components are best viewed in code mode."}
+            {artifact.kind === "diagram" && "Diagrams are best viewed in code mode."}
+            {artifact.kind === "code-snippet" && "Code snippets are best viewed in code mode."}
+          </p>
+          <p className="text-[11px] text-[#666] text-center">
+            Switch to Code view to see the full source.
+          </p>
+        </div>
+      );
+    }
   }
 }
 
@@ -483,6 +613,7 @@ export function ArtifactPanel() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [flashed, setFlashed] = useState<string | null>(null);
+  const [manualEditOpen, setManualEditOpen] = useState(false);
   const flashTimer = useRef<number | null>(null);
   /** True when the user has manually flipped the toggle for this artifact.
    *  Once they've expressed a preference, we stop auto-switching. */
@@ -758,6 +889,21 @@ export function ArtifactPanel() {
           <CritiqueButton code={activeArtifact.code} />
         )}
 
+        {/* Manual edit — design mode + HTML only */}
+        {activeArtifact.kind === "html" && useChatStore.getState().designMode && (
+          <button
+            onClick={() => setManualEditOpen(true)}
+            aria-label="Manual edit"
+            title="Edit code manually"
+            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("edit")}`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        )}
+
         {/* Print — HTML only, opens browser print dialog (Save as PDF) */}
         {activeArtifact.kind === "html" && (
           <button
@@ -792,11 +938,19 @@ export function ArtifactPanel() {
 
       {/* Content */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <ArtifactContent
-          artifact={activeArtifact}
-          view={view}
-          htmlReloadKey={htmlReloadKey}
-        />
+        {manualEditOpen && activeId ? (
+          <ManualEditPanel
+            conversationId={activeId}
+            artifactId={activeArtifact.id}
+            onClose={() => setManualEditOpen(false)}
+          />
+        ) : (
+          <ArtifactContent
+            artifact={activeArtifact}
+            view={view}
+            htmlReloadKey={htmlReloadKey}
+          />
+        )}
       </div>
     </div>
   );
@@ -865,4 +1019,12 @@ const KIND_VERB: Record<ArtifactKind, string> = {
   docx: "Writing",
   pptx: "Building deck",
   xlsx: "Building sheet",
+  deck: "Building presentation",
+  "react-component": "Building component",
+  "markdown-document": "Writing document",
+  svg: "Drawing graphic",
+  diagram: "Creating diagram",
+  "code-snippet": "Writing code",
+  "mini-app": "Building app",
+  "design-system": "Documenting system",
 };

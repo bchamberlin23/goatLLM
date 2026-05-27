@@ -490,7 +490,12 @@ function SegmentedAssistantText({
       // User opted out — keep every fence inline as a regular code block.
       return [{ type: "text" as const, text: stripped }];
     }
-    const enabledKinds = new Set<ArtifactKind>(["html", "latex", "python"]);
+    const enabledKinds = new Set<ArtifactKind>([
+      "html", "latex", "python",
+      // Design mode artifact kinds
+      "deck", "react-component", "markdown-document", "svg", 
+      "diagram", "code-snippet", "mini-app", "design-system"
+    ]);
     if (officeArtifacts) {
       enabledKinds.add("docx");
       enabledKinds.add("pptx");

@@ -48,7 +48,7 @@ describe("design project", () => {
   });
 
   describe("loadProject / saveProject / deleteProject", () => {
-    it("round-trips through localStorage", () => {
+    it("round-trips through localStorage", async () => {
       const p = createProject({
         conversationId: CONV_ID,
         skillId: "web-prototype",
@@ -57,7 +57,7 @@ describe("design project", () => {
         seedHtml: "<html></html>",
       });
 
-      saveProject(p);
+      await saveProject(p);
       const loaded = loadProject(CONV_ID);
 
       expect(loaded).not.toBeNull();
@@ -70,14 +70,14 @@ describe("design project", () => {
       expect(loadProject("nonexistent")).toBeNull();
     });
 
-    it("deletes a project", () => {
+    it("deletes a project", async () => {
       const p = createProject({
         conversationId: CONV_ID,
         skillId: "web-prototype",
         systemId: null,
         directionId: null,
       });
-      saveProject(p);
+      await saveProject(p);
       expect(loadProject(CONV_ID)).not.toBeNull();
 
       deleteProject(CONV_ID);
@@ -101,46 +101,46 @@ describe("design project", () => {
       expect(getFile(project, "nonexistent.html")).toBeUndefined();
     });
 
-    it("setFile adds a file", () => {
-      const updated = setFile(project, "brand-spec.md", "# Brand spec");
+    it("setFile adds a file", async () => {
+      const updated = await setFile(project, "brand-spec.md", "# Brand spec");
       expect(getFile(updated, "brand-spec.md")).toBe("# Brand spec");
       // Original project is unchanged (immutable update).
       expect(getFile(project, "brand-spec.md")).toBeUndefined();
     });
 
-    it("setFile overwrites an existing file", () => {
-      const first = setFile(project, "theme.css", ":root {}");
-      const second = setFile(first, "theme.css", ":root { --bg: #fff; }");
+    it("setFile overwrites an existing file", async () => {
+      const first = await setFile(project, "theme.css", ":root {}");
+      const second = await setFile(first, "theme.css", ":root { --bg: #fff; }");
       expect(getFile(second, "theme.css")).toBe(":root { --bg: #fff; }");
     });
 
-    it("deleteFile removes a file", () => {
-      const withFile = setFile(project, "notes.md", "notes");
+    it("deleteFile removes a file", async () => {
+      const withFile = await setFile(project, "notes.md", "notes");
       expect(getFile(withFile, "notes.md")).toBe("notes");
 
-      const withoutFile = deleteFile(withFile, "notes.md");
+      const withoutFile = await deleteFile(withFile, "notes.md");
       expect(getFile(withoutFile, "notes.md")).toBeUndefined();
     });
 
-    it("deleteFile is a no-op for missing files", () => {
-      const result = deleteFile(project, "nonexistent.md");
+    it("deleteFile is a no-op for missing files", async () => {
+      const result = await deleteFile(project, "nonexistent.md");
       expect(result.files).toEqual({});
     });
   });
 
   describe("listFiles", () => {
-    it("sorts alphabetically with directories first", () => {
+    it("sorts alphabetically with directories first", async () => {
       let p = createProject({
         conversationId: CONV_ID,
         skillId: "web-prototype",
         systemId: null,
         directionId: null,
       });
-      p = setFile(p, "template.html", "");
-      p = setFile(p, "assets/logo.svg", "");
-      p = setFile(p, "brand-spec.md", "");
-      p = setFile(p, "assets/hero.png", "");
-      p = setFile(p, "theme.css", "");
+      p = await setFile(p, "template.html", "");
+      p = await setFile(p, "assets/logo.svg", "");
+      p = await setFile(p, "brand-spec.md", "");
+      p = await setFile(p, "assets/hero.png", "");
+      p = await setFile(p, "theme.css", "");
 
       const files = listFiles(p);
       expect(files).toEqual([
