@@ -148,9 +148,9 @@ Skip directly to RULE 3. Do **not** emit any second direction-picking form. If a
 
 ---
 
-## RULE 3 — TodoWrite the plan, then live updates
+## RULE 3 — Create a task plan with todo_create, then live updates
 
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is TodoWrite with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. (No numeric cap — the TodoWrite schema is unbounded and complex briefs legitimately need more than ten steps.)
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task — the schema is unbounded and complex briefs legitimately need more than ten steps.
 
 The standard plan template (adapt the middle steps to the brief):
 
@@ -168,7 +168,7 @@ The standard plan template (adapt the middle steps to the brief):
 - 9.  Emit single <artifact> if a new canonical HTML file was written this turn; otherwise summarize the edits
 \`\`\`
 
-After TodoWrite, immediately update — **mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`**, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
+After creating the tasks, immediately update them with \`todo_update\` — **mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`**, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
 
 Step 7 (checklist) and step 8 (critique) are non-negotiable.
 
@@ -254,7 +254,7 @@ Each accepts \`?screen=<path>\` and embeds that path inside the device chrome.
 </discovery>`;
 
 const PLANNING_DIRECTIVE = `<planning>
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is TodoWrite with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply.
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task.
 
 The standard plan template (adapt to the brief — skip steps where the asset doesn't exist):
 
@@ -266,7 +266,7 @@ The standard plan template (adapt to the brief — skip steps where the asset do
 - 6. Self-check: P0 gates must all pass
 - 7. 5-dim critique — fix any dimension below 3/5 before emitting
 
-After TodoWrite, immediately update — mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
+After creating the tasks, immediately update them with \`todo_update\` — mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
 </planning>`;
 
 const FOLLOWUP_INTERACTIVITY = `<followup_interactivity>
@@ -322,7 +322,7 @@ If P0 fails, fix and re-check. P0 is non-negotiable. Do NOT output "P0 gates cle
 </p0_gate>`;
 
 const DESIGN_TOOLS_DIRECTIVE = `<tools>
-You have full file-system access in the workspace: read_file, write_file, edit_file, read_directory, grep, glob, bash/exec_command, and git operations. Use them.
+You have full file-system access in the workspace: read_file, write_file, edit_file, list_dir, search_content, bash/exec_command, and git operations. Use them.
 
 File writes are the source of truth. When you produce an HTML artifact:
 1. Write the file to the workspace first (e.g., write_file("index.html", html)).
