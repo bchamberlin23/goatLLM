@@ -696,6 +696,9 @@ export function ArtifactPanel() {
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
   const undoArtifact = useChatStore((s) => s.undoArtifact);
   const redoArtifact = useChatStore((s) => s.redoArtifact);
+  const workspacePath = useChatStore((s) =>
+    s.designMode ? s.designWorkspacePath : s.workspacePath
+  );
 
   const [view, setView] = useState<"preview" | "code">("preview");
   const [htmlReloadKey, setHtmlReloadKey] = useState(0);
@@ -738,6 +741,43 @@ export function ArtifactPanel() {
   useEffect(() => {
     if (completedToolCount > 0) setFileRefreshKey((k) => k + 1);
   }, [completedToolCount]);
+
+  // Resolve external references for workspace HTML files
+  const [resolvedWsHtml, setResolvedWsHtml] = useState<string | null>(null);
+  const [resolvingWsFile, setResolvingWsFile] = useState(false);
+  const [wsFileView, setWsFileView] = useState<"preview" | "code">("preview");
+
+  // Check if workspace file is HTML-like and can be previewed
+  const wsFileIsHtml = wsFile && /\.(html?|htm)$/i.test(wsFile.name);
+
+  useEffect(() => {
+    if (!wsFile || !wsFileIsHtml) {
+      setResolvedWsHtml(null);
+      return;
+    }
+
+    let cancelled = false;
+    setResolvingWsFile(true);
+    setResolvedWsHtml(null);
+
+    (async () => {
+      try {
+        const processed = await resolveArtifactReferences(
+          wsFile.content,
+          wsFile.path,
+          workspacePath,
+        );
+        if (!cancelled) setResolvedWsHtml(processed);
+      } catch (e) {
+        console.warn("[ArtifactPanel] Workspace file resolution failed:", e);
+        if (!cancelled) setResolvedWsHtml(wsFile.content);
+      } finally {
+        if (!cancelled) setResolvingWsFile(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [wsFile?.path, wsFile?.content, workspacePath]);
 
   // Reset wsFile when conversation changes
   useEffect(() => {
@@ -1097,6 +1137,13 @@ export function ArtifactPanel() {
                 <span className="text-[13px] font-medium text-[#ececec] truncate">{wsFile.name}</span>
                 <span className="text-[10px] text-[#666] truncate">{wsFile.path}</span>
                 <div className="flex-1" />
+                {/* View toggle for HTML files */}
+                {wsFileIsHtml && (
+                  <ViewToggle
+                    view={wsFileView}
+                    onChange={setWsFileView}
+                  />
+                )}
                 <button
                   onClick={() => setWsFile(null)}
                   className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
@@ -1105,11 +1152,39 @@ export function ArtifactPanel() {
                   <X size={13} strokeWidth={1.75} />
                 </button>
               </div>
-              <div className="flex-1 min-h-0 overflow-auto bg-[#161618]">
-                <pre className="p-4 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words font-mono">
-                  {wsFile.content}
-                </pre>
-              </div>
+              {/* HTML preview or code view */}
+              {wsFileIsHtml && wsFileView === "preview" ? (
+                resolvingWsFile ? (
+                  <div className="flex-1 relative">
+                    <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
+                      <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
+                        <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                        <span className="text-[11px]">Resolving references…</span>
+                      </div>
+                    </div>
+                    <iframe
+                      className="flex-1 w-full border-none bg-white"
+                      srcDoc={`<base target="_blank">\n${wsFile.content}`}
+                      sandbox="allow-scripts allow-same-origin allow-popups"
+                      title={wsFile.name}
+                    />
+                  </div>
+                ) : (
+                  <iframe
+                    key={`${wsFile.path}-${wsFile.content.length}`}
+                    className="flex-1 w-full border-none bg-white"
+                    srcDoc={`<base target="_blank">\n${resolvedWsHtml ?? wsFile.content}`}
+                    sandbox="allow-scripts allow-same-origin allow-popups"
+                    title={wsFile.name}
+                  />
+                )
+              ) : (
+                <div className="flex-1 min-h-0 overflow-auto bg-[#161618]">
+                  <pre className="p-4 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words font-mono">
+                    {wsFile.content}
+                  </pre>
+                </div>
+              )}
             </div>
           ) : manualEditOpen && activeId ? (
             <ManualEditPanel
