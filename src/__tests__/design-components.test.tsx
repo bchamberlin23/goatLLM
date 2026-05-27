@@ -76,7 +76,7 @@ describe("QuestionFormRenderer", () => {
     id: "discovery",
     fields: [
       {
-        name: "surface",
+        id: "surface",
         label: "What are you designing?",
         type: "radio",
         options: [
@@ -85,7 +85,7 @@ describe("QuestionFormRenderer", () => {
         ],
       },
       {
-        name: "brand",
+        id: "brand",
         label: "Brand notes",
         type: "textarea",
         options: [],
@@ -137,7 +137,7 @@ describe("QuestionFormRenderer", () => {
     expect(setPendingFormSubmission).toHaveBeenCalledTimes(1);
     expect(setPendingFormSubmission).toHaveBeenCalledWith({
       conversationId: "conv-1",
-      text: expect.stringContaining("[form: discovery]"),
+      text: expect.stringContaining("[form answers — discovery]"),
     });
 
     // Reset store.

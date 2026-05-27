@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser Chrome Frame</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .browser {
+    width: 1280px;
+    max-width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+      0 25px 50px -12px rgba(0,0,0,0.3),
+      0 0 0 1px rgba(0,0,0,0.1);
+    background: #f5f5f5;
+  }
+  .titlebar {
+    height: 38px;
+    background: linear-gradient(180deg, #e8e8e8 0%, #d8d8d8 100%);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    border-bottom: 1px solid #c8c8c8;
+  }
+  .traffic-lights {
+    display: flex;
+    gap: 8px;
+  }
+  .traffic-light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+  .tl-close { background: #ff5f57; }
+  .tl-minimize { background: #febc2e; }
+  .tl-maximize { background: #28c840; }
+  .toolbar {
+    height: 36px;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    border-bottom: 1px solid #d8d8d8;
+  }
+  .nav-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+  }
+  .url-bar {
+    flex: 1;
+    height: 26px;
+    background: #fff;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    padding: 0 10px;
+    font-size: 12px;
+    color: #333;
+    display: flex;
+    align-items: center;
+  }
+  .url-bar::before {
+    content: '🔒';
+    margin-right: 6px;
+    font-size: 10px;
+  }
+  .content {
+    background: #fff;
+    min-height: 600px;
+  }
+  .content iframe {
+    width: 100%;
+    height: 800px;
+    border: none;
+    display: block;
+  }
+</style>
+</head>
+<body>
+<div class="browser">
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="traffic-light tl-close"></div>
+      <div class="traffic-light tl-minimize"></div>
+      <div class="traffic-light tl-maximize"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="nav-btn">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+    </div>
+    <div class="nav-btn">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+    </div>
+    <div class="url-bar" id="url-display">example.com</div>
+  </div>
+  <div class="content">
+    <iframe id="screen-frame" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>
+  </div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const screen = params.get('screen');
+  if (screen) {
+    const iframe = document.getElementById('screen-frame');
+    const isAbsolute = /^https?:\/\//.test(screen);
+    const resolvedUrl = isAbsolute ? screen : new URL(screen, document.referrer || location.href).href;
+    iframe.src = resolvedUrl;
+    document.getElementById('url-display').textContent = resolvedUrl.replace(/^https?:\/\//, '');
+  }
+</script>
+</body>
+</html>

@@ -10,25 +10,25 @@ describe("buildDesignSystemPrompt", () => {
       isFirstTurn: true,
     });
 
-    // Identity charter always present.
     expect(prompt).toContain("<identity>");
     expect(prompt).toContain("<voice>");
     expect(prompt).toContain("<anti_slop>");
     expect(prompt).toContain("<artifact_contract>");
 
-    // Active skill block present.
     expect(prompt).toContain('<active_skill id="web-prototype"');
     expect(prompt).toContain("<seed_template>");
 
-    // First-turn discovery form present.
-    expect(prompt).toContain('<question-form id="discovery">');
-    expect(prompt).toContain('name="surface"');
-    expect(prompt).toContain('name="audience"');
+    expect(prompt).toContain('<question-form id="discovery"');
+    expect(prompt).toContain('"id": "output"');
+    expect(prompt).toContain('"id": "audience"');
+    expect(prompt).toContain('"id": "brand"');
+    expect(prompt).toContain('"id": "platform"');
+    expect(prompt).toContain('"id": "tone"');
+    expect(prompt).toContain('"id": "scale"');
+    expect(prompt).toContain('"id": "constraints"');
 
-    // Follow-up directives present.
-    expect(prompt).toContain('<discovery turn="2+">');
+    expect(prompt).toContain("<discovery>");
 
-    // P0 gate present.
     expect(prompt).toContain("<p0_gate>");
   });
 
@@ -40,11 +40,7 @@ describe("buildDesignSystemPrompt", () => {
       isFirstTurn: false,
     });
 
-    // Follow-up directives still present.
-    expect(prompt).toContain('<discovery turn="2+">');
-    // First-turn discovery form absent.
-    expect(prompt).not.toContain('<question-form id="discovery">');
-    // Identity charter always present.
+    expect(prompt).not.toContain('<question-form id="discovery"');
     expect(prompt).toContain("<identity>");
   });
 
@@ -56,14 +52,10 @@ describe("buildDesignSystemPrompt", () => {
       isFirstTurn: true,
     });
 
-    // No skill block.
     expect(prompt).not.toContain("<active_skill");
-    // No discovery form (requires active skill).
-    expect(prompt).not.toContain('<question-form id="discovery">');
-    expect(prompt).not.toContain('<discovery turn="2+">');
-    // Identity charter still present — base design mode always gets it.
+    expect(prompt).not.toContain('<question-form id="discovery"');
+    expect(prompt).not.toContain("<discovery>");
     expect(prompt).toContain("<identity>");
-    // P0 gate still present.
     expect(prompt).toContain("<p0_gate>");
   });
 
@@ -85,17 +77,20 @@ describe("buildDesignSystemPrompt", () => {
     const prompt = buildDesignSystemPrompt({
       skillId: "web-prototype",
       systemId: null,
-      directionId: "editorial",
+      directionId: "editorial-monocle",
       isFirstTurn: false,
     });
 
-    expect(prompt).toContain('<active_direction id="editorial"');
+    expect(prompt).toContain('<active_direction id="editorial-monocle"');
     expect(prompt).toContain("--bg:");
     expect(prompt).toContain("--fg:");
     expect(prompt).toContain("--accent:");
+    expect(prompt).toContain("--muted:");
+    expect(prompt).toContain("--border:");
     expect(prompt).toContain("oklch(");
     expect(prompt).toContain("display:");
     expect(prompt).toContain("body:");
+    expect(prompt).toContain("Posture:");
   });
 
   it("user prompt is injected as a tagged block", () => {
@@ -158,13 +153,58 @@ describe("buildDesignSystemPrompt", () => {
       userPrompt: "Make it pop.",
     });
 
-    // All five components present.
     expect(prompt).toContain("<identity>");
     expect(prompt).toContain('<active_skill id="saas-landing"');
     expect(prompt).toContain('<active_design_system id="stripe"');
     expect(prompt).toContain('<active_direction id="modern-minimal"');
-    expect(prompt).toContain('<question-form id="discovery">');
+    expect(prompt).toContain('<question-form id="discovery"');
     expect(prompt).toContain("<user_system_prompt>");
     expect(prompt).toContain("Make it pop.");
+  });
+
+  it("includes direction library spec block on first turn", () => {
+    const prompt = buildDesignSystemPrompt({
+      skillId: "web-prototype",
+      systemId: null,
+      directionId: null,
+      isFirstTurn: true,
+    });
+
+    expect(prompt).toContain("## Direction library");
+    expect(prompt).toContain("editorial-monocle");
+    expect(prompt).toContain("modern-minimal");
+    expect(prompt).toContain("human-approachable");
+    expect(prompt).toContain("tech-utility");
+    expect(prompt).toContain("brutalist-experimental");
+  });
+
+  it("includes cross-platform contracts in discovery directives", () => {
+    const prompt = buildDesignSystemPrompt({
+      skillId: "web-prototype",
+      systemId: null,
+      directionId: null,
+      isFirstTurn: true,
+    });
+
+    expect(prompt).toContain("Cross-platform");
+    expect(prompt).toContain("Responsive web");
+    expect(prompt).toContain("iOS app");
+    expect(prompt).toContain("Android app");
+    expect(prompt).toContain("iphone-15-pro.html");
+  });
+
+  it("includes brand extraction workflow in discovery directives", () => {
+    const prompt = buildDesignSystemPrompt({
+      skillId: "web-prototype",
+      systemId: null,
+      directionId: null,
+      isFirstTurn: true,
+    });
+
+    expect(prompt).toContain("Branch A");
+    expect(prompt).toContain("Branch B");
+    expect(prompt).toContain("brand_spec");
+    expect(prompt).toContain("reference_match");
+    expect(prompt).toContain("brand-spec");
   });
 });

@@ -102,23 +102,23 @@ describe("design catalog", () => {
       expect(directions.length).toBeGreaterThanOrEqual(5);
     });
 
-    it("every direction has full palette + fonts + refs", () => {
+    it("every direction has full palette + fonts + refs + posture", () => {
       for (const d of directions) {
-        expect(d.id).toMatch(/^(editorial|modern-minimal|tech-utility|brutalist|soft-warm|neo-brutalist|luxury|cyberpunk|swiss-modern)$/);
+        expect(d.id).toMatch(/^[a-z][a-z0-9-]*$/);
         expect(d.name).toBeTruthy();
         expect(d.mood.length).toBeGreaterThan(20);
-        // OKLch palette
         for (const v of Object.values(d.palette)) {
           expect(v).toMatch(/^oklch\(/);
         }
-        expect(d.fonts.display).toBeTruthy();
-        expect(d.fonts.body).toBeTruthy();
-        expect(d.refs.length).toBeGreaterThan(0);
+        expect(d.displayFont).toBeTruthy();
+        expect(d.bodyFont).toBeTruthy();
+        expect(d.references.length).toBeGreaterThan(0);
+        expect(d.posture.length).toBeGreaterThan(0);
       }
     });
 
     it("getDirection round-trips", () => {
-      expect(getDirection("editorial")?.id).toBe("editorial");
+      expect(getDirection("editorial-monocle")?.id).toBe("editorial-monocle");
       expect(getDirection("not-real")).toBeUndefined();
       expect(getDirection(null)).toBeUndefined();
     });

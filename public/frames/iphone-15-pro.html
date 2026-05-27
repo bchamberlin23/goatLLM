@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iPhone 15 Pro Frame</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --statusbar-fg: #1a1916;
+    --home-fg: #1a1916;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  }
+  .device {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    border-radius: 56px;
+    padding: 12px;
+    background: linear-gradient(145deg, #2a2a2c 0%, #1a1a1c 50%, #0e0e10 100%);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,0.04),
+      inset 0 0 0 2px rgba(0,0,0,0.8),
+      0 25px 50px -12px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(0,0,0,0.3);
+  }
+  .device::before,
+  .device::after {
+    content: '';
+    position: absolute;
+    top: 120px;
+    bottom: 120px;
+    width: 3px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+  }
+  .device::before { left: -1px; border-radius: 2px 0 0 2px; }
+  .device::after { right: -1px; border-radius: 0 2px 2px 0; }
+  .island {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 124px;
+    height: 36px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 10;
+  }
+  .btn-rail {
+    position: absolute;
+    width: 3px;
+    background: linear-gradient(90deg, #3a3a3c 0%, #2a2a2c 100%);
+    border-radius: 2px;
+  }
+  .btn-action { top: 140px; left: -3px; height: 32px; }
+  .btn-vol-up { top: 190px; left: -3px; height: 56px; }
+  .btn-vol-down { top: 260px; left: -3px; height: 56px; }
+  .btn-power { top: 210px; right: -3px; height: 80px; }
+  .screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 44px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+  }
+  .statusbar {
+    height: 47px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--statusbar-fg);
+    flex-shrink: 0;
+  }
+  .statusbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .inner {
+    flex: 1;
+    overflow: hidden;
+  }
+  .inner iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  .home-indicator {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .home-indicator::after {
+    content: '';
+    width: 134px;
+    height: 5px;
+    background: var(--home-fg);
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="island"></div>
+  <div class="btn-rail btn-action"></div>
+  <div class="btn-rail btn-vol-up"></div>
+  <div class="btn-rail btn-vol-down"></div>
+  <div class="btn-rail btn-power"></div>
+  <div class="screen">
+    <div class="statusbar">
+      <span>9:41</span>
+      <span class="statusbar-right">
+        <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor"><path d="M1 4.5C3.3 2.1 6.1 1 8.5 1s5.2 1.1 7.5 3.5l-1.1 1.1C12.9 3.6 10.6 2.5 8.5 2.5S4.1 3.6 2.1 5.6L1 4.5zm3 3C5.1 6.4 6.7 5.5 8.5 5.5s3.4.9 4.5 2l-1.1 1.1c-.8-.8-2-1.6-3.4-1.6s-2.6.8-3.4 1.6L5 7.5zm3 3c.6-.6 1.4-1 2.5-1s1.9.4 2.5 1l-1.1 1.1c-.3-.3-.8-.6-1.4-.6s-1.1.3-1.4.6L7 10.5z"/></svg>
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="currentColor"><path d="M8 2.4C5.6 2.4 3.4 3.3 1.8 4.9L.4 3.5C2.4 1.5 5.1.4 8 .4s5.6 1.1 7.6 3.1l-1.4 1.4C12.6 3.3 10.4 2.4 8 2.4zm0 4c-1.3 0-2.5.5-3.4 1.4L3.2 6.4c1.2-1.2 2.9-2 4.8-2s3.6.8 4.8 2l-1.4 1.4c-.9-.9-2.1-1.4-3.4-1.4zm0 4c-.7 0-1.3.3-1.8.8L8 13l1.8-1.8c-.5-.5-1.1-.8-1.8-.8z"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="currentColor"><rect x="0" y="1" width="21" height="10" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1"/><rect x="22" y="4" width="2" height="4" rx="0.5" fill="currentColor" opacity="0.4"/><rect x="1.5" y="2.5" width="18" height="7" rx="1" fill="currentColor"/></svg>
+      </span>
+    </div>
+    <div class="inner">
+      <iframe id="screen-frame" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>
+    </div>
+    <div class="home-indicator"></div>
+  </div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const screen = params.get('screen');
+  if (screen) {
+    const iframe = document.getElementById('screen-frame');
+    const isAbsolute = /^https?:\/\//.test(screen);
+    iframe.src = isAbsolute ? screen : new URL(screen, document.referrer || location.href).href;
+  }
+</script>
+</body>
+</html>

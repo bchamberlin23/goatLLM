@@ -1,32 +1,25 @@
-/**
- * Question-form parser. The design-mode system prompt tells the model to
- * emit `<question-form id="discovery">…</question-form>` instead of an
- * artifact on the first turn. We intercept that segment in the streaming
- * body and render native form controls inside the message bubble.
- *
- * The grammar is intentionally tiny so we can parse it without a real DOM
- * parser. Real model output is messy — prose before/after tags, single
- * quotes, nested HTML, incomplete streaming forms. We handle all of those.
- * When we can't parse, we fall back to plain text rather than showing a
- * half-broken UI.
- */
-
 export interface ParsedField {
-  name: string;
+  id: string;
   label: string;
-  type: "radio" | "checkbox" | "text" | "textarea";
+  type: "radio" | "checkbox" | "select" | "text" | "textarea" | "direction-cards";
   options: { value: string; label: string }[];
+  required?: boolean;
+  placeholder?: string;
+  maxSelections?: number;
+  cards?: unknown[];
 }
 
 export interface ParsedQuestionForm {
   id: string;
+  title?: string;
+  description?: string;
   fields: ParsedField[];
 }
 
 export interface QuestionFormSegment {
   type: "question-form";
   raw: string;
-  form: ParsedQuestionForm | null; // null when the closing tag hasn't streamed in yet
+  form: ParsedQuestionForm | null;
 }
 
 export interface TextSegment {
@@ -39,11 +32,6 @@ export type FormSegment = TextSegment | QuestionFormSegment;
 const FORM_OPEN = /<question-form\b[^>]*>/i;
 const FORM_CLOSE = /<\/question-form>/i;
 
-/**
- * Split a streaming assistant message into text + question-form segments.
- * Open-but-not-closed forms still produce a segment (with `form: null`)
- * so the renderer can show a "writing form…" placeholder.
- */
 export function splitByQuestionForm(content: string): FormSegment[] {
   const out: FormSegment[] = [];
   let cursor = 0;
@@ -63,7 +51,6 @@ export function splitByQuestionForm(content: string): FormSegment[] {
     const afterOpen = openIdx + openMatch[0].length;
     const closeMatch = content.slice(afterOpen).match(FORM_CLOSE);
     if (!closeMatch || closeMatch.index === undefined) {
-      // Open without close — emit a streaming-in-progress segment and stop.
       out.push({
         type: "question-form",
         raw: content.slice(openIdx),
@@ -84,43 +71,104 @@ export function splitByQuestionForm(content: string): FormSegment[] {
   return out;
 }
 
-/**
- * Parse a complete `<question-form>…</question-form>` block into a typed
- * tree. Returns null when the body is malformed enough that we can't get
- * a usable form out of it (in which case the renderer falls back to plain
- * text — better to show the model's words than a half-broken UI).
- */
 export function parseQuestionForm(raw: string): ParsedQuestionForm | null {
   const openMatch = raw.match(FORM_OPEN);
   const closeMatch = raw.match(FORM_CLOSE);
-  if (!openMatch || !closeMatch) {
-    // Incomplete — only the opening tag streamed in yet. Not parseable.
-    return null;
-  }
+  if (!openMatch || !closeMatch) return null;
 
-  // Strip form tags to get inner content. Be lenient: if the model wrapped
-  // the form in a markdown code fence, strip it before parsing.
   let inner = raw.slice(
     (openMatch.index ?? 0) + openMatch[0].length,
     closeMatch.index,
   );
 
-  // If the inner content starts/ends with markdown fences, peel them.
   const fencePeel = inner.match(/^```\w*\n?([\s\S]*?)\n?```$/);
   if (fencePeel) inner = fencePeel[1] ?? inner;
 
-  // Extract id — tolerate double-quoted, single-quoted, and unquoted.
   const idMatch =
     openMatch[0].match(/\bid\s*=\s*"([^"]+)"/i) ??
     openMatch[0].match(/\bid\s*=\s*'([^']+)'/i) ??
     openMatch[0].match(/\bid\s*=\s*([^\s>]+)/i);
   const id = idMatch ? idMatch[1] : "discovery";
 
+  const titleMatch =
+    openMatch[0].match(/\btitle\s*=\s*"([^"]+)"/i) ??
+    openMatch[0].match(/\btitle\s*=\s*'([^']+)'/i);
+  const title = titleMatch ? titleMatch[1] : undefined;
+
+  const jsonForm = tryParseJsonBody(inner);
+  if (jsonForm) {
+    const jsonTitle = jsonForm.title;
+    const { title: _omit, ...rest } = jsonForm;
+    return { id, title: title ?? jsonTitle, ...rest };
+  }
+
+  const xmlForm = tryParseXmlBody(inner);
+  if (xmlForm) {
+    return { id, title, ...xmlForm };
+  }
+
+  return null;
+}
+
+function tryParseJsonBody(inner: string): Omit<ParsedQuestionForm, "id"> | null {
+  const trimmed = inner.trim();
+  if (!trimmed.startsWith("{")) return null;
+
+  let json: Record<string, unknown>;
+  try {
+    json = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+
+  const questions = json.questions;
+  if (!Array.isArray(questions) || questions.length === 0) return null;
+
   const fields: ParsedField[] = [];
-  // Tolerate self-closing fields (text / textarea) and explicit-close fields
-  // (radio / checkbox with <option> children).
-  const fieldRegex =
-    /<field\b([^>]*)(?:\/>|>([\s\S]*?)<\/field>)/gi;
+  for (const q of questions) {
+    if (typeof q !== "object" || q === null) continue;
+    const qObj = q as Record<string, unknown>;
+    const fieldId = typeof qObj.id === "string" ? qObj.id : "";
+    if (!fieldId) continue;
+
+    const label = typeof qObj.label === "string" ? qObj.label : fieldId;
+    const typeRaw = typeof qObj.type === "string" ? qObj.type.toLowerCase() : "text";
+    const type = normalizeType(typeRaw);
+
+    const options: ParsedField["options"] = [];
+    if (Array.isArray(qObj.options)) {
+      for (const opt of qObj.options) {
+        if (typeof opt === "string") {
+          options.push({ value: opt, label: opt });
+        } else if (typeof opt === "object" && opt !== null) {
+          const oObj = opt as Record<string, unknown>;
+          const value = typeof oObj.value === "string" ? oObj.value : String(oObj.label ?? "");
+          const optLabel = typeof oObj.label === "string" ? oObj.label : value;
+          if (value) options.push({ value, label: optLabel });
+        }
+      }
+    }
+
+    const field: ParsedField = { id: fieldId, label, type, options };
+
+    if (qObj.required === true) field.required = true;
+    if (typeof qObj.placeholder === "string") field.placeholder = qObj.placeholder;
+    if (typeof qObj.maxSelections === "number") field.maxSelections = qObj.maxSelections;
+    if (Array.isArray(qObj.cards)) field.cards = qObj.cards;
+
+    fields.push(field);
+  }
+
+  if (fields.length === 0) return null;
+
+  const description = typeof json.description === "string" ? json.description : undefined;
+  const title = typeof json.title === "string" ? json.title : undefined;
+  return { description, title, fields };
+}
+
+function tryParseXmlBody(inner: string): Omit<ParsedQuestionForm, "id" | "title"> | null {
+  const fields: ParsedField[] = [];
+  const fieldRegex = /<field\b([^>]*)(?:\/>|>([\s\S]*?)<\/field>)/gi;
   let m: RegExpExecArray | null;
   while ((m = fieldRegex.exec(inner)) !== null) {
     const attrs = m[1] ?? "";
@@ -128,13 +176,10 @@ export function parseQuestionForm(raw: string): ParsedQuestionForm | null {
     const name = attrAt(attrs, "name");
     const label = attrAt(attrs, "label") ?? name ?? "";
     const typeRaw = (attrAt(attrs, "type") ?? "text").toLowerCase();
-    const type: ParsedField["type"] =
-      typeRaw === "radio" || typeRaw === "checkbox" || typeRaw === "textarea"
-        ? typeRaw
-        : "text";
+    const type = normalizeType(typeRaw);
     if (!name) continue;
     const options: ParsedField["options"] = [];
-    if (type === "radio" || type === "checkbox") {
+    if (type === "radio" || type === "checkbox" || type === "select" || type === "direction-cards") {
       const optRegex = /<option\b([^>]*)>([\s\S]*?)<\/option>/gi;
       let om: RegExpExecArray | null;
       while ((om = optRegex.exec(body)) !== null) {
@@ -144,15 +189,21 @@ export function parseQuestionForm(raw: string): ParsedQuestionForm | null {
         options.push({ value, label: optLabel || value });
       }
     }
-    fields.push({ name, label, type, options });
+    fields.push({ id: name, label, type, options });
   }
 
   if (fields.length === 0) return null;
-  return { id, fields };
+  return { fields };
+}
+
+function normalizeType(typeRaw: string): ParsedField["type"] {
+  if (typeRaw === "radio" || typeRaw === "checkbox" || typeRaw === "select" || typeRaw === "textarea" || typeRaw === "direction-cards") {
+    return typeRaw;
+  }
+  return "text";
 }
 
 function attrAt(attrs: string, name: string): string | undefined {
-  // Try double-quoted first, then single-quoted, then unquoted.
   const dq = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, "i");
   const m = attrs.match(dq);
   if (m) return m[1];
@@ -161,21 +212,16 @@ function attrAt(attrs: string, name: string): string | undefined {
   const sm = attrs.match(sq);
   if (sm) return sm[1];
 
-  // Unquoted — grab until next whitespace or >.
   const uq = new RegExp(`\\b${name}\\s*=\\s*([^\\s>]+)`, "i");
   const um = attrs.match(uq);
   return um ? um[1] : undefined;
 }
 
-/**
- * Format submitted form values as the structured user follow-up message
- * the design system prompt expects to see (see DISCOVERY_DIRECTIVES).
- */
 export function formatFormSubmission(
   formId: string,
   values: Record<string, string | string[]>,
 ): string {
-  const lines: string[] = [`[form: ${formId}]`];
+  const lines: string[] = [`[form answers — ${formId}]`];
   let filled = false;
   for (const [k, v] of Object.entries(values)) {
     const display = Array.isArray(v) ? v.join(", ") : v;

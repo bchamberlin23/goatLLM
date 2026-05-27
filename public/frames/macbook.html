@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacBook Pro 14" Frame</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  .device {
+    position: relative;
+    width: 1512px;
+    max-width: 100%;
+  }
+  .lid {
+    position: relative;
+    background: #1a1a1c;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 12px 0;
+  }
+  .notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 28px;
+    background: #1a1a1c;
+    border-radius: 0 0 16px 16px;
+    z-index: 10;
+  }
+  .camera-dot {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    background: #2a2a2c;
+    border-radius: 50%;
+    z-index: 11;
+  }
+  .screen {
+    width: 100%;
+    aspect-ratio: 1512 / 982;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .screen iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  .chin {
+    height: 24px;
+    background: linear-gradient(180deg, #2a2a2c 0%, #1a1a1c 100%);
+    border-radius: 0 0 16px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chin::after {
+    content: '';
+    width: 120px;
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="lid">
+    <div class="notch">
+      <div class="camera-dot"></div>
+    </div>
+    <div class="screen">
+      <iframe id="screen-frame" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>
+    </div>
+  </div>
+  <div class="chin"></div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const screen = params.get('screen');
+  if (screen) {
+    const iframe = document.getElementById('screen-frame');
+    const isAbsolute = /^https?:\/\//.test(screen);
+    iframe.src = isAbsolute ? screen : new URL(screen, document.referrer || location.href).href;
+  }
+</script>
+</body>
+</html>

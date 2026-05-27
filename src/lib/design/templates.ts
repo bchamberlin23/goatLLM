@@ -55,7 +55,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'High-impact product launch announcement page',
     skillId: 'web-prototype',
     recommendedSystemId: 'vercel',
-    recommendedDirectionId: 'brutalist',
+    recommendedDirectionId: 'brutalist-experimental',
     tags: ['launch', 'product', 'announcement'],
   },
   {
@@ -65,7 +65,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Creative portfolio with project grid and case studies',
     skillId: 'web-prototype',
     recommendedSystemId: 'framer',
-    recommendedDirectionId: 'editorial',
+    recommendedDirectionId: 'editorial-monocle',
     tags: ['portfolio', 'creative', 'showcase'],
   },
   
@@ -141,7 +141,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Detailed design spec with components, colors, and typography',
     skillId: 'docs-page',
     recommendedSystemId: 'figma',
-    recommendedDirectionId: 'editorial',
+    recommendedDirectionId: 'editorial-monocle',
     tags: ['design', 'spec', 'components', 'style-guide'],
   },
   
@@ -153,7 +153,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Customer success story with metrics and testimonials',
     skillId: 'blog-post',
     recommendedSystemId: 'hubspot',
-    recommendedDirectionId: 'editorial',
+    recommendedDirectionId: 'editorial-monocle',
     tags: ['case-study', 'customer', 'success', 'testimonial'],
   },
   {
@@ -185,7 +185,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Multi-slide Instagram post with educational content',
     skillId: 'social-carousel',
     recommendedSystemId: 'instagram',
-    recommendedDirectionId: 'editorial',
+    recommendedDirectionId: 'editorial-monocle',
     tags: ['instagram', 'carousel', 'educational'],
   },
   
@@ -197,7 +197,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Email newsletter with articles, updates, and CTAs',
     skillId: 'email-template',
     recommendedSystemId: 'mailchimp',
-    recommendedDirectionId: 'editorial',
+    recommendedDirectionId: 'editorial-monocle',
     tags: ['email', 'newsletter', 'updates'],
   },
   {
@@ -219,7 +219,7 @@ export const TEMPLATES: DesignTemplate[] = [
     description: 'Mobile app onboarding screens with illustrations',
     skillId: 'mobile-onboarding',
     recommendedSystemId: 'airbnb',
-    recommendedDirectionId: 'soft-warm',
+    recommendedDirectionId: 'human-approachable',
     tags: ['mobile', 'app', 'onboarding', 'welcome'],
   },
   {

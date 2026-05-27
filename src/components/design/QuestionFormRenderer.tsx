@@ -4,12 +4,6 @@ import { formatFormSubmission } from "../../lib/design/parser";
 import { useChatStore } from "../../stores/chat";
 import { ArrowRight } from "lucide-react";
 
-/**
- * Inline question-form renderer. Reads a parsed `<question-form>` block
- * out of a streaming assistant message and renders native form controls.
- * Submitting dispatches a structured user follow-up so the model can read
- * the answers in the next turn.
- */
 export function QuestionFormRenderer({
   form,
   conversationId,
@@ -34,58 +28,70 @@ export function QuestionFormRenderer({
     [form.id, values, submitted, disabled, conversationId, setPendingFormSubmission],
   );
 
-  const setRadio = (name: string, value: string) =>
-    setValues((v) => ({ ...v, [name]: value }));
-  const toggleCheckbox = (name: string, value: string) =>
+  const setRadio = (fieldId: string, value: string) =>
+    setValues((v) => ({ ...v, [fieldId]: value }));
+  const toggleCheckbox = (fieldId: string, value: string, maxSelections?: number) =>
     setValues((v) => {
-      const cur = Array.isArray(v[name]) ? (v[name] as string[]) : [];
-      const next = cur.includes(value)
-        ? cur.filter((x) => x !== value)
-        : [...cur, value];
-      return { ...v, [name]: next };
+      const cur = Array.isArray(v[fieldId]) ? (v[fieldId] as string[]) : [];
+      if (cur.includes(value)) {
+        return { ...v, [fieldId]: cur.filter((x) => x !== value) };
+      }
+      if (maxSelections && cur.length >= maxSelections) {
+        return { ...v, [fieldId]: [...cur.slice(1), value] };
+      }
+      return { ...v, [fieldId]: [...cur, value] };
     });
-  const setText = (name: string, value: string) =>
-    setValues((v) => ({ ...v, [name]: value }));
+  const setText = (fieldId: string, value: string) =>
+    setValues((v) => ({ ...v, [fieldId]: value }));
+
+  const headerText = form.title ?? (form.id === "direction" ? "Pick a direction" : "A few quick questions");
 
   return (
     <form
       onSubmit={handleSubmit}
       className="my-3 rounded-xl border border-white/[0.08] bg-[#2a2a2c] overflow-hidden"
-      aria-label="Discovery form"
+      aria-label={headerText}
     >
       <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
         <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">
-          {form.id === "direction" ? "Pick a direction" : "A few quick questions"}
+          {headerText}
         </span>
         <span className="text-[10.5px] text-[#666]">
           {form.fields.length} field{form.fields.length === 1 ? "" : "s"}
         </span>
       </div>
 
+      {form.description && (
+        <p className="px-4 pt-3 text-[11.5px] text-[#a0a0a0] leading-relaxed">
+          {form.description}
+        </p>
+      )}
+
       <fieldset
         disabled={disabled || submitted}
         className="p-4 space-y-4 disabled:opacity-60"
       >
         {form.fields.map((field) => (
-          <div key={field.name}>
+          <div key={field.id}>
             <label
-              htmlFor={`qf-${form.id}-${field.name}`}
+              htmlFor={`qf-${form.id}-${field.id}`}
               className="block text-[12.5px] font-medium text-[#ececec] mb-1.5"
             >
               {field.label}
+              {field.required && <span className="text-[#f59e42] ml-0.5">*</span>}
             </label>
 
-            {field.type === "radio" && field.options.length > 0 && (
+            {(field.type === "radio" || field.type === "direction-cards") && field.options.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {field.options.map((opt) => {
-                  const active = values[field.name] === opt.value;
+                  const active = values[field.id] === opt.value;
                   return (
                     <button
                       key={opt.value}
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      onClick={() => setRadio(field.name, opt.value)}
+                      onClick={() => setRadio(field.id, opt.value)}
                       className={`text-left px-3 py-2 rounded-lg border text-[12.5px] transition-colors ${
                         active
                           ? "border-[#f59e42]/60 bg-[#f59e42]/[0.08] text-[#ececec]"
@@ -102,8 +108,8 @@ export function QuestionFormRenderer({
             {field.type === "checkbox" && field.options.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {field.options.map((opt) => {
-                  const cur = Array.isArray(values[field.name])
-                    ? (values[field.name] as string[])
+                  const cur = Array.isArray(values[field.id])
+                    ? (values[field.id] as string[])
                     : [];
                   const active = cur.includes(opt.value);
                   return (
@@ -112,7 +118,7 @@ export function QuestionFormRenderer({
                       type="button"
                       role="checkbox"
                       aria-checked={active}
-                      onClick={() => toggleCheckbox(field.name, opt.value)}
+                      onClick={() => toggleCheckbox(field.id, opt.value, field.maxSelections)}
                       className={`text-left px-3 py-2 rounded-lg border text-[12.5px] transition-colors ${
                         active
                           ? "border-[#f59e42]/60 bg-[#f59e42]/[0.08] text-[#ececec]"
@@ -126,23 +132,41 @@ export function QuestionFormRenderer({
               </div>
             )}
 
+            {field.type === "select" && field.options.length > 0 && (
+              <select
+                id={`qf-${form.id}-${field.id}`}
+                value={(values[field.id] as string) ?? ""}
+                onChange={(e) => setText(field.id, e.target.value)}
+                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50"
+              >
+                <option value="">Select...</option>
+                {field.options.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+
             {field.type === "text" && (
               <input
-                id={`qf-${form.id}-${field.name}`}
+                id={`qf-${form.id}-${field.id}`}
                 type="text"
-                value={(values[field.name] as string) ?? ""}
-                onChange={(e) => setText(field.name, e.target.value)}
-                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50"
+                value={(values[field.id] as string) ?? ""}
+                onChange={(e) => setText(field.id, e.target.value)}
+                placeholder={field.placeholder}
+                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 placeholder:text-[#666]"
               />
             )}
 
             {field.type === "textarea" && (
               <textarea
-                id={`qf-${form.id}-${field.name}`}
-                value={(values[field.name] as string) ?? ""}
-                onChange={(e) => setText(field.name, e.target.value)}
+                id={`qf-${form.id}-${field.id}`}
+                value={(values[field.id] as string) ?? ""}
+                onChange={(e) => setText(field.id, e.target.value)}
+                placeholder={field.placeholder}
                 rows={3}
-                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 resize-none"
+                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 resize-none placeholder:text-[#666]"
               />
             )}
           </div>

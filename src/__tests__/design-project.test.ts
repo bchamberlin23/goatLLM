@@ -24,14 +24,14 @@ describe("design project", () => {
         conversationId: CONV_ID,
         skillId: "web-prototype",
         systemId: "linear-app",
-        directionId: "editorial",
+        directionId: "editorial-monocle",
         seedHtml: "<!doctype html><html></html>",
       });
 
       expect(p.conversationId).toBe(CONV_ID);
       expect(p.skillId).toBe("web-prototype");
       expect(p.systemId).toBe("linear-app");
-      expect(p.directionId).toBe("editorial");
+      expect(p.directionId).toBe("editorial-monocle");
       expect(p.files["template.html"]).toBe("<!doctype html><html></html>");
     });
 
