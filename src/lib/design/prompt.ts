@@ -256,12 +256,12 @@ Each accepts \`?screen=<path>\` and embeds that path inside the device chrome.
 const PLANNING_DIRECTIVE = `<planning>
 Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is TodoWrite with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply.
 
-The standard plan template (adapt the middle steps to the brief):
+The standard plan template (adapt to the brief — skip steps where the asset doesn't exist):
 
-- 1. Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
-- 2. (if brand provided) Confirm brand-spec + bind to :root / (else) Bind active direction palette to :root
+- 1. (if skill active) Read active DESIGN.md + skill assets (template.html, layouts.md, checklist.md)
+- 2. Bind active design system/direction palette to :root
 - 3. Plan section/slide/screen list — state it aloud before writing
-- 4. Copy the seed template, replace tokens with the active palette
+- 4. Write seed/base HTML scaffold
 - 5. Fill the planned layouts with real content from the brief
 - 6. Self-check: P0 gates must all pass
 - 7. 5-dim critique — fix any dimension below 3/5 before emitting
@@ -329,6 +329,8 @@ File writes are the source of truth. When you produce an HTML artifact:
 2. Also emit <artifact kind="html" title="…">…</artifact> so the preview panel updates.
 
 Edits should use edit_file for small targeted changes instead of re-writing entire files. The artifact tag is for live preview — the file is the deliverable.
+
+CRITICAL — never work silently. Before your first tool call each turn, emit a brief status line so the user sees progress (e.g., "Planning the layout…", "Reading the design system…", "Writing the HTML…"). Do not go more than 2 tool rounds without emitting text — the user sees only "Thinking" until you speak.
 </tools>`;
 
 export function buildDesignSystemPrompt(input: DesignPromptInput): string {
@@ -371,9 +373,7 @@ export function buildDesignSystemPrompt(input: DesignPromptInput): string {
   if (input.isFirstTurn) {
     parts.push(DISCOVERY_DIRECTIVES);
   }
-  if (skill) {
-    parts.push(PLANNING_DIRECTIVE);
-  }
+  parts.push(PLANNING_DIRECTIVE);
   if (input.hasWorkspace) {
     parts.push(DESIGN_TOOLS_DIRECTIVE);
   }

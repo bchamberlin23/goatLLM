@@ -322,10 +322,26 @@ function buildSummary(messages: Message[]): string {
 function messagesToLlm(messages: Message[]): LlmMessage[] {
   return messages
     .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
-    .map((m) => ({
-      role: m.role as "user" | "assistant" | "system",
-      content: m.content,
-    }));
+    .map((m) => {
+      if (m.role !== "assistant" || !m.toolCalls?.length) {
+        return { role: m.role as "user" | "assistant" | "system", content: m.content };
+      }
+      const doneTools = m.toolCalls.filter((tc) => tc.state === "done");
+      if (!doneTools.length) {
+        return { role: m.role, content: m.content };
+      }
+      const toolLines = doneTools.map((tc) => {
+        const prefix = tc.toolName === "write_file" || tc.toolName === "edit_file"
+          ? `[wrote: ${(tc.input as { path?: string })?.path ?? "file"}]`
+          : `[${tc.toolName}]`;
+        const result = typeof tc.output === "string" ? tc.output.slice(0, 250) : "";
+        return result ? `${prefix} ${result}${tc.output && (typeof tc.output === "string") && tc.output.length >= 250 ? "…" : ""}` : prefix;
+      }).join("\n");
+      const content = m.content
+        ? `${m.content}\n${toolLines}`
+        : toolLines;
+      return { role: "assistant", content };
+    });
 }
 
 /**

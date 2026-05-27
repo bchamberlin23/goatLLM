@@ -4,7 +4,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
-import { Shimmer, WorkingHeader } from "./ThinkingIndicator";
+import { Shimmer, WorkingHeader, useElapsedLabel } from "./ThinkingIndicator";
 import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
@@ -114,6 +114,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const anyToolRunning = !!message.toolCalls?.some((t) => t.state === "running" || t.state === "pending_approval");
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
+  const thinkingElapsed = useElapsedLabel(isWorking ? startedAt : null, isWorking);
   const agentMode = useChatStore((s) => s.agentMode);
   const showWorkingHeader = isAssistant && isStreaming && (hasToolCalls || agentMode);
   const headerRunning = isAssistant && isStreaming;
@@ -206,7 +207,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           />
         ) : null}
         {hasToolCalls && isAssistant && isStreaming && message.content.length === 0 && (
-          <Shimmer text="Thinking" className="thinking-line" />
+          <Shimmer text={`Thinking · ${thinkingElapsed}`} className="thinking-line" />
         )}
         {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
           <span className="streaming-cursor" />
@@ -230,7 +231,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             ) : isUser ? (
               <UserMessageContent message={message} />
             ) : message.content.length === 0 && isWorking ? (
-              <Shimmer text="Thinking" className="thinking-line" />
+              <Shimmer text={`Thinking · ${thinkingElapsed}`} className="thinking-line" />
             ) : (
               <>
                 <StreamingSegmentedText

@@ -634,7 +634,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     // extraction — give it room so a single paper doesn't trigger compaction
     // and lose the body. Sized for the lowest model the user targets (200K
     // context): 180K tokens leaves headroom for system prompt + reply.
-    const maxTokens = (isAgentMode || (isDesignMode && designWorkspace)) ? 8000 : 180_000;
+    const maxTokens = (isAgentMode || (isDesignMode && designWorkspace)) ? 40_000 : 180_000;
     const compaction = compactMessages(history, maxTokens, { stripTools: !activeTools });
     const { compacted, summarizedCount, truncatedCount, toolsInlinedCount, droppedMessages } = compaction;
 
