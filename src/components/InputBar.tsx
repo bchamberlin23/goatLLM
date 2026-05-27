@@ -975,20 +975,39 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const finalContent = fullText || currentContent;
         const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
 
+        // Strip ephemeral status lines ("Reading…", "Writing the HTML…")
+        // from the final message. These are live progress indicators during
+        // streaming — once the turn is done, they're noise.
+        const cleanedContent = hasToolActivity
+          ? finalContent
+              .split("\n")
+              .filter((line) => {
+                const t = line.trim();
+                if (!t) return false;
+                // Match short status lines ending with ellipsis
+                if (/^[A-Z][a-z].*…$/.test(t) && t.length < 60) return false;
+                // Match common status patterns
+                if (/^(Reading|Writing|Editing|Planning|Searching|Checking|Running|Fetching|Creating|Updating|Building|Analyzing)\b/i.test(t) && t.length < 80) return false;
+                return true;
+              })
+              .join("\n")
+              .trim()
+          : finalContent;
+
         // Stopped before the model produced anything — drop the empty bubble
         // entirely so the chat looks like the turn never started.
-        if (!finalContent.trim() && !hasToolActivity) {
+        if (!cleanedContent.trim() && !hasToolActivity) {
           deleteMessage(convId!, assistantMsg.id);
           stopStreaming(convId!);
           endJjAgentSessionIfNeeded();
           return;
         }
 
-        updateMessage(convId!, assistantMsg.id, { content: finalContent, isStreaming: false });
+        updateMessage(convId!, assistantMsg.id, { content: cleanedContent, isStreaming: false });
         stopStreaming(convId!);
         // Auto-detect artifacts in completed messages
-        if (finalContent.trim()) {
-          detectArtifacts(convId!, assistantMsg.id, finalContent);
+        if (cleanedContent.trim()) {
+          detectArtifacts(convId!, assistantMsg.id, cleanedContent);
         }
         // Any remaining streaming flags from this message clear here so
         // the canvas auto-flips from code to preview view.
