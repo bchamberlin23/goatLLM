@@ -457,6 +457,57 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       }
     }
 
+    // Bash inline execution: !command runs and sends output to LLM,
+    // !!command runs but does NOT send output (just shows in chat).
+    // Only available in agent or design mode with a workspace.
+    const bashWorkspace = useChatStore.getState().agentMode
+      ? useChatStore.getState().workspacePath
+      : useChatStore.getState().designMode
+        ? useChatStore.getState().designWorkspacePath
+        : null;
+    if (bashWorkspace && (trimmed.startsWith("!") || trimmed.startsWith("!!"))) {
+      const sendToLlm = trimmed.startsWith("!!");
+      const cmd = sendToLlm ? trimmed.slice(2).trim() : trimmed.slice(1).trim();
+      if (cmd) {
+        try {
+          const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+          const result = await tauriInvoke<{ stdout: string; stderr: string; code: number }>("exec_command", {
+            workspace: bashWorkspace,
+            command: cmd,
+          });
+          const output = [
+            result.stdout?.trim(),
+            result.stderr?.trim(),
+            result.code !== 0 ? `[exit code: ${result.code}]` : "",
+          ].filter(Boolean).join("\n");
+          if (sendToLlm) {
+            // !!command: run only, don't send to LLM — show output in chat
+            addMessage({
+              conversationId: convId,
+              role: "user",
+              content: `!${cmd}`,
+            });
+            addMessage({
+              conversationId: convId,
+              role: "assistant",
+              content: `Command output:\n\n\`\`\`\n${output || "(no output)"}\n\`\`\``,
+            });
+            clearDraft(startingDraftKey);
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+            setValue("");
+            setFiles([]);
+            return;
+          } else {
+            // !command: run and send output to LLM
+            trimmed = `${trimmed}\n\nCommand output:\n\`\`\`\n${output || "(no output)"}\n\`\`\``;
+          }
+        } catch (e) {
+          const err = e instanceof Error ? e.message : String(e);
+          trimmed = `${trimmed}\n\n[Command failed: ${err}]`;
+        }
+      }
+    }
+
     if (!isResend) {
       clearDraft(startingDraftKey);
       // If a brand-new conversation was just created from the "new chat"
