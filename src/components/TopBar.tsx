@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useChatStore } from "../stores/chat";
-import { SquarePen, MoreHorizontal, Pencil, Trash2, FileCode, FileText, Image, Paperclip, Code } from "lucide-react";
+import { SquarePen, MoreHorizontal, Pencil, Trash2, FileCode, FileText, Image, Paperclip, Code, Terminal } from "lucide-react";
 import { WorkspaceFileTree } from "./WorkspaceFileTree";
 import { ContextMeter } from "./ContextMeter";
 
@@ -17,8 +17,12 @@ export function TopBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [editingSystemPrompt, setEditingSystemPrompt] = useState(false);
+  const [systemPromptValue, setSystemPromptValue] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
+  const systemPromptRef = useRef<HTMLTextAreaElement>(null);
+  const setSystemPrompt = useChatStore((s) => s.setSystemPrompt);
 
   const activeConv = conversations.find((c) => c.id === activeId);
   const title = activeConv?.title || "New Conversation";
@@ -67,6 +71,22 @@ export function TopBar() {
   const handleDelete = () => {
     setMenuOpen(false);
     if (activeId) deleteConversation(activeId);
+  };
+
+  const handleEditSystemPrompt = () => {
+    setMenuOpen(false);
+    if (activeId) {
+      setSystemPromptValue(activeConv?.systemPrompt || "");
+      setEditingSystemPrompt(true);
+      requestAnimationFrame(() => systemPromptRef.current?.focus());
+    }
+  };
+
+  const handleSystemPromptSubmit = () => {
+    if (activeId) {
+      setSystemPrompt(activeId, systemPromptValue.trim());
+    }
+    setEditingSystemPrompt(false);
   };
 
   return (
@@ -138,13 +158,20 @@ export function TopBar() {
                   </button>
 
                   {menuOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-[160px] rounded-lg bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 overflow-hidden animate-[fadeIn_100ms_ease] z-50">
+                    <div className="absolute top-full left-0 mt-1 w-[180px] rounded-lg bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 overflow-hidden animate-[fadeIn_100ms_ease] z-50">
                       <button
                         onClick={handleRename}
                         className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#d5d5d5] hover:bg-white/[0.06] transition-colors text-left"
                       >
                         <Pencil size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
                         Rename chat
+                      </button>
+                      <button
+                        onClick={handleEditSystemPrompt}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#d5d5d5] hover:bg-white/[0.06] transition-colors text-left"
+                      >
+                        <Terminal size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
+                        System prompt
                       </button>
                       <button
                         onClick={handleDelete}
@@ -166,6 +193,56 @@ export function TopBar() {
 
       {/* Right-side assets menu (artifacts + uploaded files) */}
       {(activeId || agentMode || designMode) && <ChatAssetsMenu />}
+
+      {/* System prompt editor modal */}
+      {editingSystemPrompt && activeId && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm animate-[fadeIn_150ms_ease]"
+          onClick={() => setEditingSystemPrompt(false)}
+        >
+          <div
+            className="w-[500px] max-w-[90vw] bg-[#2a2a2c] border border-white/10 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)] overflow-hidden animate-[contextMenuIn_180ms_ease]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+              <h3 className="text-[15px] font-semibold text-[#ececec]">System prompt</h3>
+              <button
+                onClick={() => setEditingSystemPrompt(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-[12.5px] text-[#a0a0a0] mb-3">
+                Custom instructions for this conversation. Leave empty to use the default. Appended to the built-in system prompt.
+              </p>
+              <textarea
+                ref={systemPromptRef}
+                value={systemPromptValue}
+                onChange={(e) => setSystemPromptValue(e.target.value)}
+                placeholder="e.g., Be concise. Focus on security implications."
+                rows={4}
+                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] resize-none outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/25"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  onClick={() => setEditingSystemPrompt(false)}
+                  className="px-4 py-2 rounded-lg text-[12.5px] text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSystemPromptSubmit}
+                  className="px-4 py-2 rounded-lg text-[12.5px] font-medium bg-[#f59e42] text-black hover:bg-[#f0903a] transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
