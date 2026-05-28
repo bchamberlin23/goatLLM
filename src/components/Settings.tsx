@@ -14,6 +14,7 @@ import { DenylistSection } from "./settings/DenylistSection";
 import { SkillsSection } from "./settings/SkillsSection";
 import { McpSettingsSection } from "./settings/McpSettingsSection";
 import { JjAgentToggleRow } from "./settings/JjAgentToggleRow";
+import { CustomProviderSection } from "./settings/CustomProviderSection";
 
 const CLOUD_PROVIDERS = [
   { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com" },
@@ -125,6 +126,8 @@ function SettingsContent() {
           ))}
         </div>
       </section>
+
+      <CustomProviderSection />
 
       <section className="flex flex-col gap-2">
         <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">Web Search</h3>

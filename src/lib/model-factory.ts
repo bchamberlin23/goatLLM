@@ -37,7 +37,8 @@ export async function createModel(config: LlmConfig): Promise<LanguageModel> {
     config.provider === "mimo" ||
     config.provider === "openrouter" ||
     config.provider === "ollama" ||
-    config.provider === "lmstudio"
+    config.provider === "lmstudio" ||
+    config.provider.startsWith("custom-")
   ) {
     const compat = createOpenAICompatible({
       name: config.provider,
