@@ -72,6 +72,8 @@ function SettingsContent() {
   const setJjAgent = useChatStore((s) => s.setJjAgent);
   const showDesignCritique = useChatStore((s) => s.showDesignCritique);
   const setShowDesignCritique = useChatStore((s) => s.setShowDesignCritique);
+  const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
+  const setSubagentsEnabled = useChatStore((s) => s.setSubagentsEnabled);
 
   return (
     <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-8">
@@ -131,6 +133,19 @@ function SettingsContent() {
         <FreeWebSearchRow enabled={freeWebSearch} onToggle={setFreeWebSearch} />
         <ChatCodeExecRow enabled={chatCodeExec} onToggle={setChatCodeExec} />
         <TavilyKeyRow apiKey={tavilyApiKey} onSave={setTavilyApiKey} onRemove={() => setTavilyApiKey("")} />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">Subagents</h3>
+        <p className="text-[13px] text-[#8e8e8e] leading-relaxed mb-2">
+          Subagents let the main agent delegate complex tasks to child agents that run autonomously. Only available in Agent and Design modes — never in plain Chat.
+        </p>
+        <ArtifactToggleRow
+          enabled={subagentsEnabled}
+          onToggle={setSubagentsEnabled}
+          title="Enable subagents"
+          description="On: the agent can spawn child agents to handle parallelizable tasks. Off: all work stays in the main agent loop."
+        />
       </section>
 
       <section className="flex flex-col gap-2">

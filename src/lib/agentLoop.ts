@@ -49,6 +49,9 @@ export interface AgentLoopOptions {
   depth?: number;
   tools?: ToolSet;
   maxToolRounds?: number;
+  /** When false, spawn_subagent is not injected into the tool set.
+   *  Used by the parent to disable subagents based on user settings. */
+  subagentsEnabled?: boolean;
 }
 
 // ── Context compaction constants ──
@@ -254,10 +257,11 @@ export async function agentLoop(
   }
 
   try {
-    // Inject spawn_subagent into the tool set when depth allows.
-    // Dynamic import to avoid circular dep: subagent.ts → agentLoop.ts.
+    // Inject spawn_subagent into the tool set when depth allows
+    // and subagents are enabled. Dynamic import to avoid circular dep.
     let effectiveTools = options?.tools;
-    if (effectiveTools && (options?.depth ?? 0) < 2) {
+    const subagentsEnabled = options?.subagentsEnabled !== false;
+    if (effectiveTools && (options?.depth ?? 0) < 2 && subagentsEnabled) {
       const { createSpawnSubagent } = await import("./tools/builtins/subagent");
       effectiveTools = {
         ...effectiveTools,

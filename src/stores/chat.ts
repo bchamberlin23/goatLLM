@@ -735,6 +735,12 @@ interface ChatStore {
   showDesignCritique: boolean;
   setShowDesignCritique: (enabled: boolean) => void;
 
+  /** When true (default), subagents can be spawned in agent and design modes.
+   *  When false, the spawn_subagent tool is disabled. Subagents are never
+   *  available in plain chat mode regardless of this setting. */
+  subagentsEnabled: boolean;
+  setSubagentsEnabled: (enabled: boolean) => void;
+
   // ── Skills ──
   /** Extra skill directories configured by the user. Persisted. */
   skillPaths: string[];
@@ -979,6 +985,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       autoArtifacts: true,
       officeArtifacts: true,
       showDesignCritique: false,
+      subagentsEnabled: true,
       // ── Skills ──
       skillPaths: [] as string[],
       disabledSkills: new Set<string>(),
@@ -2355,6 +2362,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-show-design-critique", enabled ? "true" : "false"); } catch {}
       },
 
+      setSubagentsEnabled: (enabled) => {
+        set({ subagentsEnabled: enabled });
+        try { localStorage.setItem("goatllm-subagents-enabled", enabled ? "true" : "false"); } catch {}
+      },
+
       // ── Skills ──
       setSkillPaths: (paths) => {
         set({ skillPaths: paths });
@@ -2830,6 +2842,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
+        const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
         try {
           const data = await loadAllFromDb();
           const providerConfigs = loadProviderConfigs();
@@ -3004,6 +3017,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            subagentsEnabled,
             permissionMode: savedMode,
             autoApprove: savedMode === "yolo",
             artifacts: restoredArtifacts,
@@ -3085,6 +3099,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            subagentsEnabled,
             permissionMode: savedMode,
             agentMode,
             designMode,

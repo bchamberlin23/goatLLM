@@ -36,6 +36,8 @@ export interface StreamOptions {
   abortSignal?: AbortSignal;
   tools?: AgentLoopOptions["tools"];
   maxToolRounds?: number;
+  /** When false, spawn_subagent is not injected. */
+  subagentsEnabled?: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export async function streamChat(
     abortSignal: options?.abortSignal,
     tools: options?.tools,
     maxToolRounds: options?.maxToolRounds,
+    subagentsEnabled: options?.subagentsEnabled,
     depth: 0,
   });
 }

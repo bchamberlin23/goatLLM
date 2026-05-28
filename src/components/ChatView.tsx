@@ -10,6 +10,7 @@ import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder, Sparkles, X } from "lucide-react";
 import { SubagentPanel } from "./SubagentPanel";
+import { ToolActivityIndicator } from "./ToolActivityIndicator";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
 
@@ -352,6 +353,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
             )}
           </div>
           <ActiveSkillsBar />
+          <ToolActivityIndicator />
           <InputBar onOpenSettings={onOpenSettings} />
           <div className="flex items-center flex-wrap gap-1.5 w-full max-w-[720px] px-1">
             <ModeToggle />

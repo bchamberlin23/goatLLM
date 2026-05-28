@@ -215,6 +215,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const toggleResearchMode = useChatStore((s) => s.toggleResearchMode);
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const freeWebSearch = useChatStore((s) => s.freeWebSearch);
+  const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
 
   const [error, setError] = useState<string | null>(null);
   // Per-conversation draft (text + staged attachments). Keyed by activeId, or
@@ -1068,7 +1069,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
         endJjAgentSessionIfNeeded();
       },
-    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined });
+    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined, subagentsEnabled: (agentMode || designMode) && subagentsEnabled });
   }, [value, files, isStreaming, activeId, selectedModelId,
     addMessage, startStreaming, stopStreaming, appendToMessage, appendToThinking, updateMessage,
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,
