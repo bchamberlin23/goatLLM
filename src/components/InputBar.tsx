@@ -18,6 +18,7 @@ import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
 import { invoke } from "@tauri-apps/api/core";
+import { FileReferencePicker } from "./FileReferencePicker";
 
 /**
  * Per-conversation cache of high-quality LLM-generated summaries. We swap
@@ -252,6 +253,13 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [pendingSkills, setPendingSkills] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @ file reference picker state
+  const [fileRefQuery, setFileRefQuery] = useState<string | null>(null);
+  const [fileRefPosition, setFileRefPosition] = useState<{ top: number; left: number } | null>(null);
+  const fileRefActiveWorkspace = useChatStore((s) =>
+    s.agentMode ? s.workspacePath : s.designMode ? s.designWorkspacePath : null
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Forward ref for handleSend so effects can call into it without
   // breaking the dependency array. Assigned just below the callback def.
@@ -1157,9 +1165,47 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     handleSend({ content: steerPayload.content });
   }, [steerPayload, activeId, setSteerPayload, handleSend]);
 
+  // Handle @ file reference selection
+  const handleFileRefSelect = useCallback((path: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+
+    const cursorPos = ta.selectionStart;
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (atIndex >= 0) {
+      // Replace @query with @path
+      const before = value.slice(0, atIndex);
+      const after = value.slice(cursorPos);
+      const newValue = `${before}@${path} ${after}`;
+      setValue(newValue);
+
+      // Move cursor after the inserted path
+      requestAnimationFrame(() => {
+        const newPos = atIndex + path.length + 2; // +2 for @ and space
+        ta.selectionStart = newPos;
+        ta.selectionEnd = newPos;
+        ta.focus();
+      });
+    }
+
+    setFileRefQuery(null);
+    setFileRefPosition(null);
+  }, [value]);
+
+  const handleFileRefClose = useCallback(() => {
+    setFileRefQuery(null);
+    setFileRefPosition(null);
+  }, []);
+
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Don't handle Enter if file picker is open (let the picker handle it)
+    if (fileRefQuery !== null && (e.key === "Enter" || e.key === "Tab" || e.key === "Escape" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  }, [handleSend]);
+  }, [handleSend, fileRefQuery]);
 
   const canSend = (value.trim().length > 0 || files.length > 0) && !noModelsAvailable && !!selectedModelId;
 
@@ -1272,7 +1318,40 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            setValue(newValue);
+
+            // Detect @ file reference
+            if (fileRefActiveWorkspace) {
+              const cursorPos = e.target.selectionStart;
+              const textBeforeCursor = newValue.slice(0, cursorPos);
+              const atIndex = textBeforeCursor.lastIndexOf("@");
+
+              if (atIndex >= 0) {
+                // Check if there's a space between @ and cursor (which would close the picker)
+                const textAfterAt = textBeforeCursor.slice(atIndex + 1);
+                if (!textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
+                  // Position the picker near the cursor
+                  const ta = textareaRef.current;
+                  if (ta) {
+                    const rect = ta.getBoundingClientRect();
+                    setFileRefQuery(textAfterAt);
+                    setFileRefPosition({
+                      top: rect.top - 250,
+                      left: rect.left + 16,
+                    });
+                  }
+                } else {
+                  setFileRefQuery(null);
+                  setFileRefPosition(null);
+                }
+              } else {
+                setFileRefQuery(null);
+                setFileRefPosition(null);
+              }
+            }
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           rows={1}
@@ -1280,6 +1359,17 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           placeholder={speech.listening ? "Listening…" : isStreaming ? ((agentMode || designMode) ? "Working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
           className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
         />
+
+        {/* @ file reference picker */}
+        {fileRefQuery !== null && fileRefPosition && fileRefActiveWorkspace && (
+          <FileReferencePicker
+            workspace={fileRefActiveWorkspace}
+            query={fileRefQuery}
+            onSelect={handleFileRefSelect}
+            onClose={handleFileRefClose}
+            position={fileRefPosition}
+          />
+        )}
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
           <div className="flex items-center gap-3">
