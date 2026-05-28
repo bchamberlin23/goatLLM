@@ -4,8 +4,9 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
+import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel } from "./ThinkingIndicator";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight, GitFork } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight, GitFork, Navigation } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -51,14 +52,29 @@ function ThinkingBlock({ content, elapsed, running }: {
   elapsed: string;
   running: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // Auto-expand while the model is actively thinking so the reasoning streams
+  // in as normal content; collapse once finished — unless the user has
+  // manually toggled, in which case we respect their choice.
+  const [expanded, setExpanded] = useState(running);
+  const userToggled = useRef(false);
   const hasContent = !!content && content.trim().length > 0;
+
+  useEffect(() => {
+    if (userToggled.current) return;
+    setExpanded(running);
+  }, [running]);
+
+  const toggle = useCallback(() => {
+    if (!hasContent) return;
+    userToggled.current = true;
+    setExpanded((v) => !v);
+  }, [hasContent]);
 
   return (
     <div className="my-1.5">
       <button
         type="button"
-        onClick={() => hasContent && setExpanded((v) => !v)}
+        onClick={toggle}
         className={`flex items-center gap-1.5 w-full text-left group/think ${hasContent ? "cursor-pointer" : "cursor-default"}`}
         aria-expanded={expanded}
         aria-label={expanded ? "Collapse thinking" : "Expand thinking"}
@@ -91,10 +107,10 @@ function ThinkingBlock({ content, elapsed, running }: {
       </button>
       {expanded && hasContent && (
         <div
-          className="mt-1.5 ml-4 max-h-[320px] overflow-y-auto rounded-lg bg-[#161618] border border-white/[0.06] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] whitespace-pre-wrap break-words animate-[fadeIn_180ms_ease]"
+          className="mt-1.5 ml-4 max-h-[420px] overflow-y-auto rounded-lg bg-[#161618] border border-white/[0.06] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] break-words animate-[fadeIn_180ms_ease] thinking-prose"
           style={{ scrollbarGutter: "stable" }}
         >
-          {content}
+          <MarkdownRenderer content={content!} />
         </div>
       )}
     </div>
@@ -228,6 +244,15 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           >
             {formatMessageTime(message.createdAt)}
           </span>
+          {isUser && message.steered && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/20"
+              title="This message steered the conversation mid-response"
+            >
+              <Navigation size={9} strokeWidth={2} />
+              Steered
+            </span>
+          )}
         </div>
 
         {/* Active skills badges */}
@@ -279,9 +304,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             messageId={message.id}
           />
         ) : null}
-        {hasToolCalls && isAssistant && isStreaming && message.content.length > 0 && (
-          <span className="streaming-cursor" />
-        )}
         {hasToolCalls && isAssistant && !isStreaming && (
           <FallbackArtifactCards messageId={message.id} />
         )}
@@ -314,78 +336,84 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             )}
           </div>
         )}
-        {/* Action buttons — shown below message content on hover */}
-        {!isStreaming && (
-          <div className={`flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? "justify-end" : ""}`}>
-            {message.content.trim().length > 0 && (
-              <button
-                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
-                onClick={handleCopy}
-                aria-label={copied ? "Copied to clipboard" : isUser ? "Copy your message" : "Copy assistant response"}
-                title={copied ? "Copied" : "Copy"}
-              >
-                {copied ? (
-                  <Check size={13} strokeWidth={2} className="text-[#34d399]" aria-hidden="true" />
-                ) : (
-                  <Copy size={13} strokeWidth={1.6} aria-hidden="true" />
+        {/* Action buttons + streaming stats — one row; buttons on hover, stats pinned right */}
+        {!isStreaming && (() => {
+          const showStats = isAssistant
+            && message.streamingDurationMs
+            && message.streamingDurationMs > 500;
+          const tps = showStats
+            ? (message.outputTokens ?? 0) / (message.streamingDurationMs! / 1000)
+            : 0;
+          return (
+            <div className={`flex items-center w-full min-h-[24px] ${isUser ? "justify-end" : showStats ? "justify-between" : ""}`}>
+              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {message.content.trim().length > 0 && (
+                  <button
+                    className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                    onClick={handleCopy}
+                    aria-label={copied ? "Copied to clipboard" : isUser ? "Copy your message" : "Copy assistant response"}
+                    title={copied ? "Copied" : "Copy"}
+                  >
+                    {copied ? (
+                      <Check size={13} strokeWidth={2} className="text-[#34d399]" aria-hidden="true" />
+                    ) : (
+                      <Copy size={13} strokeWidth={1.6} aria-hidden="true" />
+                    )}
+                  </button>
                 )}
-              </button>
-            )}
-            {isUser && (
-              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
-                {editing ? (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" /></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 2l3 3-9 9H2v-3l9-9z" /></svg>
+                {isUser && (
+                  <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
+                    {editing ? (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 2l3 3-9 9H2v-3l9-9z" /></svg>
+                    )}
+                  </button>
                 )}
-              </button>
-            )}
-            {isAssistant && (
-              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
-              </button>
-            )}
-            {message.content.trim().length > 0 && (
-              <button
-                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] hover:bg-white/5" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5"}`}
-                onClick={handleTogglePin}
-                aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
-                title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
-              >
-                {message.pinned ? (
-                  <Pin size={13} strokeWidth={2} aria-hidden="true" fill="currentColor" />
-                ) : (
-                  <PinOff size={13} strokeWidth={1.6} aria-hidden="true" />
+                {isAssistant && (
+                  <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
+                  </button>
                 )}
-              </button>
-            )}
-            {!isUser && (
-              <button
-                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
-                onClick={handleFork}
-                aria-label="Fork conversation from here"
-                title="Fork — create new conversation from this point"
-              >
-                <GitFork size={13} strokeWidth={1.6} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        )}
-        {/* Tokens/second + output stats — assistant messages only, after streaming ends */}
-        {isAssistant && !isStreaming && message.streamingDurationMs && message.streamingDurationMs > 500 && (
-          <div className="flex items-center gap-2 text-[10.5px] text-[#666] tabular-nums">
-            {message.outputTokens && (
-              <span>{message.outputTokens} tokens</span>
-            )}
-            <span>
-              {(() => {
-                const tps = (message.outputTokens ?? 0) / (message.streamingDurationMs / 1000);
-                return tps > 0 ? `${tps.toFixed(1)} t/s` : null;
-              })()}
-            </span>
-            <span>{(message.streamingDurationMs / 1000).toFixed(1)}s</span>
-          </div>
-        )}
+                {message.content.trim().length > 0 && (
+                  <button
+                    className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] hover:bg-white/5" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5"}`}
+                    onClick={handleTogglePin}
+                    aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
+                    title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
+                  >
+                    {message.pinned ? (
+                      <Pin size={13} strokeWidth={2} aria-hidden="true" fill="currentColor" />
+                    ) : (
+                      <PinOff size={13} strokeWidth={1.6} aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+                {!isUser && (
+                  <button
+                    className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                    onClick={handleFork}
+                    aria-label="Fork conversation from here"
+                    title="Fork — create new conversation from this point"
+                  >
+                    <GitFork size={13} strokeWidth={1.6} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+              {showStats && (
+                <div className="flex items-center gap-2 text-[10.5px] text-[#a0a0a0] tabular-nums shrink-0">
+                  {message.outputTokens != null && message.outputTokens > 0 && (
+                    <span>{message.outputTokens} tokens</span>
+                  )}
+                  {tps > 0 && (
+                    <span>{tps.toFixed(1)} t/s</span>
+                  )}
+                  <span>{(message.streamingDurationMs! / 1000).toFixed(1)}s</span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {isAssistant && !isStreaming && (
           <PlanBuildCTA message={message} />
         )}
@@ -579,26 +607,43 @@ const CRITIQUE_FILTER = /^(?:Self[- ]check\s*(?:pass|fail|clear)?\.?\s*(?:Philos
 // (e.g. {"expression": "1+1"} from exec_eval tool call text leakage).
 const JSON_EXPR_FILTER = /\{\s*"expression"\s*:\s*[^}]*\}/g;
 
-function DesignAwareText({ text, messageId }: { text: string; messageId: string }) {
+function DesignAwareText({
+  text,
+  messageId,
+  isStreaming = false,
+}: {
+  text: string;
+  messageId: string;
+  isStreaming?: boolean;
+}) {
   const designMode = useChatStore((s) => s.designMode);
   const showCritique = useChatStore((s) => s.showDesignCritique);
   const conversationId = useChatStore((s) => s.activeId);
+  // Strip leaked tool-call JSON in every mode — `{summary`, `{"filename"...}`
+  // must never surface in the chat.
+  const deLeaked = useMemo(() => stripLeakedToolJson(text), [text]);
   const cleaned = useMemo(() => {
-    if (!designMode) return text;
-    let out = text.replace(JSON_EXPR_FILTER, "");
+    if (!designMode) return deLeaked;
+    let out = deLeaked.replace(JSON_EXPR_FILTER, "");
     if (!showCritique) out = out.replace(CRITIQUE_FILTER, "");
     return out.trim();
-  }, [designMode, showCritique, text]);
+  }, [designMode, showCritique, deLeaked]);
   const segments = useMemo(
     () => (designMode ? splitByQuestionForm(cleaned) : null),
     [designMode, cleaned],
   );
-  if (!segments) return <MarkdownRenderer content={text} />;
+  if (!segments) return <MarkdownRenderer content={deLeaked} isStreaming={isStreaming} />;
   return (
     <>
       {segments.map((seg, i) => {
         if (seg.type === "text") {
-          return <MarkdownRenderer key={`fseg-${messageId}-${i}`} content={seg.text} />;
+          return (
+            <MarkdownRenderer
+              key={`fseg-${messageId}-${i}`}
+              content={seg.text}
+              isStreaming={isStreaming}
+            />
+          );
         }
         if (seg.form && conversationId) {
           return (
@@ -679,7 +724,14 @@ function SegmentedAssistantText({
     <>
       {parts.map((p, i) => {
         if (p.type === "text") {
-          return <DesignAwareText key={`t-${i}`} text={p.text} messageId={messageId} />;
+          return (
+            <DesignAwareText
+              key={`t-${i}`}
+              text={p.text}
+              messageId={messageId}
+              isStreaming={isStreaming}
+            />
+          );
         }
         const real = findArtifact(p.kind, p.title);
         if (real) {

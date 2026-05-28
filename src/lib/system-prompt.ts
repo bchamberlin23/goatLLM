@@ -35,6 +35,37 @@ export interface SystemPromptOptions {
   projectContextFiles?: ProjectContextFile[];
   /** Current date in YYYY-MM-DD form. Defaults to today. */
   date?: string;
+  /** Artifacts already present in the side-panel canvas for this conversation.
+   *  Injected so the model reuses an existing artifact's title/kind when asked
+   *  to modify it (via edit_artifact or by re-emitting the same heading)
+   *  instead of always spawning a duplicate. */
+  existingArtifacts?: { kind: string; title: string }[];
+}
+
+/**
+ * Render the "existing artifacts" inventory block. Empty string when there are
+ * no artifacts yet (nothing to reuse).
+ */
+export function formatArtifactInventory(
+  artifacts?: { kind: string; title: string }[],
+): string {
+  if (!artifacts || artifacts.length === 0) return "";
+  // De-dupe on (kind, title) so version history doesn't list the same
+  // artifact five times.
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const a of artifacts) {
+    const key = `${a.kind}::${a.title.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`- [${a.kind}] "${a.title}"`);
+  }
+  if (lines.length === 0) return "";
+  return (
+    "\n\n# Existing canvas artifacts\n\nYou have already created these artifacts in this conversation:\n" +
+    lines.join("\n") +
+    "\n\nWhen the user asks you to change, fix, update, extend, or rewrite one of these, you MUST modify the EXISTING artifact — never create a new one. Reuse its EXACT title and kind (the heading above the fence, or the `title`/`kind` arguments to edit_artifact). Inventing a new title for a change to an existing artifact creates a confusing duplicate tab, which is wrong. Only create a new artifact when the user genuinely wants a separate, additional deliverable."
+  );
 }
 
 const RESEARCH_MODE_PREAMBLE = `[RESEARCH MODE]
@@ -95,7 +126,7 @@ Rules:
  * usage guidelines, and workspace context.
  */
 export function buildAgentSystemPrompt(options: SystemPromptOptions): string {
-  const { tools, workspacePath, researchMode, planMode, projectContextFiles, date } = options;
+  const { tools, workspacePath, researchMode, planMode, projectContextFiles, date, existingArtifacts } = options;
 
   const toolsList = Array.isArray(tools)
     ? tools.map((t) => `- ${t.name}: ${t.description}`).join("\n")
@@ -152,6 +183,8 @@ Current date: ${today}`;
     base += "</project_context>";
   }
 
+  base += formatArtifactInventory(existingArtifacts);
+
   return researchMode ? RESEARCH_MODE_PREAMBLE + base : (planMode ? PLAN_MODE_PREAMBLE + base : base);
 }
 
@@ -169,7 +202,7 @@ export function buildChatSystemPrompt(
   userPrompt?: string,
   researchMode?: boolean,
   hasWebSearch?: boolean,
-  options?: { autoArtifacts?: boolean; officeArtifacts?: boolean },
+  options?: { autoArtifacts?: boolean; officeArtifacts?: boolean; existingArtifacts?: { kind: string; title: string }[] },
 ): string {
   const autoArtifacts = options?.autoArtifacts ?? true;
   const officeArtifacts = options?.officeArtifacts ?? true;
@@ -196,7 +229,7 @@ export function buildChatSystemPrompt(
     "\n\nWhen showing code, keep it inline in the chat as a normal fenced code block (```html, ```python, ```js, etc.). The user has turned off the side-panel canvas, so do not assume artifacts will render anywhere else.";
 
   const artifactGuide = autoArtifacts
-    ? artifactCoreGuide + (officeArtifacts ? officeGuide : "")
+    ? artifactCoreGuide + (officeArtifacts ? officeGuide : "") + formatArtifactInventory(options?.existingArtifacts)
     : inlineOnlyGuide;
 
   const webSearchGuide = hasWebSearch

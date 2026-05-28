@@ -64,6 +64,7 @@ export const RESEARCH_TOOLS = {
   browser_extract: WRITE_TOOLS.browser_extract,
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
+  load_skill: READ_ONLY_TOOLS.load_skill,
 };
 
 /**
@@ -89,6 +90,7 @@ export const CHAT_TOOLS = {
   web_search: READ_ONLY_TOOLS.web_search,
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
+  load_skill: READ_ONLY_TOOLS.load_skill,
 };
 
 /**
@@ -99,6 +101,16 @@ export const CHAT_TOOLS = {
 export const ATTACHMENT_TOOLS = {
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
+  load_skill: READ_ONLY_TOOLS.load_skill,
+};
+
+/**
+ * Minimal bundle exposing just `load_skill` — attached in plain chat (no web
+ * backend, no attachments) when there are model-invocable skills available,
+ * so the model can pull a skill on demand (pi-style progressive disclosure).
+ */
+export const SKILL_TOOLS = {
+  load_skill: READ_ONLY_TOOLS.load_skill,
 };
 
 /**

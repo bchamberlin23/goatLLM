@@ -29,4 +29,5 @@ export {
   CHAT_TOOLS,
   ATTACHMENT_TOOLS,
   CODE_EXEC_TOOLS,
+  SKILL_TOOLS,
 } from "./tools/registry";

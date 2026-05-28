@@ -449,11 +449,12 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
   if (visible.length === 0) return "";
 
   let out = "\n<available_skills>\n";
+  out +=
+    "The following skills are available. When a user's request matches a skill's description, call the `load_skill` tool with the skill's exact name to load its full instructions, then follow them. Do this proactively — don't wait to be asked.\n";
   for (const s of visible) {
     out += `  <skill>\n`;
     out += `    <name>${escapeXml(s.name)}</name>\n`;
     out += `    <description>${escapeXml(s.description)}</description>\n`;
-    out += `    <location>${escapeXml(s.filePath)}</location>\n`;
     out += `  </skill>\n`;
   }
   out += "</available_skills>\n";
