@@ -38,6 +38,10 @@ export interface StreamOptions {
   maxToolRounds?: number;
   /** When false, spawn_subagent is not injected. */
   subagentsEnabled?: boolean;
+  /** Session ID for prompt cache affinity. */
+  sessionId?: string;
+  /** Cache retention policy. */
+  cacheRetention?: "none" | "short" | "long";
 }
 
 /**
@@ -58,6 +62,8 @@ export async function streamChat(
     tools: options?.tools,
     maxToolRounds: options?.maxToolRounds,
     subagentsEnabled: options?.subagentsEnabled,
+    sessionId: options?.sessionId,
+    cacheRetention: options?.cacheRetention,
     depth: 0,
   });
 }

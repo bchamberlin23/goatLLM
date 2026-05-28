@@ -1069,7 +1069,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
         endJjAgentSessionIfNeeded();
       },
-    }, { abortSignal: ac.signal, tools: activeTools, maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined, subagentsEnabled: (agentMode || designMode) && subagentsEnabled });
+    }, {
+      abortSignal: ac.signal,
+      tools: activeTools,
+      maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined,
+      subagentsEnabled: (agentMode || designMode) && subagentsEnabled,
+      // Session ID for prompt cache affinity — derived from conversation ID
+      // so the same conversation gets consistent cache routing.
+      sessionId: convId ? `goatllm-${convId}` : undefined,
+      cacheRetention: "long",
+    });
   }, [value, files, isStreaming, activeId, selectedModelId,
     addMessage, startStreaming, stopStreaming, appendToMessage, appendToThinking, updateMessage,
     createConversation, getActiveMessages, getActiveLlmConfig, getModels,

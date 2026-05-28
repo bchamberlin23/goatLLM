@@ -52,6 +52,12 @@ export interface AgentLoopOptions {
   /** When false, spawn_subagent is not injected into the tool set.
    *  Used by the parent to disable subagents based on user settings. */
   subagentsEnabled?: boolean;
+  /** Session ID for prompt cache affinity. Sent as prompt_cache_key to OpenAI
+   *  and used for session affinity headers. Generated per conversation. */
+  sessionId?: string;
+  /** Cache retention policy: "short" (default, provider-defined), "long" (24h
+   *  for OpenAI, 1h for Anthropic), or "none" (disable caching). */
+  cacheRetention?: "none" | "short" | "long";
 }
 
 // ── Context compaction constants ──
@@ -64,6 +70,17 @@ const CONTEXT_PRESSURE_THRESHOLD = 0.8;
 
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
+
+/**
+ * Clamp a cache key to OpenAI's 64-character limit.
+ * Matches pi agent's clampOpenAIPromptCacheKey implementation.
+ */
+function clampCacheKey(key: string | undefined): string | undefined {
+  if (key === undefined) return undefined;
+  const chars = Array.from(key);
+  if (chars.length <= 64) return key;
+  return chars.slice(0, 64).join("");
+}
 
 /**
  * Combine an inner abort signal with an optional parent signal so abort
@@ -296,6 +313,65 @@ export async function agentLoop(
         : 0;
       let fullText = "";
 
+      // ── Prompt caching for batched loop ──
+      const isAnthropic = config.provider === "anthropic";
+      const isOpenAICompatible = [
+        "openai", "deepseek", "mimo", "groq", "openrouter",
+        "opencode-go", "opencode-go-free", "ollama", "lmstudio",
+      ].includes(config.provider);
+      const cacheRetention = options?.cacheRetention ?? "short";
+      const sessionId = options?.sessionId;
+
+      // Build provider options with caching for batched loop
+      let batchedProviderOptions = providerOptions;
+
+      if (isAnthropic && cacheRetention !== "none") {
+        const cacheControl = cacheRetention === "long"
+          ? { type: "ephemeral" as const, ttl: "1h" }
+          : { type: "ephemeral" as const };
+        batchedProviderOptions = {
+          ...(batchedProviderOptions ?? {}),
+          anthropic: {
+            ...(batchedProviderOptions?.anthropic ?? {}),
+            cacheControl,
+          },
+        };
+      }
+
+      if (isOpenAICompatible && cacheRetention !== "none" && sessionId) {
+        const providerKey = config.provider;
+        const promptCacheKey = clampCacheKey(sessionId);
+        const promptCacheRetention = cacheRetention === "long" ? "24h" : undefined;
+        batchedProviderOptions = {
+          ...(batchedProviderOptions ?? {}),
+          [providerKey]: {
+            ...(batchedProviderOptions?.[providerKey] ?? {}),
+            promptCacheKey,
+            promptCacheRetention,
+          },
+        };
+      }
+
+      // Apply Anthropic cache_control to messages for batched loop
+      if (isAnthropic && cacheRetention !== "none") {
+        const cacheControl = cacheRetention === "long"
+          ? { type: "ephemeral" as const, ttl: "1h" }
+          : { type: "ephemeral" as const };
+
+        const firstUserIdx = workingMessages.findIndex((m) => m.role === "user");
+        if (firstUserIdx >= 0) {
+          workingMessages = workingMessages.map((m, i) => {
+            if (i === firstUserIdx) {
+              return {
+                ...m,
+                providerOptions: { anthropic: { cacheControl } },
+              } as ModelMessage;
+            }
+            return m;
+          });
+        }
+      }
+
       while (true) {
         if (effectiveSignal?.aborted) {
           callbacks.onDone(fullText);
@@ -311,7 +387,7 @@ export async function agentLoop(
           stopWhen: stepCountIs(BATCH_SIZE),
           abortSignal: effectiveSignal,
           ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-          ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+          ...(batchedProviderOptions ? { providerOptions: batchedProviderOptions as any } : {}),
         });
 
         let batchText = "";
@@ -410,14 +486,30 @@ export async function agentLoop(
       // Used when maxToolRounds is explicitly set (research/design modes)
       // or when there are no tools (chat mode).
 
-      // ── Anthropic prompt caching ──
-      // Mark the first user message with cache_control so Anthropic caches
-      // the system prompt + early messages across turns. Design mode's
-      // system prompt (~10K tokens) benefits enormously.
+      // ── Prompt caching ──
+      // Similar to pi agent's implementation:
+      // - Anthropic: cache_control markers on system prompt, last tool, last message
+      // - OpenAI: prompt_cache_key + prompt_cache_retention for server-side caching
+      // - Session affinity headers for cache-friendly routing
       const isAnthropic = config.provider === "anthropic";
+      const isOpenAICompatible = [
+        "openai", "deepseek", "mimo", "groq", "openrouter",
+        "opencode-go", "opencode-go-free", "ollama", "lmstudio",
+      ].includes(config.provider);
+      const cacheRetention = options?.cacheRetention ?? "short";
+      const sessionId = options?.sessionId;
       let messagesForStream = mapMessagesForProvider(messages);
 
-      if (isAnthropic) {
+      // Anthropic-style cache_control markers
+      if (isAnthropic && cacheRetention !== "none") {
+        const cacheControl = cacheRetention === "long"
+          ? { type: "ephemeral" as const, ttl: "1h" }
+          : { type: "ephemeral" as const };
+
+        // Mark system prompt
+        // (handled via providerOptions below)
+
+        // Mark first user message (caches system prompt + early context)
         const firstUserIdx = messagesForStream.findIndex((m) => m.role === "user");
         if (firstUserIdx >= 0) {
           messagesForStream = messagesForStream.map((m, i) => {
@@ -425,18 +517,61 @@ export async function agentLoop(
               return {
                 ...m,
                 providerOptions: {
-                  anthropic: { cacheControl: { type: "ephemeral" } },
+                  anthropic: { cacheControl },
                 },
               } as ModelMessage;
             }
             return m;
           });
         }
+
+        // Mark last user/assistant message (caches recent conversation)
+        for (let i = messagesForStream.length - 1; i >= 0; i--) {
+          const m = messagesForStream[i];
+          if (m.role === "user" || m.role === "assistant") {
+            if (i !== firstUserIdx) {
+              messagesForStream[i] = {
+                ...m,
+                providerOptions: {
+                  anthropic: { cacheControl },
+                },
+              } as ModelMessage;
+            }
+            break;
+          }
+        }
       }
 
-      const mergedProviderOptions = isAnthropic && systemPrompt
-        ? { ...(providerOptions ?? {}), anthropic: { ...(providerOptions?.anthropic ?? {}), cacheControl: { type: "ephemeral" } } }
-        : providerOptions;
+      // Build provider options with caching
+      let mergedProviderOptions = providerOptions;
+
+      if (isAnthropic && cacheRetention !== "none") {
+        const cacheControl = cacheRetention === "long"
+          ? { type: "ephemeral" as const, ttl: "1h" }
+          : { type: "ephemeral" as const };
+        mergedProviderOptions = {
+          ...(mergedProviderOptions ?? {}),
+          anthropic: {
+            ...(mergedProviderOptions?.anthropic ?? {}),
+            cacheControl,
+          },
+        };
+      }
+
+      // OpenAI prompt caching via prompt_cache_key + prompt_cache_retention
+      if (isOpenAICompatible && cacheRetention !== "none" && sessionId) {
+        const providerKey = config.provider;
+        const promptCacheKey = clampCacheKey(sessionId);
+        const promptCacheRetention = cacheRetention === "long" ? "24h" : undefined;
+        mergedProviderOptions = {
+          ...(mergedProviderOptions ?? {}),
+          [providerKey]: {
+            ...(mergedProviderOptions?.[providerKey] ?? {}),
+            promptCacheKey,
+            promptCacheRetention,
+          },
+        };
+      }
 
       const result = streamText({
         model,
