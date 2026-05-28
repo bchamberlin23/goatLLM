@@ -918,12 +918,20 @@ export function ArtifactPanel() {
   }, [activeArtifactId]);
 
   // Refresh file browser when tool calls complete (files may have changed)
-  const toolCalls = useChatStore((s) => {
-    if (!activeId) return [] as { state: string }[];
+  // Use a stable selector to avoid unnecessary re-renders
+  const completedToolCount = useChatStore((s) => {
+    if (!activeId) return 0;
     const msgs = s.messages[activeId] ?? [];
-    return msgs.flatMap((m) => m.toolCalls ?? []);
+    let count = 0;
+    for (const m of msgs) {
+      if (m.toolCalls) {
+        for (const tc of m.toolCalls) {
+          if (tc.state === "done") count++;
+        }
+      }
+    }
+    return count;
   });
-  const completedToolCount = toolCalls.filter((tc) => tc.state === "done").length;
   useEffect(() => {
     if (completedToolCount > 0) setFileRefreshKey((k) => k + 1);
   }, [completedToolCount]);
@@ -974,12 +982,17 @@ export function ArtifactPanel() {
   // user watches the code being typed; once streaming finishes, snap to
   // preview so they see the rendered result. Skip both moves once the user
   // has expressed their own preference for this artifact.
+  // Note: This must be before the null guard to satisfy React's rules of hooks.
   const streamingForActive = (() => {
-    if (!artifacts) return false;
-    const a = artifacts.find((x) => x.id === activeArtifactId) ?? artifacts[0];
-    if (!a) return false;
-    const v = a.versions?.[a.activeVersionIndex ?? a.versions.length - 1];
-    return !!v?.streaming;
+    try {
+      if (!artifacts || artifacts.length === 0) return false;
+      const a = artifacts.find((x) => x.id === activeArtifactId) ?? artifacts[0];
+      if (!a) return false;
+      const v = a.versions?.[a.activeVersionIndex ?? a.versions.length - 1];
+      return !!v?.streaming;
+    } catch {
+      return false;
+    }
   })();
   useEffect(() => {
     if (userPickedView.current === activeArtifactId) return;
