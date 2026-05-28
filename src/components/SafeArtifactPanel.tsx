@@ -1,4 +1,4 @@
-import { Component, type ReactNode, type ErrorInfo } from "react";
+import { Component } from "react";
 import { ArtifactPanel } from "./ArtifactPanel";
 
 interface State {
@@ -16,12 +16,12 @@ export class SafeArtifactPanel extends Component<{}, State> {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error) {
     // Log but don't crash the app
     console.warn("[SafeArtifactPanel] Caught error:", error.message);
   }
 
-  componentDidUpdate(prevProps: {}) {
+  componentDidUpdate() {
     // Reset error state when props change (e.g., new artifact selected)
     if (this.state.hasError) {
       this.setState({ hasError: false });

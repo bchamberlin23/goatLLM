@@ -52,8 +52,8 @@ export function SystemPromptSection() {
           onClick={handleSave}
           className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
             saved
-              ? "bg-[#34d399]/10 text-[#34d399]"
-              : "bg-white text-black hover:bg-[#e5e5e5]"
+              ? "bg-success/10 text-success"
+              : "bg-accent text-bg hover:bg-[#f0903a]"
           }`}
         >
           {saved ? "Saved" : "Save"}

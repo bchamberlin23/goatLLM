@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { Plus } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 import { ProviderCard } from "./ProviderCard";
+import { SettingsGroup } from "./SettingsGroup";
 
 interface CustomProvider {
   id: string;
@@ -24,7 +25,7 @@ function saveCustomProviders(providers: CustomProvider[]) {
   localStorage.setItem(CUSTOM_PROVIDERS_KEY, JSON.stringify(providers));
 }
 
-export function CustomProviderSection() {
+export function CustomProviderSection({ embedded = false }: { embedded?: boolean }) {
   const providerConfigs = useChatStore((s) => s.providerConfigs);
   const configureProvider = useChatStore((s) => s.configureProvider);
   const removeProvider = useChatStore((s) => s.removeProvider);
@@ -72,15 +73,8 @@ export function CustomProviderSection() {
     removeProvider(id);
   }, [customProviders, removeProvider]);
 
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">
-        Custom providers
-      </h3>
-      <p className="text-[13px] text-[#8e8e8e] leading-relaxed mb-2">
-        Add any OpenAI-compatible API (LiteLLM, vLLM, Together AI, Fireworks, etc.). Enter the base URL and API key.
-      </p>
-
+  const body = (
+    <>
       <div className="flex flex-col gap-2">
         {customProviders.map((provider) => {
           const cfg = providerConfigs[provider.id] ?? null;
@@ -169,6 +163,28 @@ export function CustomProviderSection() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <SettingsGroup
+        title="Custom providers"
+        description="Any OpenAI-compatible API — LiteLLM, vLLM, Together AI, etc."
+        defaultOpen={false}
+      >
+        {body}
+      </SettingsGroup>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-[11px] font-semibold text-text-3 uppercase tracking-wider">Custom providers</h3>
+      <p className="text-[13px] text-text-3 leading-relaxed mb-2">
+        Add any OpenAI-compatible API (LiteLLM, vLLM, Together AI, Fireworks, etc.). Enter the base URL and API key.
+      </p>
+      {body}
     </section>
   );
 }

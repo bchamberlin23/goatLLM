@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Sparkles, AlertCircle, X, Zap } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 
-export function SkillsSection() {
+export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
   const discoveredSkills = useChatStore((s) => s.discoveredSkills);
   const disabledSkills = useChatStore((s) => s.disabledSkills);
   const autoTriggerSkills = useChatStore((s) => s.autoTriggerSkills);
@@ -32,7 +32,18 @@ export function SkillsSection() {
   const visible = discoveredSkills.slice(0, expanded ? undefined : 5);
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col gap-3 ${embedded ? "pt-2 border-t border-white/5" : ""}`}>
+      {!embedded && (
+        <>
+          <h3 className="text-[11px] font-semibold text-text-3 uppercase tracking-wider">Skills</h3>
+          <p className="text-[13px] text-text-3 leading-relaxed mb-2">
+            Reusable agent capabilities from <code className="text-text-2 bg-white/5 px-1 py-0.5 rounded text-[12px]">~/.goat/agent/skills/</code>. Toggle off to remove from context, or add external directories.
+          </p>
+        </>
+      )}
+      {embedded && (
+        <span className="text-[12px] font-medium text-text-3">Skills</span>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-[#a0a0a0]">
           {discoveredSkills.length} skill{discoveredSkills.length === 1 ? "" : "s"} discovered

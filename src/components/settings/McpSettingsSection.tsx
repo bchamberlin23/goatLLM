@@ -14,7 +14,7 @@ import type { McpServerConfig } from "../../lib/mcp/client";
 import { getMcpServers, saveMcpServers } from "../../lib/mcp/registry";
 import { formatTokenEstimate } from "../../lib/mcp/token-budget";
 
-export function McpSettingsSection() {
+export function McpSettingsSection({ embedded = false }: { embedded?: boolean }) {
   const [servers, setServers] = useState<McpServerConfig[]>(() => getMcpServers());
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -43,25 +43,41 @@ export function McpSettingsSection() {
     persist(servers.map((s) => s.id === id ? { ...s, ...patch } : s));
   }
 
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">
-          MCP Servers
-        </h3>
-        <button
-          onClick={addServer}
-          className="flex items-center gap-1.5 text-[12px] text-[#a0a0a0] hover:text-[#ececec] transition-colors"
-        >
-          <Plus size={13} strokeWidth={2} />
-          Add server
-        </button>
-      </div>
-      <p className="text-[13px] text-[#8e8e8e] leading-relaxed mb-2">
-        Connect to Model Context Protocol servers to give the agent access to
-        external tools. Servers are trusted by installation — trust them only
-        with workspaces you control.
-      </p>
+  const header = embedded ? (
+    <div className="flex items-center justify-between">
+      <span className="text-[12px] font-medium text-text-3">MCP servers</span>
+      <button
+        onClick={addServer}
+        className="flex items-center gap-1.5 text-[12px] text-text-3 hover:text-text-1 transition-colors"
+      >
+        <Plus size={13} strokeWidth={2} />
+        Add server
+      </button>
+    </div>
+  ) : (
+    <div className="flex items-center justify-between">
+      <h3 className="text-[11px] font-semibold text-text-3 uppercase tracking-wider">
+        MCP Servers
+      </h3>
+      <button
+        onClick={addServer}
+        className="flex items-center gap-1.5 text-[12px] text-text-3 hover:text-text-1 transition-colors"
+      >
+        <Plus size={13} strokeWidth={2} />
+        Add server
+      </button>
+    </div>
+  );
+
+  const content = (
+    <>
+      {header}
+      {!embedded && (
+        <p className="text-[13px] text-text-3 leading-relaxed mb-2">
+          Connect to Model Context Protocol servers to give the agent access to
+          external tools. Trust servers only with workspaces you control.
+        </p>
+      )}
 
       {servers.length === 0 && (
         <div className="text-[13px] text-[#8e8e8e] py-3 text-center border border-dashed border-white/5 rounded-lg">
@@ -81,6 +97,16 @@ export function McpSettingsSection() {
           />
         ))}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="flex flex-col gap-2">{content}</div>;
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      {content}
     </section>
   );
 }
