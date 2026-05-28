@@ -117,7 +117,7 @@ export function buildAgentSystemPrompt(options: SystemPromptOptions): string {
     "Use search_semantic when search_content's exact-match misses (e.g. 'auth flow' should match 'login handler').",
     "Use list_dir instead of `bash ls` for directory listings. Use git_status/git_log/git_blame instead of shelling out to git for read-only inspection.",
     // ---- Completion ---------------------------------------------------
-    "ALWAYS end your turn with a brief summary: what you did, whether it succeeded or failed, and any key takeaways. Never stop silently — close every response.",
+    "ALWAYS call the `done` tool when you have finished the task. Pass a brief summary of what was accomplished. Do not just stop generating — you MUST call `done` to end your turn.",
     // ---- Subagent routing ----------------------------------------------
     "A spawn_subagent tool is available for delegating complex, self-contained tasks to a child agent loop. Use it for parallelizable research or multi-step operations that don't need user interaction. The subagent gets its own context and tools, and its transcript is visible in the UI for review.",
   ];

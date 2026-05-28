@@ -71,10 +71,7 @@ const CONTEXT_PRESSURE_THRESHOLD = 0.8;
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
 
-/** Max consecutive truncation retries before bailing out. When the model hits
- *  maxOutputTokens multiple times in a row without making tool calls, something
- *  is wrong — stop instead of looping forever. */
-const MAX_CONSECUTIVE_TRUNCATIONS = 5;
+
 
 /**
  * Clamp a cache key to OpenAI's 64-character limit.
@@ -297,6 +294,13 @@ export async function agentLoop(
       };
     }
 
+    // Inject the `done` tool so the model can explicitly signal completion.
+    // The batched loop exits when done is called — no finishReason heuristics.
+    if (effectiveTools) {
+      const { done } = await import("./tools/builtins/done");
+      effectiveTools = { ...effectiveTools, done };
+    }
+
     // ── Determine if we need the batched + compaction loop ──
     // When tools are active and no explicit maxToolRounds is set, we run
     // in batches and check context pressure between each batch.
@@ -317,9 +321,10 @@ export async function agentLoop(
         ? Math.floor(contextWindow * COMPACTION_TARGET)
         : 0;
       let fullText = "";
-      let consecutiveTruncations = 0;
       let totalOutputTokens = 0;
       let totalGenerationMs = 0;
+      let doneCalled = false;
+      let doneSummary: string | undefined;
 
       // ── Prompt caching for batched loop ──
       const isAnthropic = config.provider === "anthropic";
@@ -481,33 +486,30 @@ export async function agentLoop(
         const stepResults = await result.steps;
         totalSteps += stepResults.length;
 
-        // Determine if the loop should continue based on the last step's
-        // finishReason — not the stream-level `finished` flag, which fires
-        // on step-limit boundaries too.
-        const lastStep = stepResults[stepResults.length - 1];
-        const finishReason = lastStep?.finishReason;
-        const hasToolCalls = !!lastStep?.toolCalls?.length;
-
-        // 'tool-calls' = model wants to continue (step limit hit, or model
-        //   is mid-chain). Continue the loop.
-        // 'length' = response truncated by maxOutputTokens. Continue so the
-        //   model can pick up where it left off.
-        // 'stop' / 'content-filter' / 'error' / 'other' = model is done.
-        const shouldContinue =
-          finishReason === "tool-calls" ||
-          (finishReason === "length" && consecutiveTruncations < MAX_CONSECUTIVE_TRUNCATIONS);
-
-        if (finishReason === "length" && !hasToolCalls) {
-          consecutiveTruncations++;
-          console.log(
-            `[agentLoop] Response truncated (attempt ${consecutiveTruncations}/${MAX_CONSECUTIVE_TRUNCATIONS}), continuing…`
-          );
-        } else if (hasToolCalls) {
-          // Model produced tool calls — reset truncation counter.
-          consecutiveTruncations = 0;
+        // Check if the model called the `done` tool this batch.
+        for (const step of stepResults) {
+          for (const tc of step.toolCalls ?? []) {
+            if (tc.toolName === "done") {
+              doneCalled = true;
+              doneSummary = (tc.input as { summary?: string })?.summary;
+              break;
+            }
+          }
+          if (doneCalled) break;
         }
 
-        if (!shouldContinue) {
+        if (doneCalled) {
+          emitUsage();
+          callbacks.onDone(doneSummary || fullText);
+          return;
+        }
+
+        // If no tool calls at all and finishReason is 'stop', the model
+        // emitted text without calling done. This shouldn't happen (the
+        // system prompt instructs it to call done), but handle gracefully
+        // by exiting so the loop doesn't spin forever.
+        const lastStep = stepResults[stepResults.length - 1];
+        if (!lastStep?.toolCalls?.length && lastStep?.finishReason === "stop") {
           emitUsage();
           callbacks.onDone(fullText);
           return;
