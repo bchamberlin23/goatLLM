@@ -58,7 +58,7 @@ export function getBuiltInProviders(): ProviderConfig[] {
         {
           id: "nemotron-3-super-free",
           name: "Nemotron 3 Super (Free)",
-          contextWindow: 128_000,
+          contextWindow: 204_800,
         },
       ],
     },
