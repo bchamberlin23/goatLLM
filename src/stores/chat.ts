@@ -749,6 +749,11 @@ interface ChatStore {
   showDesignCritique: boolean;
   setShowDesignCritique: (enabled: boolean) => void;
 
+  /** When true (default), a subtle click sound plays when an agent/design
+   *  turn completes. When false, completion is silent. */
+  completionSound: boolean;
+  setCompletionSound: (enabled: boolean) => void;
+
   /** When true (default), subagents can be spawned in agent and design modes.
    *  When false, the spawn_subagent tool is disabled. Subagents are never
    *  available in plain chat mode regardless of this setting. */
@@ -1004,6 +1009,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       autoArtifacts: true,
       officeArtifacts: true,
       showDesignCritique: false,
+      completionSound: true,
       subagentsEnabled: true,
       // ── Skills ──
       skillPaths: [] as string[],
@@ -2429,6 +2435,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-show-design-critique", enabled ? "true" : "false"); } catch {}
       },
 
+      setCompletionSound: (enabled) => {
+        set({ completionSound: enabled });
+        try { localStorage.setItem("goatllm-completion-sound", enabled ? "true" : "false"); } catch {}
+      },
+
       setSubagentsEnabled: (enabled) => {
         set({ subagentsEnabled: enabled });
         try { localStorage.setItem("goatllm-subagents-enabled", enabled ? "true" : "false"); } catch {}
@@ -2911,6 +2922,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
+        const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
         try {
           const data = await loadAllFromDb();
           const providerConfigs = loadProviderConfigs();
@@ -3085,6 +3097,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
             autoApprove: savedMode === "yolo",
@@ -3167,6 +3180,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
             agentMode,

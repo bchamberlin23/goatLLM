@@ -17,6 +17,29 @@ import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
+
+/**
+ * Play a short click/ding sound using the Web Audio API.
+ * No external files needed — synthesized at runtime.
+ */
+let audioCtx: AudioContext | null = null;
+function playCompletionSound() {
+  try {
+    if (!audioCtx) audioCtx = new AudioContext();
+    const ctx = audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);        // A5
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.06); // E6
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch { /* audio not available */ }
+}
 import { invoke } from "@tauri-apps/api/core";
 import { FileReferencePicker } from "./FileReferencePicker";
 
@@ -1110,6 +1133,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         }
         // Squash jjagent change back into parent now that the turn is complete.
         endJjAgentSessionIfNeeded();
+        // Play completion sound in agent/design mode if enabled.
+        if ((isAgentMode || isDesignMode) && useChatStore.getState().completionSound) {
+          playCompletionSound();
+        }
         // Auto-dispatch next queued message
         const next = dequeueMessage(convId!);
         if (next) {

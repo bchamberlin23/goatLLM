@@ -76,6 +76,8 @@ function SettingsContent() {
   const setShowDesignCritique = useChatStore((s) => s.setShowDesignCritique);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
   const setSubagentsEnabled = useChatStore((s) => s.setSubagentsEnabled);
+  const completionSound = useChatStore((s) => s.completionSound);
+  const setCompletionSound = useChatStore((s) => s.setCompletionSound);
 
   return (
     <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-8">
@@ -209,6 +211,16 @@ function SettingsContent() {
           onToggle={setShowDesignCritique}
           title="Show critique scores in messages"
           description="On: the 5-dim critique output (Philosophy, Hierarchy, Execution, Specificity, Restraint) is visible in design messages. Off (default): scores are stripped from the UI for a cleaner experience."
+        />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-[11px] font-semibold text-[#a0a0a0] uppercase tracking-wider">Notifications</h3>
+        <ArtifactToggleRow
+          enabled={completionSound}
+          onToggle={setCompletionSound}
+          title="Play sound on completion"
+          description="On (default): a subtle click plays when an agent or design turn finishes. Off: completion is silent."
         />
       </section>
 
