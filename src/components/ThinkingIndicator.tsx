@@ -20,9 +20,12 @@ export function useElapsedLabel(startedAt: number | null, running: boolean) {
   const diffMs = Math.max(0, now - startedAt);
   const totalSec = Math.floor(diffMs / 1000);
   if (totalSec < 60) return `${totalSec}s`;
-  const m = Math.floor(totalSec / 60);
+  const totalMin = Math.floor(totalSec / 60);
   const s = totalSec % 60;
-  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+  if (totalMin < 60) return s === 0 ? `${totalMin}m` : `${totalMin}m ${s}s`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 export function WorkingHeader({

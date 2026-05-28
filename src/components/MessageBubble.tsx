@@ -4,7 +4,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
-import { Shimmer, WorkingHeader, useElapsedLabel } from "./ThinkingIndicator";
+import { Shimmer, useElapsedLabel } from "./ThinkingIndicator";
 import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight, GitFork } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
@@ -72,7 +72,13 @@ function ThinkingBlock({ content, elapsed, running }: {
           />
         )}
         {running ? (
-          <Shimmer text={`Thinking · ${elapsed}`} className="text-[12px] font-medium" />
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f59e42] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f59e42]" />
+            </span>
+            <Shimmer text={`Thinking · ${elapsed}`} className="text-[13px] font-medium" />
+          </div>
         ) : elapsed !== "0s" ? (
           <span className="text-[12px] font-medium text-[#888]">
             Thought for {elapsed}
@@ -207,9 +213,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
   const thinkingElapsed = useElapsedLabel(isWorking ? startedAt : null, isWorking);
-  const agentMode = useChatStore((s) => s.agentMode);
-  const showWorkingHeader = isAssistant && isStreaming && (hasToolCalls || agentMode);
-  const headerRunning = isAssistant && isStreaming;
 
   return (
     <div className={`group px-6 py-1.5 w-full ${isUser ? "flex justify-end" : ""}`}>
@@ -296,9 +299,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           </div>
         )}
 
-        {showWorkingHeader && <WorkingHeader startedAt={startedAt} running={headerRunning} label="Working" />}
-
-        {/* Thinking block — shown at the TOP of the message */}
+        {/* Thinking block — shown at the TOP of the message when thinking/reasoning */}
         {isAssistant && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
           <ThinkingBlock
             content={message.thinkingContent}
@@ -353,8 +354,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
               />
             ) : isUser ? (
               <UserMessageContent message={message} />
-            ) : message.content.length === 0 && isWorking ? (
-              <div className="text-[12px] text-[#a0a0a0]">Thinking…</div>
             ) : (
               <>
                 <StreamingSegmentedText
