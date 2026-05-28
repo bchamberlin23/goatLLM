@@ -71,6 +71,11 @@ const CONTEXT_PRESSURE_THRESHOLD = 0.8;
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
 
+/** Max consecutive truncation retries before bailing out. When the model hits
+ *  maxOutputTokens multiple times in a row without making tool calls, something
+ *  is wrong — stop instead of looping forever. */
+const MAX_CONSECUTIVE_TRUNCATIONS = 5;
+
 /**
  * Clamp a cache key to OpenAI's 64-character limit.
  * Matches pi agent's clampOpenAIPromptCacheKey implementation.
@@ -312,6 +317,7 @@ export async function agentLoop(
         ? Math.floor(contextWindow * COMPACTION_TARGET)
         : 0;
       let fullText = "";
+      let consecutiveTruncations = 0;
 
       // ── Prompt caching for batched loop ──
       const isAnthropic = config.provider === "anthropic";
@@ -457,10 +463,22 @@ export async function agentLoop(
         // Check if the model is done (no tool calls in the last step).
         const lastStep = stepResults[stepResults.length - 1];
         const modelIsDone = !lastStep?.toolCalls?.length;
+        const wasTruncated = lastStep?.finishReason === "length";
 
-        if (modelIsDone || finished) {
+        if (modelIsDone && wasTruncated && consecutiveTruncations < MAX_CONSECUTIVE_TRUNCATIONS) {
+          // The model hit maxOutputTokens mid-response — it was cut off
+          // before it could emit tool calls. Continue the loop so it can
+          // pick up where it left off.
+          consecutiveTruncations++;
+          console.log(
+            `[agentLoop] Response truncated (attempt ${consecutiveTruncations}/${MAX_CONSECUTIVE_TRUNCATIONS}), continuing…`
+          );
+        } else if (modelIsDone || finished) {
           callbacks.onDone(fullText);
           return;
+        } else {
+          // Model produced tool calls — reset truncation counter.
+          consecutiveTruncations = 0;
         }
 
         // ── Context pressure check ──
