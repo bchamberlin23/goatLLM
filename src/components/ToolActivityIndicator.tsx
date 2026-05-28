@@ -3,6 +3,9 @@ import { useChatStore } from "../stores/chat";
 import { presentTool } from "./InlineToolCall";
 import { Shimmer } from "./ThinkingIndicator";
 
+/** Stable empty array reference to avoid re-renders. */
+const EMPTY_ARRAY: never[] = [];
+
 /**
  * Floating status bar that shows what the agent is currently doing.
  * Appears above the input bar when a tool is running in agent or design mode.
@@ -13,18 +16,26 @@ export function ToolActivityIndicator() {
   const activeId = useChatStore((s) => s.activeId);
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] : []));
   const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
 
-  const activity = useMemo(() => {
-    if (!isStreaming || !messages || messages.length === 0) return null;
+  // Get the latest message count to detect changes without subscribing to the full array
+  const messageCount = useChatStore((s) => {
+    if (!activeId) return 0;
+    return (s.messages[activeId] ?? EMPTY_ARRAY).length;
+  });
 
-    // Only show in agent or design mode
+  // Get the latest tool call state directly from the store in the render
+  // This avoids subscribing to the entire messages array
+  const activity = useMemo(() => {
+    if (!isStreaming || !activeId || messageCount === 0) return null;
     if (!agentMode && !designMode) return null;
 
+    // Read directly from store to avoid stale closure
+    const msgs = useChatStore.getState().messages[activeId] ?? EMPTY_ARRAY;
+
     // Find the most recent running tool call across all messages
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
       if (!msg.toolCalls) continue;
 
       // Check tool calls in reverse order (most recent first)
@@ -41,7 +52,9 @@ export function ToolActivityIndicator() {
     }
 
     return null;
-  }, [messages, isStreaming, agentMode, designMode]);
+    // messageCount changes when messages are added/removed, which is when we need to re-check
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageCount, isStreaming, agentMode, designMode, activeId]);
 
   if (!activity) return null;
 
