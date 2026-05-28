@@ -228,60 +228,6 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           >
             {formatMessageTime(message.createdAt)}
           </span>
-          <div className={`flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? "flex-row-reverse" : ""}`}>
-            {!isStreaming && message.content.trim().length > 0 && (
-              <button
-                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
-                onClick={handleCopy}
-                aria-label={copied ? "Copied to clipboard" : isUser ? "Copy your message" : "Copy assistant response"}
-                title={copied ? "Copied" : "Copy"}
-              >
-                {copied ? (
-                  <Check size={13} strokeWidth={2} className="text-[#34d399]" aria-hidden="true" />
-                ) : (
-                  <Copy size={13} strokeWidth={1.6} aria-hidden="true" />
-                )}
-              </button>
-            )}
-            {isUser && !isStreaming && (
-              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
-                {editing ? (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" /></svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 2l3 3-9 9H2v-3l9-9z" /></svg>
-                )}
-              </button>
-            )}
-            {isAssistant && !isStreaming && (
-              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
-              </button>
-            )}
-            {!isStreaming && message.content.trim().length > 0 && (
-              <button
-                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] hover:bg-white/5" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5"}`}
-                onClick={handleTogglePin}
-                aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
-                title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
-              >
-                {message.pinned ? (
-                  <Pin size={13} strokeWidth={2} aria-hidden="true" fill="currentColor" />
-                ) : (
-                  <PinOff size={13} strokeWidth={1.6} aria-hidden="true" />
-                )}
-              </button>
-            )}
-            {!isStreaming && !isUser && (
-              <button
-                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
-                onClick={handleFork}
-                aria-label="Fork conversation from here"
-                title="Fork — create new conversation from this point"
-              >
-                <GitFork size={13} strokeWidth={1.6} aria-hidden="true" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Active skills badges */}
@@ -365,6 +311,63 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                   <span className="streaming-cursor" />
                 )}
               </>
+            )}
+          </div>
+        )}
+        {/* Action buttons — shown below message content on hover */}
+        {!isStreaming && (
+          <div className={`flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? "justify-end" : ""}`}>
+            {message.content.trim().length > 0 && (
+              <button
+                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                onClick={handleCopy}
+                aria-label={copied ? "Copied to clipboard" : isUser ? "Copy your message" : "Copy assistant response"}
+                title={copied ? "Copied" : "Copy"}
+              >
+                {copied ? (
+                  <Check size={13} strokeWidth={2} className="text-[#34d399]" aria-hidden="true" />
+                ) : (
+                  <Copy size={13} strokeWidth={1.6} aria-hidden="true" />
+                )}
+              </button>
+            )}
+            {isUser && (
+              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
+                {editing ? (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" /></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 2l3 3-9 9H2v-3l9-9z" /></svg>
+                )}
+              </button>
+            )}
+            {isAssistant && (
+              <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
+              </button>
+            )}
+            {message.content.trim().length > 0 && (
+              <button
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] hover:bg-white/5" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5"}`}
+                onClick={handleTogglePin}
+                aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
+                title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
+              >
+                {message.pinned ? (
+                  <Pin size={13} strokeWidth={2} aria-hidden="true" fill="currentColor" />
+                ) : (
+                  <PinOff size={13} strokeWidth={1.6} aria-hidden="true" />
+                )}
+              </button>
+            )}
+            {!isUser && (
+              <button
+                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                onClick={handleFork}
+                aria-label="Fork conversation from here"
+                title="Fork — create new conversation from this point"
+              >
+                <GitFork size={13} strokeWidth={1.6} aria-hidden="true" />
+              </button>
             )}
           </div>
         )}
