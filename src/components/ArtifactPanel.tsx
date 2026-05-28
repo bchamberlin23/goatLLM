@@ -990,7 +990,8 @@ export function ArtifactPanel() {
 
   const activeIdx = artifacts.findIndex((a) => a.id === activeArtifactId);
   const activeArtifact = activeIdx >= 0 ? artifacts[activeIdx] : artifacts[0];
-  const Icon = KIND_ICON[activeArtifact.kind];
+  if (!activeArtifact) return null;
+  const Icon = KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html;
 
   const versions = activeArtifact.versions ?? [];
   const verIdx = activeArtifact.activeVersionIndex ?? versions.length - 1;
