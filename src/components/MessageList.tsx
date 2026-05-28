@@ -205,6 +205,7 @@ export function MessageList() {
           transform: "translateZ(0)",
           willChange: "transform",
           overflowAnchor: "none",
+          overflowX: "hidden",
         }}
         onScroll={handleScroll}
         role="log"

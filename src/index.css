@@ -78,6 +78,19 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Kill horizontal scrolling globally — chat content should never scroll sideways */
+* {
+  scrollbar-width: auto;
+}
+[role="log"],
+[role="log"] * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+[role="log"] {
+  overflow-x: hidden !important;
+}
+
 /* ─── Scrollbar ─── */
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb {
@@ -229,7 +242,7 @@ textarea:focus-visible,
   font-size: 14px;
   line-height: 1.58;
   letter-spacing: -0.005em;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   word-break: break-word;
   min-width: 0;
   overflow-x: hidden;
@@ -245,7 +258,11 @@ textarea:focus-visible,
 }
 
 .markdown-body pre {
+  max-width: 100%;
   overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body p { margin: 0 0 10px; }
@@ -284,6 +301,10 @@ textarea:focus-visible,
   border-radius: 5px;
   padding: 1px 5px;
   color: #ececec;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  display: inline-block;
 }
 
 /* ─── Links ─── */
@@ -371,12 +392,15 @@ textarea:focus-visible,
 .code-block__copy:hover { background: rgba(255,255,255,0.05); color: #ececec; }
 .code-block__copy--copied { color: #34d399; }
 
-.code-block__content { overflow-x: auto; font-size: 13px; line-height: 1.6; }
-.code-block__content .shiki { background: transparent !important; margin: 0; padding: 14px 16px; }
+.code-block__content { overflow-x: auto; font-size: 13px; line-height: 1.6; max-width: 100%; }
+.code-block__content .shiki { background: transparent !important; margin: 0; padding: 14px 16px; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; white-space: pre-wrap !important; }
 .code-block__content--plain {
   padding: 14px 16px;
   margin: 0;
   color: #ececec;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 /* ─── KaTeX math ─── */
