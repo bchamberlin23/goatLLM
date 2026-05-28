@@ -783,6 +783,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     logMessage(convId!, "assistant", "", assistantMsg.id);
     const streamStartTime = performance.now();
     let capturedOutputTokens: number | undefined;
+    let capturedGenerationMs: number | undefined;
 
     const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
     const userPrompt = conv?.systemPrompt || "";
@@ -1040,6 +1041,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       onToolResult: handleToolResult,
       onUsage: (usage) => {
         capturedOutputTokens = usage.outputTokens;
+        if (usage.generationMs) capturedGenerationMs = usage.generationMs;
       },
       onDone: (fullText) => {
         const streamDurationMs = performance.now() - streamStartTime;
@@ -1081,10 +1083,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         }
 
         const outputTokens = capturedOutputTokens ?? (cleanedContent.length / 4); // fallback: ~4 chars/token
+        // Use generationMs from the agent loop when available — it excludes
+        // tool execution time (bash, file reads, etc.) so t/s is accurate.
+        // Falls back to wall-clock streamDurationMs for simple single-call paths.
+        const displayDurationMs = capturedGenerationMs ?? streamDurationMs;
         updateMessage(convId!, assistantMsg.id, {
           content: cleanedContent,
           isStreaming: false,
-          streamingDurationMs: streamDurationMs,
+          streamingDurationMs: displayDurationMs,
           outputTokens,
         });
         stopStreaming(convId!);

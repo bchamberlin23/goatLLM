@@ -318,6 +318,8 @@ export async function agentLoop(
         : 0;
       let fullText = "";
       let consecutiveTruncations = 0;
+      let totalOutputTokens = 0;
+      let totalGenerationMs = 0;
 
       // ── Prompt caching for batched loop ──
       const isAnthropic = config.provider === "anthropic";
@@ -378,12 +380,29 @@ export async function agentLoop(
         }
       }
 
+      // Track latest usage across batches for the final emitUsage call.
+      let lastBatchUsage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number } | undefined;
+
+      function emitUsage() {
+        if (totalOutputTokens > 0 || totalGenerationMs > 0) {
+          callbacks.onUsage?.({
+            inputTokens: lastBatchUsage?.inputTokens ?? 0,
+            outputTokens: totalOutputTokens,
+            cacheRead: lastBatchUsage?.cacheReadTokens ?? undefined,
+            cacheWrite: lastBatchUsage?.cacheWriteTokens ?? undefined,
+            generationMs: totalGenerationMs,
+          });
+        }
+      }
+
       while (true) {
         if (effectiveSignal?.aborted) {
+          emitUsage();
           callbacks.onDone(fullText);
           return;
         }
 
+        const batchStart = performance.now();
         const result = streamText({
           model,
           system: systemPrompt ?? undefined,
@@ -450,6 +469,10 @@ export async function agentLoop(
           }
         }
 
+        // Track generation time for this batch (streaming only, excludes
+        // tool execution which happens between batches).
+        totalGenerationMs += performance.now() - batchStart;
+
         // Accumulate the response messages for the next batch.
         // result.response.messages contains assistant + tool messages in
         // the AI SDK's native format — exactly what streamText expects.
@@ -474,6 +497,7 @@ export async function agentLoop(
             `[agentLoop] Response truncated (attempt ${consecutiveTruncations}/${MAX_CONSECUTIVE_TRUNCATIONS}), continuing…`
           );
         } else if (modelIsDone || finished) {
+          emitUsage();
           callbacks.onDone(fullText);
           return;
         } else {
@@ -484,7 +508,9 @@ export async function agentLoop(
         // ── Context pressure check ──
         // Use actual token usage from the provider if available.
         const usage = await result.usage;
+        lastBatchUsage = usage as typeof lastBatchUsage;
         const inputTokens = usage?.inputTokens ?? estimateMessageTokens(workingMessages);
+        if (usage?.outputTokens) totalOutputTokens += usage.outputTokens;
 
         if (contextWindow > 0 && inputTokens > pressureLimit) {
           // We're at 80%+ of the context window. Compact.
