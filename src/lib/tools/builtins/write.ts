@@ -83,7 +83,7 @@ export const WRITE_TOOLS = {
 
   edit_artifact: tool({
     description:
-      "Make precise text replacements in an existing artifact (the side-panel canvas). Finds the artifact by kind and title (case-insensitive match), then applies targeted edits to its current code — just like edit_file does for workspace files. Use this instead of emitting a full artifact fence when you only need to change part of an existing artifact. Each old_text must appear exactly once in the artifact's current code. ⚠️ Requires user approval.",
+      "Make precise text replacements in an existing artifact (the side-panel canvas). Finds the artifact by kind and title (case-insensitive match), then applies targeted edits to its current code — just like edit_file does for workspace files. ALWAYS prefer this over emitting a brand-new artifact fence when the user asks to change, fix, or extend an artifact you already created — re-emitting a full fence with a different title spawns a confusing duplicate tab. Each old_text must appear exactly once in the artifact's current code. Runs immediately (no approval needed) — the canvas keeps full version history so edits are reversible.",
     inputSchema: z.object({
       kind: z
         .enum(["html", "latex", "python", "docx", "pptx", "xlsx", "deck", "react-component", "markdown-document", "svg", "diagram", "code-snippet", "mini-app", "design-system"])
@@ -96,32 +96,30 @@ export const WRITE_TOOLS = {
         newText: z.string().describe("Replacement text for this edit"),
       })).optional().describe("Array of replacements for multi-edit. Each oldText must match uniquely in the artifact's current code."),
     }),
-    execute: async (input, { toolCallId }) => {
-      return withApproval(toolCallId, async () => {
-        const store = useChatStore.getState();
-        const activeConvId = store.activeId;
-        if (!activeConvId) return "No active conversation. Open a conversation first.";
+    execute: async (input) => {
+      const store = useChatStore.getState();
+      const activeConvId = store.activeId;
+      if (!activeConvId) return "No active conversation. Open a conversation first.";
 
-        const edits: { oldText: string; newText: string }[] = [];
-        if (input.edits && input.edits.length > 0) {
-          edits.push(...input.edits);
-        } else if (input.old_text !== undefined && input.new_text !== undefined) {
-          edits.push({ oldText: input.old_text, newText: input.new_text });
-        } else {
-          return "Provide either old_text + new_text, or an edits array.";
-        }
+      const edits: { oldText: string; newText: string }[] = [];
+      if (input.edits && input.edits.length > 0) {
+        edits.push(...input.edits);
+      } else if (input.old_text !== undefined && input.new_text !== undefined) {
+        edits.push({ oldText: input.old_text, newText: input.new_text });
+      } else {
+        return "Provide either old_text + new_text, or an edits array.";
+      }
 
-        const result = store.editArtifactByKindAndTitle(
-          activeConvId,
-          input.kind as ArtifactKind,
-          input.title,
-          edits,
-        );
-        if (!result) {
-          return `No artifact found with kind="${input.kind}" and title="${input.title}" in the current conversation. Use a full artifact fence to create one first.`;
-        }
-        return `Edited artifact "${input.title}" (${input.kind}). ${edits.length} replacement(s) applied.`;
-      });
+      const result = store.editArtifactByKindAndTitle(
+        activeConvId,
+        input.kind as ArtifactKind,
+        input.title,
+        edits,
+      );
+      if (!result) {
+        return `No artifact found with kind="${input.kind}" and title="${input.title}" in the current conversation. Use a full artifact fence to create one first.`;
+      }
+      return `Edited artifact "${input.title}" (${input.kind}). ${edits.length} replacement(s) applied.`;
     },
   }),
 

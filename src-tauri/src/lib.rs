@@ -494,6 +494,16 @@ fn path_exists_abs(path: String) -> bool {
     std::path::PathBuf::from(&path).exists()
 }
 
+/// Create a directory (and any missing parents) at an absolute path. Used to
+/// eagerly provision a design project folder so the file tree shows it before
+/// the first file is written.
+#[tauri::command]
+fn create_dir_abs(path: String) -> Result<String, String> {
+    let p = std::path::PathBuf::from(&path);
+    fs::create_dir_all(&p).map_err(|e| format!("Cannot create '{}': {}", path, e))?;
+    Ok(p.to_string_lossy().to_string())
+}
+
 /// Recursively copy a directory tree from `src` to `dst`. Used to seed the
 /// built-in `impeccable` skill into `~/.goat/agent/skills/impeccable` on
 /// first run. Skips entries that already exist at the destination so the
@@ -2868,6 +2878,7 @@ pub fn run() {
             list_dir_abs,
             read_text_file_abs,
             path_exists_abs,
+            create_dir_abs,
             copy_dir_abs,
             resource_dir,
             write_skill_file,

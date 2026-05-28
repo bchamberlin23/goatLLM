@@ -375,4 +375,45 @@ export const READ_ONLY_TOOLS = {
       }
     },
   }),
+
+  load_skill: tool({
+    description:
+      "Load the full instructions for one of the skills listed in <available_skills>. Call this the moment the user's request matches a skill's description — it returns the complete SKILL.md body so you can follow it for the rest of the conversation. Pass the exact skill name.",
+    inputSchema: z.object({
+      name: z.string().describe("Exact skill name from <available_skills>"),
+    }),
+    execute: async ({ name }) => {
+      const state = useChatStore.getState();
+      const skill =
+        state.discoveredSkills.find((s) => s.name === name) ??
+        state.discoveredSkills.find((s) => s.aliases?.includes(name));
+      if (!skill) {
+        const names = state.discoveredSkills.map((s) => s.name).join(", ");
+        return `No skill named "${name}". Available skills: ${names || "(none)"}.`;
+      }
+      let raw: string;
+      try {
+        raw = await invoke<string>("read_text_file_abs", { path: skill.filePath });
+      } catch (e) {
+        return `Failed to read skill "${skill.name}": ${e instanceof Error ? e.message : String(e)}`;
+      }
+      // Strip YAML frontmatter — the model already saw name/description in the
+      // prompt; it only needs the body instructions.
+      const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, "").replace(/^\n+/, "");
+
+      // Mark the skill active on the current conversation so it shows a badge
+      // and stays injected for subsequent turns (pi-style progressive
+      // disclosure — the model loads once and keeps following it).
+      const convId = state.activeId;
+      if (convId) {
+        const conv = state.conversations.find((c) => c.id === convId);
+        const current = conv?.activeSkillNames ?? [];
+        if (!current.includes(skill.name)) {
+          state.setConversationSkills(convId, [...current, skill.name]);
+        }
+      }
+
+      return `Loaded skill "${skill.name}". Follow these instructions:\n\n${body}`;
+    },
+  }),
 };

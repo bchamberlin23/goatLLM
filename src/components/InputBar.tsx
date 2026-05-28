@@ -4,6 +4,7 @@ import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type ToolCallEntry } from
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
 import { classifyCommand } from "../lib/command-safety";
+import { stripLeakedToolJson } from "../lib/sanitize";
 import { buildAgentSystemPrompt, buildChatSystemPrompt } from "../lib/system-prompt";
 import { buildDesignSystemPrompt } from "../lib/design/prompt";
 import { splitContentByArtifacts } from "../lib/artifact-segments";
@@ -177,6 +178,10 @@ async function filesToAttachments(fileList: File[]): Promise<Attachment[]> {
 export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const activeId = useChatStore((s) => s.activeId);
   const focusNonce = useChatStore((s) => s.focusNonce);
+  // "Follow-up" = composing inside an existing conversation that already has
+  // messages. New-chat composer stays roomy; follow-ups tighten vertically so
+  // the box doesn't waste height once the thread is rolling.
+  const isFollowUp = useChatStore((s) => (s.activeId ? (s.messages[s.activeId]?.length ?? 0) > 0 : false));
   const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
   const startStreaming = useChatStore((s) => s.startStreaming);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
@@ -414,23 +419,28 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     setFiles((prev) => [...prev, ...newAttachments]);
   }, []);
 
-  const handleSend = useCallback(async (overrides?: { content?: string; attachments?: Attachment[] }) => {
+  const handleSend = useCallback(async (overrides?: { content?: string; attachments?: Attachment[]; fromQueue?: boolean; steered?: boolean }) => {
     const rawTrimmed = (overrides?.content ?? value).trim();
     const currentFiles = overrides?.attachments ?? files;
-    const isResend = !!overrides;
+    // A queued/steered dispatch is a genuine new user turn (must be added to
+    // the thread + sent), unlike an edit/regenerate resend whose message is
+    // already in history.
+    const isQueuedDispatch = overrides?.fromQueue === true;
+    const isResend = !!overrides && !isQueuedDispatch;
     if (!rawTrimmed && currentFiles.length === 0) return;
 
-    // Agent/Design mode: enqueue instead of blocking while streaming
+    // While a turn is streaming, queue the new message instead of blocking.
+    // Works in every mode now (chat, agent, design) — the user can line up a
+    // follow-up or steer the in-flight turn.
     if (isStreaming) {
       const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
-      const state = useChatStore.getState();
-      if ((state.agentMode || state.designMode) && rawTrimmed && activeId) {
+      if (rawTrimmed && activeId) {
         enqueueMessage(activeId, rawTrimmed);
         clearDraft(k);
+        setValue("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         return;
       }
-      // Chat mode: block
       return;
     }
 
@@ -639,6 +649,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         content: displayContent,
         attachments: currentFiles.length > 0 ? currentFiles : undefined,
         pinned: hasHeavyAttachment || undefined,
+        steered: overrides?.steered || undefined,
       });
       logMessage(convId!, "user", displayContent, "");
       // Mark the conversation as "title pending" the moment the user sends so
@@ -676,9 +687,33 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     const history = getActiveMessages();
     const currentWorkspace = useChatStore.getState().workspacePath;
-    const designWorkspace = useChatStore.getState().designWorkspacePath;
+    let designWorkspace = useChatStore.getState().designWorkspacePath;
     const isAgentMode = useChatStore.getState().agentMode;
     const isDesignMode = useChatStore.getState().designMode;
+
+    // Design mode with no project folder yet → auto-provision one under
+    // ~/.goat/designs/<slug> so the design agent actually writes files to disk
+    // (the artifact is the live preview; the files are the deliverable). Without
+    // a workspace the model can only emit in-memory artifacts and never touches
+    // the filesystem — which is the "it doesn't create files" gap.
+    if (isDesignMode && !designWorkspace && convId) {
+      try {
+        const home = await invoke<string>("home_dir");
+        const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
+        const slug =
+          (conv?.title || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 40) || `design-${convId.slice(0, 8)}`;
+        const folder = `${home}/.goat/designs/${slug}`;
+        try { await invoke("create_dir_abs", { path: folder }); } catch { /* lazy-create on first write */ }
+        useChatStore.getState().addDesignWorkspace(folder);
+        useChatStore.getState().setDesignWorkspace(folder);
+        useChatStore.getState().moveConversationToWorkspace?.(convId, folder);
+        designWorkspace = folder;
+      } catch { /* home dir unavailable — fall back to artifact-only mode */ }
+    }
     const isPlanMode = isAgentMode && useChatStore.getState().planMode;
     // Research mode is one-shot: we snapshot the toggle at send time and
     // immediately flip it off so the indicator resets in the UI. Anything
@@ -721,6 +756,24 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                 : undefined;
     if (!isAgentMode && !isDesignMode && chatCodeExec) {
       activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
+    }
+    // Expose load_skill in chat/research mode whenever the model has skills it
+    // can pull on demand (pi-style progressive disclosure). Agent/design mode
+    // already get it via ALL_TOOLS. We only attach it if at least one enabled,
+    // model-invocable skill applies to the current mode — otherwise there's
+    // nothing to load and the tool would just be noise.
+    if (!isAgentMode && !isDesignMode) {
+      const s = useChatStore.getState();
+      const hasModelSkills = s.discoveredSkills.some(
+        (sk) =>
+          !sk.disableModelInvocation &&
+          !s.disabledSkills.has(sk.name) &&
+          (sk.mode === "chat" || sk.mode === "both"),
+      );
+      if (hasModelSkills) {
+        const { SKILL_TOOLS } = await import("../lib/tools");
+        activeTools = { ...(activeTools ?? {}), ...SKILL_TOOLS } as ToolSet;
+      }
     }
 
     // Apply context compaction for long conversations
@@ -904,6 +957,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             researchMode: isResearchMode,
             planMode: useChatStore.getState().planMode,
             projectContextFiles,
+            existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
           });
           const prefix = userPrompt ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>` : dynamicPrompt;
           let out = prefix;
@@ -928,6 +982,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           const base = buildChatSystemPrompt(userPrompt, isResearchMode, hasWebSearch && !isResearchMode, {
             autoArtifacts,
             officeArtifacts,
+            existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
           });
           let out = base;
           if (skillsBlock) out += `\n${skillsBlock}`;
@@ -1080,7 +1135,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         // Strip ephemeral status lines ("Reading…", "Writing the HTML…")
         // from the final message. These are live progress indicators during
         // streaming — once the turn is done, they're noise.
-        const cleanedContent = hasToolActivity
+        const statusStripped = hasToolActivity
           ? finalContent
               .split("\n")
               .filter((line) => {
@@ -1095,10 +1150,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               .join("\n")
               .trim()
           : finalContent;
+        // Strip any leaked tool-call JSON ({summary, {"filename"...}) before
+        // persisting so it never lands in storage, copy, or reload.
+        const cleanedContent = stripLeakedToolJson(statusStripped);
 
         // Stopped before the model produced anything — drop the empty bubble
-        // entirely so the chat looks like the turn never started.
-        if (!cleanedContent.trim() && !hasToolActivity) {
+        // entirely so the chat looks like the turn never started. BUT if the
+        // model had already streamed reasoning ("thinking"), keep the bubble so
+        // those thoughts survive the stop — nothing the user saw should vanish.
+        const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
+        if (!cleanedContent.trim() && !hasToolActivity && !hasThinking) {
           deleteMessage(convId!, assistantMsg.id);
           stopStreaming(convId!);
           endJjAgentSessionIfNeeded();
@@ -1137,10 +1198,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if ((isAgentMode || isDesignMode) && useChatStore.getState().completionSound) {
           playCompletionSound();
         }
-        // Auto-dispatch next queued message
+        // Auto-dispatch next queued message (a normal follow-up, not a steer).
         const next = dequeueMessage(convId!);
         if (next) {
-          setSteerPayload({ conversationId: convId!, content: next.content });
+          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
         }
       },
       onError: (err) => {
@@ -1152,7 +1213,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
           const currentContent = currentMsg?.content || "";
           const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
-          if (!currentContent.trim() && !hasToolActivity) {
+          const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
+          if (!currentContent.trim() && !hasToolActivity && !hasThinking) {
             deleteMessage(convId!, assistantMsg.id);
           } else {
             updateMessage(convId!, assistantMsg.id, { content: currentContent, isStreaming: false });
@@ -1216,8 +1278,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   useEffect(() => {
     if (!steerPayload) return;
     if (steerPayload.conversationId !== activeId) { setSteerPayload(null); return; }
+    const { content, steered } = steerPayload;
     setSteerPayload(null);
-    handleSend({ content: steerPayload.content });
+    handleSend({ content, fromQueue: true, steered });
   }, [steerPayload, activeId, setSteerPayload, handleSend]);
 
   // Handle @ file reference selection
@@ -1275,7 +1338,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   return (
     <div className="w-full max-w-[720px]">
       <div
-        className="relative w-full rounded-[24px] bg-[#2d2d2d] border border-white/5 p-5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] transition-all duration-200 focus-within:border-white/15 focus-within:shadow-[0_18px_50px_-14px_rgba(0,0,0,0.7),0_0_0_4px_rgba(245,158,66,0.06)] focus-within:-translate-y-px"
+        className={`relative w-full rounded-[24px] bg-[#2d2d2d] border border-white/5 ${isFollowUp ? "px-5 py-3" : "p-5"} shadow-[0_10px_40px_-10px_rgba(0,0,0,0.6)] transition-all duration-200 focus-within:border-white/15 focus-within:shadow-[0_18px_50px_-14px_rgba(0,0,0,0.7),0_0_0_4px_rgba(245,158,66,0.06)] focus-within:-translate-y-px`}
       >
         {error && (
           <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-[12.5px] text-[#a0a0a0] animate-[fadeIn_180ms_ease]">
@@ -1411,8 +1474,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           onPaste={handlePaste}
           rows={1}
           aria-label="Message input"
-          placeholder={speech.listening ? "Listening…" : isStreaming ? ((agentMode || designMode) ? "Working — type to queue…" : "Type your next message…") : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
-          className="w-full min-h-[40px] max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed"
+          placeholder={speech.listening ? "Listening…" : isStreaming ? "Working — type to queue or steer…" : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
+          className={`w-full ${isFollowUp ? "min-h-[28px]" : "min-h-[40px]"} max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#a0a0a0] resize-none focus:outline-none leading-relaxed`}
         />
 
         {/* @ file reference picker */}
@@ -1426,7 +1489,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           />
         )}
 
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
+        <div className={`flex items-center justify-between ${isFollowUp ? "mt-2.5 pt-2.5" : "mt-4 pt-3"} border-t border-white/5`}>
           <div className="flex items-center gap-3">
             {/* + menu */}
             <div className="relative">

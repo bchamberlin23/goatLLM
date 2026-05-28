@@ -111,6 +111,10 @@ export interface Message {
   inputTokens?: number;
   /** Streaming duration in milliseconds (from first token to onDone). */
   streamingDurationMs?: number;
+  /** True for user messages that were sent via "Steer" — i.e. they
+   *  interrupted an in-flight turn to redirect it. Surfaced as a small badge
+   *  so the thread makes clear the conversation was steered mid-stream. */
+  steered?: boolean;
 }
 
 export interface Conversation {
@@ -540,13 +544,13 @@ interface ChatStore {
   resendPayload: { conversationId: string; content: string; attachments?: Attachment[] } | null;
   /** Agent-mode message queue: messages sent while the LLM is working. */
   messageQueue: Record<string, { content: string }[]>;
-  steerPayload: { conversationId: string; content: string } | null;
+  steerPayload: { conversationId: string; content: string; steered?: boolean } | null;
   triggerResend: (conversationId: string, content: string, attachments?: Attachment[]) => void;
   clearResend: () => void;
   enqueueMessage: (conversationId: string, content: string) => void;
   dequeueMessage: (conversationId: string) => { content: string } | undefined;
   steerMessage: (conversationId: string, content: string) => void;
-  setSteerPayload: (payload: { conversationId: string; content: string } | null) => void;
+  setSteerPayload: (payload: { conversationId: string; content: string; steered?: boolean } | null) => void;
 
   // Artifacts (non-persisted) — auto-detected code blocks rendered in side panel
   artifacts: Record<string, Artifact[]>;
@@ -1598,7 +1602,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             messageQueue: { ...state.messageQueue, [conversationId]: filtered },
           }));
         }
-        set({ steerPayload: { conversationId, content } });
+        set({ steerPayload: { conversationId, content, steered: true } });
       },
 
       setSteerPayload: (payload) => set({ steerPayload: payload }),

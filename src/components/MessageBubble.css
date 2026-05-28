@@ -8,3 +8,30 @@
   border-radius: 1px;
   animation: cursorBlink 1s step-end infinite;
 }
+
+/* Reasoning rendered as markdown inside the collapsible thinking block.
+   Keep it visually quieter and tighter than primary answer prose. */
+.thinking-prose,
+.thinking-prose * {
+  color: #b4b4b4;
+}
+.thinking-prose p,
+.thinking-prose ul,
+.thinking-prose ol,
+.thinking-prose pre {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+.thinking-prose :first-child {
+  margin-top: 0;
+}
+.thinking-prose :last-child {
+  margin-bottom: 0;
+}
+.thinking-prose h1,
+.thinking-prose h2,
+.thinking-prose h3,
+.thinking-prose h4 {
+  font-size: 13px;
+  margin: 0.5em 0 0.3em;
+}
