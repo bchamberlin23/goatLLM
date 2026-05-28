@@ -568,6 +568,15 @@ interface ChatStore {
   finalizeStreamingArtifacts: (conversationId: string, messageId: string) => void;
   /** Edit the code of an existing artifact. Triggered by the Monaco editor. */
   updateArtifact: (conversationId: string, artifactId: string, code: string) => void;
+  /** Find an artifact by (kind, normalized title) and apply text replacements.
+   *  Returns the artifact id if found and edited, or null if no match.
+   *  Used by the edit_artifact tool. */
+  editArtifactByKindAndTitle: (
+    conversationId: string,
+    kind: ArtifactKind,
+    title: string,
+    edits: { oldText: string; newText: string }[],
+  ) => { artifactId: string; newCode: string } | null;
   /** Move the version pointer back/forward. No-op at the ends. */
   undoArtifact: (conversationId: string, artifactId: string) => void;
   redoArtifact: (conversationId: string, artifactId: string) => void;
@@ -1732,6 +1741,54 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           });
           return { artifacts: { ...state.artifacts, [conversationId]: next } };
         });
+      },
+
+      editArtifactByKindAndTitle: (conversationId, kind, title, edits) => {
+        let result: { artifactId: string; newCode: string } | null = null;
+        set((state) => {
+          const list = state.artifacts[conversationId];
+          if (!list) return state;
+          const want = normalizeTitle(title);
+          const targetIdx = (() => {
+            // Search from the end so the most recent match wins.
+            for (let j = list.length - 1; j >= 0; j--) {
+              if (list[j].kind === kind && normalizeTitle(list[j].title) === want) {
+                return j;
+              }
+            }
+            return -1;
+          })();
+          if (targetIdx < 0) return state;
+
+          const target = list[targetIdx];
+          let newCode = target.code;
+          for (const { oldText, newText } of edits) {
+            const idx = newCode.indexOf(oldText);
+            if (idx === -1) continue; // skip non-matching edits silently
+            newCode = newCode.slice(0, idx) + newText + newCode.slice(idx + oldText.length);
+          }
+          if (newCode === target.code) return state; // nothing changed
+
+          const now = Date.now();
+          const versions = target.versions ?? [];
+          const activeIdx = target.activeVersionIndex ?? versions.length - 1;
+          const trimmed = activeIdx < versions.length - 1 ? versions.slice(0, activeIdx + 1) : versions;
+          const newVersion: ArtifactVersion = {
+            code: newCode,
+            title: target.title,
+            createdAt: now,
+            source: "agent",
+          };
+          const newVersions = [...trimmed, newVersion];
+          const next = list.map((a, i) =>
+            i === targetIdx
+              ? { ...a, code: newCode, versions: newVersions, activeVersionIndex: newVersions.length - 1 }
+              : a,
+          );
+          result = { artifactId: target.id, newCode };
+          return { artifacts: { ...state.artifacts, [conversationId]: next } };
+        });
+        return result;
       },
 
       undoArtifact: (conversationId, artifactId) => {

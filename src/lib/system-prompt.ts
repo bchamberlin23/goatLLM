@@ -107,6 +107,7 @@ export function buildAgentSystemPrompt(options: SystemPromptOptions): string {
     "Use read_file to examine files instead of bash cat or sed.",
     "Use edit_file for precise changes — old_text must match exactly once.",
     "Use write_file only for new files or complete rewrites.",
+    "Use edit_artifact for targeted edits to existing side-panel artifacts (HTML, LaTeX, Python, etc.) instead of emitting a full artifact fence when you only changed part of the code. Find the artifact by kind + title and pass old_text/new_text or an edits array, just like edit_file.",
     "Use bash for build commands, test runners, package managers, and git operations.",
     // ---- Tool routing -------------------------------------------------
     // search_content is the structured grep replacement. Always reach for
