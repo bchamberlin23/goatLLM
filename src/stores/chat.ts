@@ -848,9 +848,6 @@ export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; c
   ollama: [],
   lmstudio: [],
   "opencode-go": [
-    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash (Free)", contextWindow: 200_000 },
-    { id: "mimo-v2.5-free", name: "MiMo V2.5 (Free)", contextWindow: 1_048_576 },
-    { id: "nemotron-3-super-free", name: "Nemotron 3 Super (Free)", contextWindow: 204_800 },
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000 },
     { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000 },
     { id: "glm-5", name: "GLM 5", contextWindow: 200_000 },
@@ -861,9 +858,9 @@ export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; c
     { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
     { id: "minimax-m2.5", name: "MiniMax M2.5", contextWindow: 204_800 },
     { id: "minimax-m2.7", name: "MiniMax M2.7", contextWindow: 204_800 },
-    { id: "nemotron-3-super", name: "Nemotron 3 Super", contextWindow: 204_800 },
     { id: "qwen3.5-plus", name: "Qwen 3.5 Plus", contextWindow: 262_144 },
     { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", contextWindow: 262_144 },
+    { id: "qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144 },
   ],
   groq: [
     { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 128_000 },
