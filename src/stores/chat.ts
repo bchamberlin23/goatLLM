@@ -848,6 +848,9 @@ export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; c
   ollama: [],
   lmstudio: [],
   "opencode-go": [
+    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash (Free)", contextWindow: 200_000 },
+    { id: "mimo-v2.5-free", name: "MiMo V2.5 (Free)", contextWindow: 1_048_576 },
+    { id: "nemotron-3-super-free", name: "Nemotron 3 Super (Free)", contextWindow: 204_800 },
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000 },
     { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000 },
     { id: "glm-5", name: "GLM 5", contextWindow: 200_000 },
