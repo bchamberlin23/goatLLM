@@ -702,7 +702,7 @@ function PlanBuildCTA({ message }: { message: Message }) {
   const setPlanMode = useChatStore((s) => s.setPlanMode);
   const triggerResend = useChatStore((s) => s.triggerResend);
   const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
-  const isStreaming = useChatStore((s) => activeId ? activeId in s.streamingAbortControllers : false);
+  const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
   // Local consumed flag for instant feedback. Once the user clicks Build
   // (or otherwise dismisses), we hide the CTA immediately rather than
   // waiting for the resend round-trip to update the message list.
