@@ -469,11 +469,15 @@ function renderTranscript(messages: Message[]): string {
  * the extractive `buildSummary` if the LLM call fails or returns nothing
  * usable. The returned string can be dropped straight into the system-role
  * summary slot inserted by `compactMessages`.
+ *
+ * @param customInstructions Optional user instructions to focus the summary
+ *        (e.g., "focus on the authentication flow").
  */
 export async function summarizeWithLlm(
   dropped: Message[],
   config: LlmConfig,
   signal?: AbortSignal,
+  customInstructions?: string,
 ): Promise<string> {
   if (dropped.length === 0) return "";
   const transcript = renderTranscript(dropped);
@@ -513,10 +517,13 @@ export async function summarizeWithLlm(
         config.modelId,
       );
     }
+    const userPrompt = customInstructions
+      ? `Summarize the following conversation slice, focusing especially on: ${customInstructions}\n\n${trimmed}`
+      : `Summarize the following conversation slice:\n\n${trimmed}`;
     const result = await generateText({
       model,
       system: LLM_SUMMARY_PROMPT,
-      prompt: `Summarize the following conversation slice:\n\n${trimmed}`,
+      prompt: userPrompt,
       maxOutputTokens: 800,
       temperature: 0.2,
       abortSignal: signal,

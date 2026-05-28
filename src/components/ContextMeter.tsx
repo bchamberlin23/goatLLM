@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useChatStore } from "../stores/chat";
-import { estimateTotalTokens } from "../lib/context-manager";
+import { estimateTotalTokens, summarizeWithLlm } from "../lib/context-manager";
 import {
   getContextWindow,
   formatTokens,
@@ -229,7 +229,7 @@ export function ContextMeter() {
             />
           </dl>
 
-          <div className="px-3.5 pb-3 pt-1 text-[10.5px] text-[#888] leading-relaxed">
+          <div className="px-3.5 pb-2 pt-1 text-[10.5px] text-[#888] leading-relaxed">
             {!windowKnown
               ? "Window size estimated — no authoritative size was found for this model. You can set an explicit value in the model's gear menu."
               : ratio >= 0.9
@@ -240,6 +240,11 @@ export function ContextMeter() {
                     ? "Window size set by you. Pinned messages are always kept."
                     : "Tokens estimated at ~4 chars each. Pinned messages are always kept."}
           </div>
+
+          {/* Manual compaction */}
+          {ratio >= 0.5 && activeId && (
+            <ManualCompactButton conversationId={activeId} />
+          )}
         </div>
       )}
     </div>
@@ -253,6 +258,106 @@ function Row({ label, value }: { label: string; value: string }) {
       <dd className="font-mono tabular-nums text-[#ececec] text-[11.5px]">
         {value}
       </dd>
+    </div>
+  );
+}
+
+function ManualCompactButton({ conversationId }: { conversationId: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const [compacting, setCompacting] = useState(false);
+  const getActiveLlmConfig = useChatStore((s) => s.getActiveLlmConfig);
+
+  const handleCompact = useCallback(async () => {
+    const config = getActiveLlmConfig();
+    if (!config) return;
+
+    setCompacting(true);
+    try {
+      const messages = useChatStore.getState().messages[conversationId] ?? [];
+      // Keep only the last 4 messages + pinned, summarize the rest
+      const pinned = messages.filter((m) => m.pinned);
+      const recent = messages.slice(-4);
+      const toSummarize = messages.slice(0, -4).filter((m) => !m.pinned);
+
+      if (toSummarize.length === 0) {
+        setCompacting(false);
+        setExpanded(false);
+        return;
+      }
+
+      const summary = await summarizeWithLlm(
+        toSummarize,
+        config,
+        undefined,
+        instructions.trim() || undefined,
+      );
+
+      // Replace old messages with summary + recent
+      const summaryMsg = {
+        id: `compact-${Date.now()}`,
+        conversationId,
+        role: "system" as const,
+        content: summary,
+        createdAt: Date.now(),
+        pinned: true,
+      };
+
+      useChatStore.setState((s) => {
+        return {
+          messages: {
+            ...s.messages,
+            [conversationId]: [summaryMsg, ...pinned.filter((m) => !recent.includes(m)), ...recent],
+          },
+        };
+      });
+
+      setExpanded(false);
+      setInstructions("");
+    } catch (e) {
+      console.error("Manual compaction failed:", e);
+    } finally {
+      setCompacting(false);
+    }
+  }, [conversationId, instructions, getActiveLlmConfig]);
+
+  return (
+    <div className="px-3.5 pb-3">
+      {!expanded ? (
+        <button
+          onClick={() => setExpanded(true)}
+          className="w-full py-1.5 rounded-md text-[11.5px] font-medium text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] transition-colors"
+        >
+          Compact context…
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder="Optional: focus instructions (e.g., 'auth flow')"
+            className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[11.5px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-[#f59e42]/50"
+            onKeyDown={(e) => { if (e.key === "Enter") handleCompact(); }}
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setExpanded(false); setInstructions(""); }}
+              className="flex-1 py-1.5 rounded-md text-[11.5px] text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCompact}
+              disabled={compacting}
+              className="flex-1 py-1.5 rounded-md text-[11.5px] font-medium bg-[#f59e42] text-black hover:bg-[#f0903a] disabled:opacity-50 transition-colors"
+            >
+              {compacting ? "Compacting…" : "Compact"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
