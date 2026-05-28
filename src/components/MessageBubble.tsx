@@ -5,7 +5,7 @@ import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
 import { Shimmer, WorkingHeader, useElapsedLabel } from "./ThinkingIndicator";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight, GitFork } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -164,6 +164,44 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     store.updateMessage(message.conversationId, message.id, { pinned: !message.pinned });
   }, [message.conversationId, message.id, message.pinned]);
 
+  const handleFork = useCallback(() => {
+    const store = useChatStore.getState();
+    const allMessages = store.messages[message.conversationId] ?? [];
+    const currentIdx = allMessages.findIndex((m) => m.id === message.id);
+    if (currentIdx < 0) return;
+
+    // Get messages up to and including this one
+    const messagesToFork = allMessages.slice(0, currentIdx + 1);
+    const oldConv = store.conversations.find((c) => c.id === message.conversationId);
+
+    // Create new conversation
+    const newConvId = store.createConversation();
+    if (!newConvId) return;
+
+    // Copy conversation settings
+    if (oldConv) {
+      store.setSystemPrompt(newConvId, oldConv.systemPrompt);
+      if (oldConv.workspacePath) {
+        // This is a workspace conversation - we'd need to handle this
+      }
+    }
+
+    // Copy messages to new conversation
+    for (const msg of messagesToFork) {
+      store.addMessage({
+        conversationId: newConvId,
+        role: msg.role as "user" | "assistant" | "system",
+        content: msg.content,
+        attachments: msg.attachments,
+        pinned: msg.pinned,
+        toolCalls: msg.toolCalls,
+      });
+    }
+
+    // Navigate to the new conversation
+    store.setActiveConversation(newConvId);
+  }, [message.conversationId, message.id]);
+
   const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
   const anyToolRunning = !!message.toolCalls?.some((t) => t.state === "running" || t.state === "pending_approval");
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
@@ -228,6 +266,16 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 ) : (
                   <PinOff size={13} strokeWidth={1.6} aria-hidden="true" />
                 )}
+              </button>
+            )}
+            {!isStreaming && !isUser && (
+              <button
+                className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                onClick={handleFork}
+                aria-label="Fork conversation from here"
+                title="Fork — create new conversation from this point"
+              >
+                <GitFork size={13} strokeWidth={1.6} aria-hidden="true" />
               </button>
             )}
           </div>
