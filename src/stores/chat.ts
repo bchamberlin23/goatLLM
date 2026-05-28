@@ -841,6 +841,10 @@ export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; c
     { id: "deepseek-chat", name: "DeepSeek V3", contextWindow: 64_000 },
     { id: "deepseek-reasoner", name: "DeepSeek R1", contextWindow: 64_000 },
   ],
+  mimo: [
+    { id: "mimo-v2.5", name: "MiMo V2.5", contextWindow: 1_000_000 },
+    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
+  ],
   openrouter: [
     { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
     { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
@@ -882,6 +886,7 @@ const CLOUD_PROVIDER_BASE_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   anthropic: "https://api.anthropic.com",
   deepseek: "https://api.deepseek.com/v1",
+  mimo: "https://token-plan-sgp.xiaomimimo.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
   ollama: "http://localhost:11434/v1",
   lmstudio: "http://localhost:1234/v1",
@@ -2696,6 +2701,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           openai: "OpenAI",
           anthropic: "Anthropic",
           deepseek: "DeepSeek",
+          mimo: "MiMo",
           openrouter: "OpenRouter",
           ollama: "Ollama",
           "opencode-go": "OpenCode Go",

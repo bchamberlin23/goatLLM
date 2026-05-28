@@ -173,6 +173,7 @@ function autoDetectContextWindow(modelId: string, providerId: string): number {
     openai: 128_000,
     anthropic: 200_000,
     deepseek: 64_000,
+    mimo: 1_000_000,
     openrouter: 128_000,
     groq: 128_000,
     "opencode-go": 1_000_000,

@@ -19,6 +19,7 @@ const CLOUD_PROVIDERS = [
   { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com" },
   { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1" },
   { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
+  { id: "mimo", name: "MiMo", baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1" },
   { id: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
   { id: "opencode-go", name: "OpenCode Go", baseUrl: "https://opencode.ai/zen/go/v1" },
   { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1" },
