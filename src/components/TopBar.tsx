@@ -360,8 +360,8 @@ function ChatAssetsMenu() {
             <div className="h-px bg-white/5 mx-2" />
           )}
 
-          {/* Files section (user-uploaded attachments) */}
-          {attachments.length > 0 && (
+          {/* Files section (user-uploaded attachments) — hide in plain chat mode */}
+          {attachments.length > 0 && (agentMode || designMode) && (
             <div className="p-1.5">
               <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
                 Attached files
