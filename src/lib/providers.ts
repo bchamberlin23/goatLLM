@@ -50,6 +50,16 @@ export function getBuiltInProviders(): ProviderConfig[] {
           name: "DeepSeek V4 Flash (Free)",
           contextWindow: 200_000,
         },
+        {
+          id: "mimo-v2.5-free",
+          name: "MiMo V2.5 (Free)",
+          contextWindow: 1_048_576,
+        },
+        {
+          id: "nemotron-3-super-free",
+          name: "Nemotron 3 Super (Free)",
+          contextWindow: 128_000,
+        },
       ],
     },
   ];
