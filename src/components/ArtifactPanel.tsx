@@ -882,6 +882,8 @@ export function ArtifactPanel() {
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
   const undoArtifact = useChatStore((s) => s.undoArtifact);
   const redoArtifact = useChatStore((s) => s.redoArtifact);
+  const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
   const workspacePath = useChatStore((s) =>
     s.designMode ? s.designWorkspacePath : s.workspacePath
   );
@@ -1288,14 +1290,16 @@ export function ArtifactPanel() {
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar: file browser + artifact list */}
         <div className="w-[200px] shrink-0 border-r border-white/[0.04] flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <WorkspaceFileBrowser
-              onFileContent={(path, name, content) => {
-                setWsFile({ path, name, content });
-              }}
-              refreshKey={fileRefreshKey}
-            />
-          </div>
+          {(agentMode || designMode) && (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <WorkspaceFileBrowser
+                onFileContent={(path, name, content) => {
+                  setWsFile({ path, name, content });
+                }}
+                refreshKey={fileRefreshKey}
+              />
+            </div>
+          )}
           {artifacts.length > 0 && (
             <div className="border-t border-white/[0.04]">
               <div className="px-3 py-1.5">

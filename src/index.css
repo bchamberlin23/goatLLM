@@ -229,6 +229,9 @@ textarea:focus-visible,
   font-size: 14px;
   line-height: 1.58;
   letter-spacing: -0.005em;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .markdown-body p { margin: 0 0 10px; }
@@ -317,6 +320,8 @@ textarea:focus-visible,
   overflow: hidden;
   margin: 10px 0;
   font-family: var(--font-mono);
+  min-width: 0;
+  max-width: 100%;
 }
 .code-block__header {
   display: flex;

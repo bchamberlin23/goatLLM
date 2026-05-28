@@ -342,7 +342,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
 
         {/* Plain assistant text (no tool calls) + user messages */}
         {(!hasToolCalls || !isAssistant) && (
-          <div className={isUser ? "bg-[#2d2d2d] border border-white/5 rounded-2xl px-4 py-2 max-w-[85%]" : "w-full"}>
+          <div className={isUser ? "bg-[#2d2d2d] border border-white/5 rounded-2xl px-4 py-2 max-w-[85%]" : "w-full overflow-hidden min-w-0"}>
             {editing ? (
               <textarea
                 ref={textareaRef}
@@ -366,6 +366,21 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
               </>
             )}
+          </div>
+        )}
+        {/* Tokens/second + output stats — assistant messages only, after streaming ends */}
+        {isAssistant && !isStreaming && message.streamingDurationMs && message.streamingDurationMs > 500 && (
+          <div className="flex items-center gap-2 text-[10.5px] text-[#666] tabular-nums">
+            {message.outputTokens && (
+              <span>{message.outputTokens} tokens</span>
+            )}
+            <span>
+              {(() => {
+                const tps = (message.outputTokens ?? 0) / (message.streamingDurationMs / 1000);
+                return tps > 0 ? `${tps.toFixed(1)} t/s` : null;
+              })()}
+            </span>
+            <span>{(message.streamingDurationMs / 1000).toFixed(1)}s</span>
           </div>
         )}
         {isAssistant && !isStreaming && (

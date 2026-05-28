@@ -251,7 +251,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   );
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const [pendingSkills, setPendingSkills] = useState<string[]>([]);
+  const [pendingSkills, setPendingSkills] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("goatllm-pending-skills");
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  // Persist pending skills to localStorage so they survive remounts/reloads.
+  useEffect(() => {
+    try { localStorage.setItem("goatllm-pending-skills", JSON.stringify(pendingSkills)); } catch {}
+  }, [pendingSkills]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // @ file reference picker state
@@ -423,6 +432,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       if (pendingSkills.length > 0) {
         setConversationSkills(convId, pendingSkills);
         setPendingSkills([]);
+        try { localStorage.removeItem("goatllm-pending-skills"); } catch {}
       }
     }
 
@@ -771,6 +781,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
     logMessage(convId!, "assistant", "", assistantMsg.id);
+    const streamStartTime = performance.now();
+    let capturedOutputTokens: number | undefined;
 
     const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
     const userPrompt = conv?.systemPrompt || "";
@@ -1026,7 +1038,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       },
       onToolCall: handleToolCall,
       onToolResult: handleToolResult,
+      onUsage: (usage) => {
+        capturedOutputTokens = usage.outputTokens;
+      },
       onDone: (fullText) => {
+        const streamDurationMs = performance.now() - streamStartTime;
         // Any tool call still flagged "running" never got its result chunk
         // (stream ended early, abort, partial response, etc.) — flip it to
         // done so the UI stops shimmering "Reading…" forever.
@@ -1064,7 +1080,13 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           return;
         }
 
-        updateMessage(convId!, assistantMsg.id, { content: cleanedContent, isStreaming: false });
+        const outputTokens = capturedOutputTokens ?? (cleanedContent.length / 4); // fallback: ~4 chars/token
+        updateMessage(convId!, assistantMsg.id, {
+          content: cleanedContent,
+          isStreaming: false,
+          streamingDurationMs: streamDurationMs,
+          outputTokens,
+        });
         stopStreaming(convId!);
         // Auto-detect artifacts in completed messages
         if (cleanedContent.trim()) {

@@ -106,6 +106,11 @@ export interface Message {
   /** Skills that were active when this message was sent (for user messages)
    *  or received (for assistant messages). Shown as badges in the UI. */
   activeSkillNames?: string[];
+  /** Token usage stats from the LLM provider. */
+  outputTokens?: number;
+  inputTokens?: number;
+  /** Streaming duration in milliseconds (from first token to onDone). */
+  streamingDurationMs?: number;
 }
 
 export interface Conversation {
