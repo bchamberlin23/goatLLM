@@ -416,7 +416,6 @@ export async function agentLoop(
         });
 
         let batchText = "";
-        let finished = false;
 
         for await (const chunk of result.fullStream) {
           switch (chunk.type) {
@@ -464,7 +463,6 @@ export async function agentLoop(
               return;
 
             case "finish":
-              finished = true;
               break;
           }
         }
@@ -483,26 +481,36 @@ export async function agentLoop(
         const stepResults = await result.steps;
         totalSteps += stepResults.length;
 
-        // Check if the model is done (no tool calls in the last step).
+        // Determine if the loop should continue based on the last step's
+        // finishReason — not the stream-level `finished` flag, which fires
+        // on step-limit boundaries too.
         const lastStep = stepResults[stepResults.length - 1];
-        const modelIsDone = !lastStep?.toolCalls?.length;
-        const wasTruncated = lastStep?.finishReason === "length";
+        const finishReason = lastStep?.finishReason;
+        const hasToolCalls = !!lastStep?.toolCalls?.length;
 
-        if (modelIsDone && wasTruncated && consecutiveTruncations < MAX_CONSECUTIVE_TRUNCATIONS) {
-          // The model hit maxOutputTokens mid-response — it was cut off
-          // before it could emit tool calls. Continue the loop so it can
-          // pick up where it left off.
+        // 'tool-calls' = model wants to continue (step limit hit, or model
+        //   is mid-chain). Continue the loop.
+        // 'length' = response truncated by maxOutputTokens. Continue so the
+        //   model can pick up where it left off.
+        // 'stop' / 'content-filter' / 'error' / 'other' = model is done.
+        const shouldContinue =
+          finishReason === "tool-calls" ||
+          (finishReason === "length" && consecutiveTruncations < MAX_CONSECUTIVE_TRUNCATIONS);
+
+        if (finishReason === "length" && !hasToolCalls) {
           consecutiveTruncations++;
           console.log(
             `[agentLoop] Response truncated (attempt ${consecutiveTruncations}/${MAX_CONSECUTIVE_TRUNCATIONS}), continuing…`
           );
-        } else if (modelIsDone || finished) {
+        } else if (hasToolCalls) {
+          // Model produced tool calls — reset truncation counter.
+          consecutiveTruncations = 0;
+        }
+
+        if (!shouldContinue) {
           emitUsage();
           callbacks.onDone(fullText);
           return;
-        } else {
-          // Model produced tool calls — reset truncation counter.
-          consecutiveTruncations = 0;
         }
 
         // ── Context pressure check ──
