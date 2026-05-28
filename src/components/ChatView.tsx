@@ -4,7 +4,7 @@ import { MessageList } from "./MessageList";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { DesignWorkspacePicker } from "./design/DesignWorkspacePicker";
 import { ModeToggle } from "./ModeToggle";
-import { ArtifactPanel } from "./ArtifactPanel";
+import { SafeArtifactPanel } from "./SafeArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
@@ -294,7 +294,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               </div>
               {(artifactPanelOpen || attachmentPanelOpen) && (
                 <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-                  {attachmentPanelOpen ? <AttachmentPanel /> : <ArtifactPanel />}
+                  {attachmentPanelOpen ? <AttachmentPanel /> : <SafeArtifactPanel />}
                 </div>
               )}
             </>
