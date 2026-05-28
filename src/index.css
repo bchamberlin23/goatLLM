@@ -232,6 +232,20 @@ textarea:focus-visible,
   overflow-wrap: break-word;
   word-break: break-word;
   min-width: 0;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* Prevent any markdown child from overflowing the message container */
+.markdown-body img,
+.markdown-body video,
+.markdown-body iframe,
+.markdown-body pre {
+  max-width: 100%;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
 }
 
 .markdown-body p { margin: 0 0 10px; }
@@ -295,6 +309,7 @@ textarea:focus-visible,
   margin: 14px 0;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.06);
+  max-width: 100%;
 }
 .md-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .md-table th {
@@ -366,7 +381,7 @@ textarea:focus-visible,
 
 /* ─── KaTeX math ─── */
 .markdown-body .katex { font-size: 1.05em; }
-.markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.markdown-body .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; max-width: 100%; }
 .markdown-body .katex .mathnormal { color: #ececec; }
 
 /* ─── HTML Preview ─── */
