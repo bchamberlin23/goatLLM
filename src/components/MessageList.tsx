@@ -10,7 +10,7 @@ function isToday(ts: number): boolean {
 
 export function MessageList() {
   const activeId = useChatStore((s) => s.activeId);
-  const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
+  const isStreaming = useChatStore((s) => activeId ? activeId in s.streamingAbortControllers : false);
   const saveScrollPosition = useChatStore((s) => s.saveScrollPosition);
   const scrollPositions = useChatStore((s) => s.scrollPositions);
   const msgMap = useChatStore((s) => s.messages);

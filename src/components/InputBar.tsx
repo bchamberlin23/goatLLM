@@ -153,7 +153,7 @@ async function filesToAttachments(fileList: File[]): Promise<Attachment[]> {
 export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const activeId = useChatStore((s) => s.activeId);
   const focusNonce = useChatStore((s) => s.focusNonce);
-  const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
+  const isStreaming = useChatStore((s) => activeId ? activeId in s.streamingAbortControllers : false);
   const startStreaming = useChatStore((s) => s.startStreaming);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const addToolCallToMessage = useChatStore((s) => s.addToolCallToMessage);

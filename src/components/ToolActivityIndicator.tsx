@@ -14,7 +14,7 @@ export function ToolActivityIndicator() {
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
   const messages = useChatStore((s) => (activeId ? s.messages[activeId] : []));
-  const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
+  const isStreaming = useChatStore((s) => activeId ? activeId in s.streamingAbortControllers : false);
 
   const activity = useMemo(() => {
     if (!isStreaming || !messages || messages.length === 0) return null;
