@@ -78,17 +78,17 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Kill horizontal scrolling globally — chat content should never scroll sideways */
+/* Kill horizontal scrolling on the message list — not via max-width on descendants */
 * {
   scrollbar-width: auto;
 }
-[role="log"],
-[role="log"] * {
-  max-width: 100%;
-  box-sizing: border-box;
-}
+
+/* Prevent horizontal scroll on the message list viewport only. Do NOT set
+   max-width on [role="log"] * — it overrides Tailwind max-w-* layout classes
+   (720px/860px column) and stretches chat content to the full scroll width. */
 [role="log"] {
   overflow-x: hidden !important;
+  box-sizing: border-box;
 }
 
 /* ─── Scrollbar ─── */

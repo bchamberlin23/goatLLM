@@ -33,11 +33,41 @@ export function ContextMeter() {
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const lastActiveIdRef = useRef<string | null>(null);
 
-  const tokens = useMemo(
-    () => (messages ? estimateTotalTokens(messages) : 0),
-    [messages],
-  );
+  const estimateKey = useMemo(() => {
+    if (!messages?.length) return "0";
+    let total = messages.length;
+    for (const m of messages) {
+      total += m.content.length;
+      if (m.thinkingContent) total += m.thinkingContent.length;
+      if (m.toolCalls) total += m.toolCalls.length;
+    }
+    return String(total);
+  }, [messages]);
+
+  const [tokens, setTokens] = useState(0);
+
+  useEffect(() => {
+    if (!messages) {
+      setTokens(0);
+      return;
+    }
+
+    const switchedConversation = lastActiveIdRef.current !== activeId;
+    lastActiveIdRef.current = activeId ?? null;
+
+    if (switchedConversation) {
+      setTokens(estimateTotalTokens(messages));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setTokens(estimateTotalTokens(messages));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeId, estimateKey, messages]);
 
   // Resolve the effective context window for the currently selected model.
   const { windowTokens, windowKnown, source } = useMemo(() => {

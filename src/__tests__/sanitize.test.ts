@@ -41,4 +41,24 @@ describe("stripLeakedToolJson", () => {
     const t = 'Editing {"edits": [{"old_text":"a","new_text":"b"}]} ok';
     expect(stripLeakedToolJson(t)).toBe("Editing  ok");
   });
+
+  it("strips load_skill name leak", () => {
+    const t = 'Loading {"name": "impeccable"} skill';
+    expect(stripLeakedToolJson(t)).toBe("Loading  skill");
+  });
+
+  it("strips unquoted name key", () => {
+    const t = "Loading { name: \"impeccable\" } skill";
+    expect(stripLeakedToolJson(t)).toBe("Loading  skill");
+  });
+
+  it("strips streaming-tail { name fragment", () => {
+    const t = "Loading { name";
+    expect(stripLeakedToolJson(t)).toBe("Loading ");
+  });
+
+  it("strips streaming-tail {summary fragment", () => {
+    const t = "Summarizing {summary";
+    expect(stripLeakedToolJson(t)).toBe("Summarizing ");
+  });
 });

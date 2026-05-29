@@ -8,6 +8,18 @@ export function Shimmer({ text, className = "" }: { text: string; className?: st
   );
 }
 
+/** Format a duration in ms as a human-readable elapsed label. */
+export function formatDurationMs(ms: number): string {
+  const totalSec = Math.floor(Math.max(0, ms) / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (totalMin < 60) return s === 0 ? `${totalMin}m` : `${totalMin}m ${s}s`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 export function useElapsedLabel(startedAt: number | null, running: boolean) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -17,15 +29,7 @@ export function useElapsedLabel(startedAt: number | null, running: boolean) {
     return () => clearInterval(id);
   }, [running]);
   if (!startedAt) return "0s";
-  const diffMs = Math.max(0, now - startedAt);
-  const totalSec = Math.floor(diffMs / 1000);
-  if (totalSec < 60) return `${totalSec}s`;
-  const totalMin = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  if (totalMin < 60) return s === 0 ? `${totalMin}m` : `${totalMin}m ${s}s`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  return formatDurationMs(now - startedAt);
 }
 
 export function WorkingHeader({

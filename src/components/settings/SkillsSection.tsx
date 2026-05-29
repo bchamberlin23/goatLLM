@@ -53,7 +53,7 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
             creatingSkill
               ? "bg-white/10 text-[#ececec]"
-              : "bg-[#f59e42] text-[#1a1a1c] hover:bg-[#f6a64e]"
+              : "bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.06] text-text-2"
           }`}
         >
           <Sparkles size={12} strokeWidth={2} aria-hidden="true" />
@@ -89,13 +89,7 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
                       <div className="flex items-center gap-2">
                         <span className="text-[13px] font-medium text-[#d5d5d5] truncate">{skill.name}</span>
                         <span
-                          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                            skill.mode === "agent"
-                              ? "text-[#f59e42] bg-[#f59e42]/10"
-                              : skill.mode === "chat"
-                                ? "text-[#7dd3fc] bg-[#7dd3fc]/10"
-                                : "text-[#a0a0a0] bg-white/5"
-                          }`}
+                          className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium text-text-3 bg-white/[0.06]"
                           title={
                             skill.mode === "agent"
                               ? "Available in Agent mode only"
@@ -107,8 +101,8 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
                           {skill.mode}
                         </span>
                         {isAutoTrigger && (
-                          <span className="shrink-0 text-[10px] text-[#f59e42] bg-[#f59e42]/10 px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <Zap size={10} />
+                          <span className="shrink-0 text-[10px] text-text-3 bg-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Zap size={10} className="text-accent" />
                             auto
                           </span>
                         )}
@@ -123,7 +117,7 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
                     </div>
                     <button
                       className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${
-                        isDisabled ? "bg-white/10" : "bg-[#f59e42]"
+                        isDisabled ? "bg-white/10" : "bg-accent"
                       }`}
                       onClick={() => setSkillEnabled(skill.name, !!isDisabled)}
                       aria-label={`${isDisabled ? "Enable" : "Disable"} ${skill.name}`}
@@ -137,14 +131,14 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
                   </div>
                   <div className="flex items-center justify-between pl-0.5">
                     <div className="flex items-center gap-1.5">
-                      <Zap size={10} className="text-[#f59e42]" />
+                      <Zap size={10} className="text-text-3" />
                       <span className="text-[10.5px] text-[#888]">
                         Auto-load every turn
                       </span>
                     </div>
                     <button
                       className={`shrink-0 w-7 h-4 rounded-full relative transition-colors ${
-                        isAutoTrigger ? "bg-[#f59e42]" : "bg-white/10"
+                        isAutoTrigger ? "bg-accent" : "bg-white/10"
                       } ${isDisabled ? "opacity-30 cursor-not-allowed" : ""}`}
                       disabled={isDisabled}
                       onClick={() => setAutoTriggerSkill(skill.name, !isAutoTrigger)}
@@ -180,10 +174,10 @@ export function SkillsSection({ embedded = false }: { embedded?: boolean }) {
             value={newPath}
             onChange={(e) => setNewPath(e.target.value)}
             placeholder="~/projects/my-skills"
-            className="flex-1 bg-[#1a1a1c] border border-white/5 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-[#f59e42]/30 transition-colors"
+            className="flex-1 bg-[#1a1a1c] border border-white/5 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-white/10 transition-colors"
           />
           <button
-            className="px-3 py-1.5 bg-[#f59e42] text-[#1a1a1c] text-[12px] font-medium rounded-lg hover:bg-[#f6a64e] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.06] text-text-2 text-[12px] font-medium rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             disabled={!newPath.trim()}
             onClick={() => {
               const trimmed = newPath.trim();
@@ -275,7 +269,7 @@ function CreateSkillForm({
   };
 
   return (
-    <div className="flex flex-col gap-3 p-3.5 bg-[#1a1a1c] border border-[#f59e42]/20 rounded-xl">
+    <div className="flex flex-col gap-3 p-3.5 bg-[#1a1a1c] border border-white/[0.06] rounded-xl">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="text-[13px] font-semibold text-[#ececec]">New skill</h4>
@@ -309,7 +303,7 @@ function CreateSkillForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="detail-mode"
           maxLength={80}
-          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-[#f59e42]/40 transition-colors"
+          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-white/10 transition-colors"
         />
         {name && slug !== name && (
           <span className="text-[10.5px] text-[#888]">Saved as <code className="bg-white/5 px-1 rounded">{slug}</code></span>
@@ -323,7 +317,7 @@ function CreateSkillForm({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Use when the user wants longer, more detailed explanations with worked examples."
           rows={2}
-          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-[#f59e42]/40 transition-colors resize-none"
+          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-white/10 transition-colors resize-none"
         />
       </div>
 
@@ -337,7 +331,7 @@ function CreateSkillForm({
               onClick={() => setMode(m)}
               className={`flex-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
                 mode === m
-                  ? "bg-[#f59e42]/15 text-[#f59e42] border border-[#f59e42]/40"
+                  ? "bg-accent/10 text-text-1 border border-accent/30"
                   : "bg-white/[0.04] text-[#a0a0a0] border border-white/5 hover:text-[#ececec] hover:bg-white/[0.06]"
               }`}
             >
@@ -354,7 +348,7 @@ function CreateSkillForm({
           onChange={(e) => setBody(e.target.value)}
           placeholder={"You answer with thorough, well-structured explanations.\n\nRules:\n- Lead with the answer, then expand.\n- Include at least one worked example for non-trivial questions.\n- Use headings only when the response has multiple distinct sections."}
           rows={8}
-          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-2 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-[#f59e42]/40 transition-colors font-mono resize-y leading-relaxed"
+          className="bg-[#1a1a1c] border border-white/10 rounded-lg px-3 py-2 text-[13px] text-[#d5d5d5] placeholder:text-[#6a6a6c] focus:outline-none focus:border-white/10 transition-colors font-mono resize-y leading-relaxed"
         />
       </div>
 
@@ -376,7 +370,7 @@ function CreateSkillForm({
         <button
           onClick={handleSave}
           disabled={saving || !name.trim() || !description.trim() || !body.trim()}
-          className="px-3.5 py-1.5 bg-[#f59e42] text-[#1a1a1c] text-[12.5px] font-medium rounded-lg hover:bg-[#f6a64e] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="px-3.5 py-1.5 bg-accent text-bg text-[12.5px] font-medium rounded-lg hover:bg-[#f0903a] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           {saving ? "Saving…" : "Create skill"}
         </button>

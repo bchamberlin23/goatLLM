@@ -14,6 +14,8 @@
 // First-key names that identify a leaked tool-argument object.
 const TOOL_ARG_KEYS = new Set([
   "summary",
+  "name",
+  "id",
   "filename",
   "file_path",
   "path",
@@ -37,6 +39,42 @@ const TOOL_ARG_KEYS = new Set([
   "max_matches",
 ]);
 
+/** Match a tool-arg key at the start of a JSON object (quoted or unquoted). */
+const TOOL_KEY_RE = /^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:/;
+
+/**
+ * True when `{` at `i` is followed only by whitespace / quote / a partial
+ * known-key prefix and the region ends before `:` — a streaming tail fragment
+ * like `{ name` or `{summary` that should not flash on screen.
+ */
+function isStreamingTailFragment(region: string, i: number): boolean {
+  let j = i + 1;
+  const n = region.length;
+  while (j < n && /\s/.test(region[j])) j++;
+  if (j >= n) return true;
+  if (region[j] === '"') {
+    const close = region.indexOf('"', j + 1);
+    if (close === -1) {
+      const partial = region.slice(j + 1);
+      return [...TOOL_ARG_KEYS].some(
+        (k) => k.startsWith(partial) || partial.startsWith(k),
+      );
+    }
+    const key = region.slice(j + 1, close);
+    if (!TOOL_ARG_KEYS.has(key)) return false;
+    j = close + 1;
+    while (j < n && /\s/.test(region[j])) j++;
+    return j >= n || region[j] !== ":";
+  }
+  const rest = region.slice(j);
+  const colon = rest.search(/[:{}\[\]"\\]/);
+  const token = (colon === -1 ? rest : rest.slice(0, colon)).trim();
+  if (!token) return true;
+  return [...TOOL_ARG_KEYS].some(
+    (k) => k.startsWith(token) || token.startsWith(k),
+  );
+}
+
 /**
  * Scan a fence-free text region and remove leaked tool-argument JSON objects.
  */
@@ -56,8 +94,12 @@ function stripJsonFromRegion(region: string): string {
     // Peek: is this `{` followed by optional whitespace and a known key?
     let j = i + 1;
     while (j < n && /\s/.test(region[j])) j++;
-    const keyMatch = /^"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:/.exec(region.slice(j, j + 64));
+    const keyMatch = TOOL_KEY_RE.exec(region.slice(j, j + 64));
     if (!keyMatch || !TOOL_ARG_KEYS.has(keyMatch[1])) {
+      if (isStreamingTailFragment(region, i)) {
+        i = n;
+        continue;
+      }
       out += ch;
       i++;
       continue;

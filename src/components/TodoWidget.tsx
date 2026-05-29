@@ -5,6 +5,9 @@ import { CheckSquare } from "lucide-react";
 export function TodoWidget() {
   const activeId = useChatStore((s) => s.activeId);
   const todoBoardUpdated = useChatStore((s) => s.todoBoardUpdated);
+  const isStreaming = useChatStore((s) =>
+    s.activeId ? s.isConversationStreaming(s.activeId) : false,
+  );
   const [board, setBoard] = useState<any>(null);
   const [boardEmpty, setBoardEmpty] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -37,6 +40,23 @@ export function TodoWidget() {
   const completedCount = visibleTasks.filter((t: any) => t.status === "completed").length;
   const allDone = completedCount === visibleTasks.length;
   const inProgressCount = visibleTasks.filter((t: any) => t.status === "in_progress").length;
+
+  // When every task is done and the agent turn has finished, clear the board
+  // so a new todo_create batch doesn't stack under old completed rows.
+  useEffect(() => {
+    if (!activeId || visibleTasks.length === 0 || !allDone || isStreaming) return;
+    let cancelled = false;
+    import("../lib/tools/todo").then((m) => {
+      if (cancelled) return;
+      m.clearBoard(activeId);
+      useChatStore.setState((s) => ({
+        todoBoardUpdated: (s.todoBoardUpdated ?? 0) + 1,
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, allDone, isStreaming, visibleTasks.length]);
 
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[320px] w-[280px] flex flex-col items-center">

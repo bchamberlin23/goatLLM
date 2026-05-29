@@ -63,7 +63,7 @@ export default function App() {
   });
 
   return (
-    <div className="w-full h-screen flex overflow-hidden relative" style={{ background: "#1e1e1e" }}>
+    <div className="w-full h-screen flex overflow-hidden relative" style={{ background: "#1a1a1c" }}>
       <div
         className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
         style={{ width: sidebarOpen ? 244 : 0 }}
@@ -74,7 +74,7 @@ export default function App() {
         className="flex-1 h-full flex flex-col relative overflow-hidden"
         style={{
           background:
-            "radial-gradient(1100px 620px at 50% -10%, rgba(245,158,66,0.045), transparent 55%), radial-gradient(900px 500px at 100% 110%, rgba(99,102,241,0.035), transparent 55%), #1e1e1e",
+            "radial-gradient(1100px 620px at 50% -10%, rgba(245,158,66,0.045), transparent 55%), radial-gradient(900px 500px at 100% 110%, rgba(99,102,241,0.035), transparent 55%), #1a1a1c",
         }}
       >
         <ChatView onOpenSettings={handleOpenSettings} />

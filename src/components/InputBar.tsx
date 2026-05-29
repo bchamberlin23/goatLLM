@@ -3,6 +3,7 @@ import type { ToolSet } from "ai";
 import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type ToolCallEntry } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
+import { shouldAutoApprove } from "../lib/tools/approval";
 import { classifyCommand } from "../lib/command-safety";
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { buildAgentSystemPrompt, buildChatSystemPrompt } from "../lib/system-prompt";
@@ -112,7 +113,6 @@ import {
   X,
   Check,
   Wand2,
-  Sparkles,
   ListChecks,
   Telescope,
 } from "lucide-react";
@@ -858,6 +858,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
     logMessage(convId!, "assistant", "", assistantMsg.id);
     const streamStartTime = performance.now();
+    const editedFilesThisTurn = new Set<string>();
     let capturedOutputTokens: number | undefined;
     let capturedGenerationMs: number | undefined;
 
@@ -992,12 +993,19 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         })();
 
     const handleToolCall = (tc: ToolCallInfo) => {
+      // The `done` tool is an internal completion signal — its summary
+      // becomes the closing message content, not a visible tool pill.
+      if (tc.toolName === "done") return;
+
       const writeTool = isWriteTool(tc.toolName);
+      const permissionMode = useChatStore.getState().permissionMode;
+      const autoApproved =
+        isDesignMode || shouldAutoApprove(tc.toolName, permissionMode);
       // Capture how much text content exists at this point for chronological interleaving
       const currentContent = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)?.content || "";
       const entry: ToolCallEntry = {
         toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input,
-        state: writeTool && !isDesignMode ? "pending_approval" : "running",
+        state: writeTool && !autoApproved ? "pending_approval" : "running",
         contentAtInvocation: currentContent.length,
       };
       // Suppress web_search pills beyond the hard cap — the tool returns an
@@ -1023,6 +1031,31 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const handleToolResult = async (tr: ToolResultInfo) => {
       completeToolCall(convId!, assistantMsg.id, tr.toolCallId, tr.output);
       logToolResult(convId!, tr.toolCallId, tr.toolName, tr.output);
+
+      if (
+        (tr.toolName === "write_file" || tr.toolName === "edit_file") &&
+        typeof tr.output === "string" &&
+        !tr.output.startsWith("Error") &&
+        !tr.output.startsWith("❌") &&
+        !/failed:/i.test(tr.output)
+      ) {
+        const input = tr.input as { path?: string } | undefined;
+        const filePath =
+          typeof input?.path === "string" ? input.path.trim() : "";
+        if (filePath) {
+          editedFilesThisTurn.add(filePath);
+          const live = useChatStore
+            .getState()
+            .messages[convId!]
+            ?.find((m) => m.id === assistantMsg.id);
+          const prev = live?.editedFiles ?? [];
+          if (!prev.includes(filePath)) {
+            updateMessage(convId!, assistantMsg.id, {
+              editedFiles: [...prev, filePath],
+            });
+          }
+        }
+      }
 
       // Design mode: when an HTML file is written/edited, sync it as an
       // artifact so the preview panel shows it live.
@@ -1121,7 +1154,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         capturedOutputTokens = usage.outputTokens;
         if (usage.generationMs) capturedGenerationMs = usage.generationMs;
       },
-      onDone: (fullText) => {
+      onDone: (fullText, summary) => {
         const streamDurationMs = performance.now() - streamStartTime;
         // Any tool call still flagged "running" never got its result chunk
         // (stream ended early, abort, partial response, etc.) — flip it to
@@ -1153,34 +1186,48 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         // Strip any leaked tool-call JSON ({summary, {"filename"...}) before
         // persisting so it never lands in storage, copy, or reload.
         const cleanedContent = stripLeakedToolJson(statusStripped);
+        // If the model only put its answer in the `done` tool args (or leaked
+        // JSON that got stripped), fall back to the done summary.
+        const displayContent =
+          cleanedContent.trim() || (summary?.trim() ?? "");
 
         // Stopped before the model produced anything — drop the empty bubble
         // entirely so the chat looks like the turn never started. BUT if the
         // model had already streamed reasoning ("thinking"), keep the bubble so
         // those thoughts survive the stop — nothing the user saw should vanish.
         const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
-        if (!cleanedContent.trim() && !hasToolActivity && !hasThinking) {
+        if (!displayContent.trim() && !hasToolActivity && !hasThinking) {
           deleteMessage(convId!, assistantMsg.id);
           stopStreaming(convId!);
           endJjAgentSessionIfNeeded();
           return;
         }
 
-        const outputTokens = capturedOutputTokens ?? (cleanedContent.length / 4); // fallback: ~4 chars/token
+        const outputTokens = capturedOutputTokens ?? (displayContent.length / 4); // fallback: ~4 chars/token
         // Use generationMs from the agent loop when available — it excludes
         // tool execution time (bash, file reads, etc.) so t/s is accurate.
         // Falls back to wall-clock streamDurationMs for simple single-call paths.
         const displayDurationMs = capturedGenerationMs ?? streamDurationMs;
+        const editedFiles =
+          editedFilesThisTurn.size > 0
+            ? Array.from(editedFilesThisTurn)
+            : useChatStore
+                .getState()
+                .messages[convId!]
+                ?.find((m) => m.id === assistantMsg.id)?.editedFiles;
         updateMessage(convId!, assistantMsg.id, {
-          content: cleanedContent,
+          content: displayContent,
           isStreaming: false,
           streamingDurationMs: displayDurationMs,
+          turnDurationMs: streamDurationMs,
           outputTokens,
+          editedFiles:
+            editedFiles && editedFiles.length > 0 ? editedFiles : undefined,
         });
         stopStreaming(convId!);
         // Auto-detect artifacts in completed messages
-        if (cleanedContent.trim()) {
-          detectArtifacts(convId!, assistantMsg.id, cleanedContent);
+        if (displayContent.trim()) {
+          detectArtifacts(convId!, assistantMsg.id, displayContent);
         }
         // Any remaining streaming flags from this message clear here so
         // the canvas auto-flips from code to preview view.
@@ -1232,17 +1279,24 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         // longer-context options and one-click history trimming.
         const isOverflow =
           (err as Error & { code?: string }).code === "context_overflow";
+        const errMsg =
+          err?.message?.trim() || "Something went wrong during the response.";
         if (isOverflow) {
           updateMessage(convId!, assistantMsg.id, {
-            content: `⚠ Context overflow\n\nThis turn exceeded "${selectedModel?.name ?? selectedModelId}"'s context window. Try switching to a longer-context model from the picker, or trim earlier messages by deleting older turns.\n\n${err.message.split("\n")[0]}`,
+            content: `⚠ Context overflow\n\nThis turn exceeded "${selectedModel?.name ?? selectedModelId}"'s context window. Try switching to a longer-context model from the picker, or trim earlier messages by deleting older turns.\n\n${errMsg.split("\n")[0]}`,
             isStreaming: false,
           });
+          logError(convId!, errMsg, "streaming");
+          setError("Context window exceeded — see banner above.");
         } else {
-          updateMessage(convId!, assistantMsg.id, { content: `Error: ${err.message}`, isStreaming: false });
+          updateMessage(convId!, assistantMsg.id, {
+            content: `Error: ${errMsg}`,
+            isStreaming: false,
+          });
+          logError(convId!, errMsg, "streaming");
+          setError(errMsg);
         }
         stopStreaming(convId!);
-        logError(convId!, err.message, "streaming");
-        setError(isOverflow ? "Context window exceeded — see banner above." : err.message);
         endJjAgentSessionIfNeeded();
       },
     }, {
@@ -1410,9 +1464,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
                 <span
                   key={sn}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[12px] text-[#f59e42] border border-[#f59e42]/20"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] text-[12px] text-text-2 border border-white/[0.06]"
                 >
-                  <Sparkles size={11} strokeWidth={2} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
                   {sn}
                   <button
                     onClick={() => {
@@ -1423,7 +1477,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         setPendingSkills((prev) => prev.filter((n) => n !== sn));
                       }
                     }}
-                    className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
+                    className="ml-0.5 p-0.5 rounded-sm hover:bg-white/10 transition-colors text-text-3 hover:text-text-2"
                     aria-label={`Remove ${sn} skill`}
                   >
                     <X size={10} strokeWidth={2} />
@@ -1546,14 +1600,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         onClick={opt.onClick}
                         className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
                           ("active" in opt && opt.active)
-                            ? "bg-[#f59e42]/10 text-[#f59e42]"
+                            ? "bg-white/[0.06] text-text-1"
                             : "text-[#d5d5d5] hover:bg-white/5"
                         }`}
                       >
                         <opt.icon
                           size={14}
                           strokeWidth={1.75}
-                          className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-[#f59e42]" : "text-[#c9c9c9]"}`}
+                          className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-text-2" : "text-[#c9c9c9]"}`}
                         />
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="truncate">{opt.label}</span>
@@ -1564,7 +1618,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                           )}
                         </div>
                         {("active" in opt && opt.active) && (
-                          <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e42]" />
+                          <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
                         )}
                       </button>
                     ))}
@@ -1597,12 +1651,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             }}
                             className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
                               selected
-                                ? "bg-[#f59e42]/10 text-[#f59e42]"
+                                ? "bg-white/[0.06] text-text-1"
                                 : "text-[#d5d5d5] hover:bg-white/5"
                             }`}
                           >
                             {selected ? (
-                              <Check size={14} strokeWidth={2} className="text-[#f59e42] shrink-0" />
+                              <Check size={14} strokeWidth={2} className="text-accent shrink-0" />
                             ) : (
                               <div className="w-3.5 h-3.5 rounded-sm border border-white/20 shrink-0" />
                             )}
@@ -1629,7 +1683,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         }
                         setShowSkillPicker(false);
                       }}
-                      className="flex items-center justify-center gap-1.5 w-full mt-1.5 px-3 py-1.5 rounded-lg bg-[#f59e42]/15 hover:bg-[#f59e42]/25 text-[#f59e42] text-[13px] font-medium transition-colors"
+                      className="flex items-center justify-center gap-1.5 w-full mt-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.06] text-text-2 text-[13px] font-medium transition-colors"
                     >
                       <Check size={14} strokeWidth={2.5} />
                       Done

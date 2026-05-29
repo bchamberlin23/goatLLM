@@ -161,6 +161,8 @@ interface DbMessage {
   created_at: number;
   pinned?: boolean;
   thinking_content?: string | null;
+  turn_duration_ms?: number | null;
+  edited_files?: string | null;
 }
 
 interface AllData {
@@ -192,6 +194,15 @@ function fromDbConversation(d: DbConversation): Conversation {
 }
 
 function fromDbMessage(d: DbMessage): Message {
+  let editedFiles: string[] | undefined;
+  if (d.edited_files) {
+    try {
+      const parsed = JSON.parse(d.edited_files);
+      if (Array.isArray(parsed)) {
+        editedFiles = parsed.filter((p) => typeof p === "string");
+      }
+    } catch { /* malformed */ }
+  }
   return {
     id: d.id,
     conversationId: d.conversation_id,
@@ -202,6 +213,8 @@ function fromDbMessage(d: DbMessage): Message {
     attachments: d.attachments ? JSON.parse(d.attachments) : undefined,
     pinned: d.pinned ? true : undefined,
     thinkingContent: d.thinking_content || undefined,
+    turnDurationMs: d.turn_duration_ms ?? undefined,
+    editedFiles,
   };
 }
 
@@ -364,6 +377,11 @@ async function invokeSaveMessage(m: Message): Promise<void> {
     createdAt: m.createdAt,
     pinned: m.pinned ?? false,
     thinkingContent: m.thinkingContent ?? null,
+    turnDurationMs: m.turnDurationMs ?? null,
+    editedFiles:
+      m.editedFiles && m.editedFiles.length > 0
+        ? JSON.stringify(m.editedFiles)
+        : null,
   });
 }
 
