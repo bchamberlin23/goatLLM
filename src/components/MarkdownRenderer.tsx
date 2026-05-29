@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, memo, ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, memo, useMemo, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -30,31 +30,43 @@ getHighlighter().catch(() => {});
 interface CodeBlockProps {
   language: string;
   code: string;
+  deferHighlight?: boolean;
 }
 
-const CodeBlock = memo(function CodeBlock({ language, code }: CodeBlockProps) {
+const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = false }: CodeBlockProps) {
   const [html, setHtml] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (deferHighlight) {
+      setHtml("");
+      return;
+    }
+
     let cancelled = false;
-    getHighlighter()
-      .then((highlighter) => {
-        if (cancelled) return;
-        const langs = highlighter.getLoadedLanguages() as string[];
-        const lang = langs.includes(language) ? language : "text";
-        const highlighted = highlighter.codeToHtml(code, {
-          lang: lang as BundledLanguage,
-          theme: "github-dark-dimmed",
+    const timer = window.setTimeout(() => {
+      getHighlighter()
+        .then((highlighter) => {
+          if (cancelled) return;
+          const langs = highlighter.getLoadedLanguages() as string[];
+          const lang = langs.includes(language) ? language : "text";
+          const highlighted = highlighter.codeToHtml(code, {
+            lang: lang as BundledLanguage,
+            theme: "github-dark-dimmed",
+          });
+          if (!cancelled) setHtml(highlighted);
+        })
+        .catch(() => {
+          if (!cancelled) setHtml("");
         });
-        if (!cancelled) setHtml(highlighted);
-      })
-      .catch(() => {
-        if (!cancelled) setHtml("");
-      });
-    return () => { cancelled = true; };
-  }, [code, language]);
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [code, language, deferHighlight]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -110,7 +122,7 @@ interface MarkdownComponents {
   [key: string]: (props: any) => ReactNode;
 }
 
-const createComponents = (): MarkdownComponents => ({
+const createComponents = (deferHighlight: boolean): MarkdownComponents => ({
   code({ node, inline, className, children, ...props }: {
     node?: any; inline?: boolean; className?: string; children?: ReactNode; [key: string]: any;
   }) {
@@ -118,7 +130,7 @@ const createComponents = (): MarkdownComponents => ({
     const language = match ? match[1] : "";
     const code = String(children).replace(/\n$/, "");
     if (!inline && (match || code.includes("\n"))) {
-      return <CodeBlock language={language} code={code} />;
+      return <CodeBlock language={language} code={code} deferHighlight={deferHighlight} />;
     }
     return <code className="inline-code" {...props}>{children}</code>;
   },
@@ -148,10 +160,9 @@ const createComponents = (): MarkdownComponents => ({
   },
 });
 
-const markdownComponents = createComponents();
-
 interface MarkdownRendererProps {
   content: string;
+  isStreaming?: boolean;
 }
 
 /**
@@ -185,8 +196,16 @@ function normalizeMath(input: string): string {
     .join("");
 }
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content }: MarkdownRendererProps) {
-  const normalized = normalizeMath(content);
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  content,
+  isStreaming = false,
+}: MarkdownRendererProps) {
+  const normalized = useMemo(() => normalizeMath(content), [content]);
+  const markdownComponents = useMemo(
+    () => createComponents(isStreaming),
+    [isStreaming],
+  );
+
   return (
     <div className="markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>

@@ -3,6 +3,7 @@ import type { ToolCallEntry } from "../stores/chat";
 import { useChatStore } from "../stores/chat";
 import { approveExecution, denyExecution } from "../lib/tools";
 import { computeDiff, type DiffResult } from "../lib/diff-utils";
+import { DiffView } from "./DiffView";
 import { Shimmer } from "./ThinkingIndicator";
 import { ChevronDown, AlertTriangle, ArrowUpRight } from "lucide-react";
 import { ansiToHtml, hasAnsi } from "../lib/ansi";
@@ -123,53 +124,16 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
   if (name === "todo_clear") {
     return { runningVerb: "Clearing", doneVerb: "Cleared", target: "all tasks", icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>) };
   }
+  if (name === "load_skill") {
+    const skillName = getInputField(tc.input, "name") || "skill";
+    return {
+      runningVerb: "Loading skill",
+      doneVerb: "Loaded skill",
+      target: skillName,
+      icon: baseIcon(<><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></>),
+    };
+  }
   return { runningVerb: "Running", doneVerb: "Ran", target: name, detail: formatInput(tc.input).slice(0, 200), icon: baseIcon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>) };
-}
-
-// ── Diff Preview ───────────────────────────────────────────────────
-
-function DiffPreview({ diff }: { diff: DiffResult }) {
-  const [expanded, setExpanded] = useState(false);
-  const maxPreview = 20;
-  const displayLines = expanded ? diff.lines : diff.lines.slice(0, maxPreview);
-
-  return (
-    <div className="border border-white/5 rounded-md overflow-hidden bg-black/20">
-      <div className="px-2.5 py-1.5 bg-white/5 border-b border-white/5">
-        <span className="text-[10px] text-[#a0a0a0] font-mono font-medium">
-          <span className="text-[#34d399] font-semibold">+{diff.added}</span>{" "}
-          /{" "}
-          <span className="text-[#f87171] font-semibold">-{diff.removed}</span>{" "}
-          lines
-        </span>
-      </div>
-      <pre className="m-0 p-2.5 font-mono text-[11px] leading-relaxed max-h-[280px] overflow-auto whitespace-pre text-[#b4b4b4]">
-        {displayLines.map((line, i) => (
-          <span
-            key={i}
-            className={`block ${
-              line.type === "added"
-                ? "bg-green-500/10 text-[#bbf7d0]"
-                : line.type === "removed"
-                  ? "bg-red-500/10 text-[#fecaca]"
-                  : "text-[#a0a0a0]"
-            }`}
-          >
-            {line.content}
-            {"\n"}
-          </span>
-        ))}
-      </pre>
-      {diff.lines.length > maxPreview && !expanded && (
-        <button
-          className="w-full px-2.5 py-1.5 bg-white/5 border-t border-white/5 text-[11px] text-[#a0a0a0] hover:bg-white/10 hover:text-[#ececec] transition-colors"
-          onClick={() => setExpanded(true)}
-        >
-          Show all {diff.lines.length} lines…
-        </button>
-      )}
-    </div>
-  );
 }
 
 // ── Approval Gate ──────────────────────────────────────────────────
@@ -220,7 +184,7 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
       </div>
       <div className="flex flex-col gap-2">
         {tc.toolName === "write_file" && diffPreview ? (
-          <DiffPreview diff={diffPreview} />
+          <DiffView diff={diffPreview} />
         ) : isWrite ? (
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[#a0a0a0]">
@@ -352,11 +316,14 @@ export function InlineToolCall({
           type="button"
           disabled={!canExpand}
           onClick={() => canExpand && setExpanded((v) => !v)}
-          className={`flex items-baseline gap-1.5 text-[13px] leading-relaxed text-left max-w-full min-w-0 ${
+          className={`flex items-center gap-1.5 text-[13px] leading-relaxed text-left max-w-full min-w-0 ${
             canExpand ? "cursor-pointer" : "cursor-default"
           }`}
           aria-expanded={canExpand ? expanded : undefined}
         >
+          <span className="shrink-0 self-center text-[#777] group-hover/tool:text-[#a0a0a0] transition-colors">
+            {pres.icon}
+          </span>
           {isRunning ? (
             <Shimmer text={label} className="text-[13px] font-normal" />
           ) : (

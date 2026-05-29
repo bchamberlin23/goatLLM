@@ -5,8 +5,9 @@ import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
 import { stripLeakedToolJson } from "../lib/sanitize";
-import { Shimmer, useElapsedLabel } from "./ThinkingIndicator";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, Sparkles, ChevronRight, GitFork, Navigation } from "lucide-react";
+import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
+import { ReviewChanges } from "./ReviewChanges";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -261,17 +262,17 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             {message.activeSkillNames.map((skillName) => (
               <span
                 key={skillName}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/15"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/[0.04] text-text-3 border border-white/[0.06]"
               >
-                <Sparkles size={9} strokeWidth={2} />
+                <span className="h-1 w-1 rounded-full bg-accent shrink-0" aria-hidden="true" />
                 {skillName}
               </span>
             ))}
           </div>
         )}
 
-        {/* Thinking block — shown at the TOP of the message when thinking/reasoning */}
-        {isAssistant && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
+        {/* Thinking block — plain turns only; tool turns embed thinking in AgentTurnView */}
+        {isAssistant && !hasToolCalls && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
           <ThinkingBlock
             content={message.thinkingContent}
             elapsed={thinkingElapsed}
@@ -287,9 +288,9 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
               {[...autoTriggerNames].map((name) => (
                 <span
                   key={name}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[11.5px] text-[#f59e42]"
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] text-[11.5px] text-text-3 border border-white/[0.06]"
                 >
-                  <Sparkles size={10} strokeWidth={1.75} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
                   {name}
                 </span>
               ))}
@@ -298,7 +299,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         })()}
 
         {hasToolCalls && isAssistant ? (
-          <ToolCallInterleavedBody
+          <AgentTurnView
             message={message}
             isStreaming={isStreaming}
             messageId={message.id}
@@ -422,55 +423,75 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   );
 });
 
-// ── Tool-call interleaved body (memoized, throttled display) ───────────
+// ── Agent turn: collapsed trace + summary + review changes ───────────
 
-function ToolCallInterleavedBody({
-  message, isStreaming, messageId,
+type InterleavedSegment =
+  | { type: "text"; text: string }
+  | { type: "tool"; tc: ToolCallEntry };
+
+function buildInterleavedSegments(
+  message: Message,
+  displayContent: string,
+): InterleavedSegment[] {
+  const tcSnapshot = (message.toolCalls ?? [])
+    .map((t) => ({
+      id: t.toolCallId,
+      pos: t.contentAtInvocation ?? 0,
+    }))
+    .sort((a, b) => a.pos - b.pos);
+
+  const result: InterleavedSegment[] = [];
+  let lastPos = 0;
+  for (const snap of tcSnapshot) {
+    if (snap.pos > lastPos && displayContent.length > 0) {
+      const slice = displayContent.slice(lastPos, snap.pos).trim();
+      if (slice) result.push({ type: "text", text: slice });
+    }
+    const full = message.toolCalls?.find((t) => t.toolCallId === snap.id);
+    if (full) result.push({ type: "tool", tc: full });
+    lastPos = Math.max(lastPos, snap.pos);
+  }
+  if (lastPos < displayContent.length) {
+    const remaining = displayContent.slice(lastPos).trim();
+    if (remaining) result.push({ type: "text", text: remaining });
+  }
+  return result;
+}
+
+function splitTraceAndSummary(segments: InterleavedSegment[]): {
+  traceSegments: InterleavedSegment[];
+  summaryText: string;
+} {
+  let lastTextIdx = -1;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i].type === "text") {
+      lastTextIdx = i;
+      break;
+    }
+  }
+  if (lastTextIdx < 0) {
+    return { traceSegments: segments, summaryText: "" };
+  }
+  const last = segments[lastTextIdx];
+  const summaryText = last.type === "text" ? last.text : "";
+  return {
+    traceSegments: [
+      ...segments.slice(0, lastTextIdx),
+      ...segments.slice(lastTextIdx + 1),
+    ],
+    summaryText,
+  };
+}
+
+function TraceSegmentList({
+  segments,
+  messageId,
+  isStreaming,
 }: {
-  message: Message;
-  isStreaming: boolean;
+  segments: InterleavedSegment[];
   messageId: string;
+  isStreaming: boolean;
 }) {
-  // Snapshot tool positions — stable ref while the tool list is the same,
-  // so interleaving computation is memoized and doesn't run on every token.
-  const tcSnapshot = useMemo(
-    () =>
-      (message.toolCalls ?? [])
-        .map((t) => ({
-          id: t.toolCallId,
-          state: t.state,
-          pos: t.contentAtInvocation ?? 0,
-        }))
-        .sort((a, b) => a.pos - b.pos),
-    [message.toolCalls],
-  );
-
-  // Throttle markdown/segment re-parses to ~80ms during streaming.
-  const displayContent = useThrottledContent(message.content, isStreaming);
-
-  // Interleave: split text at each tool-call position. Recomputes only when
-  // tcSnapshot changes (tool add/complete) or displayContent changes (which
-  // is already throttled).
-  const segments = useMemo(() => {
-    type Segment = { type: "text"; text: string } | { type: "tool"; tc: ToolCallEntry };
-    const result: Segment[] = [];
-    let lastPos = 0;
-    for (const snap of tcSnapshot) {
-      if (snap.pos > lastPos && displayContent.length > 0) {
-        const slice = displayContent.slice(lastPos, snap.pos).trim();
-        if (slice) result.push({ type: "text", text: slice });
-      }
-      const full = message.toolCalls?.find((t) => t.toolCallId === snap.id);
-      if (full) result.push({ type: "tool", tc: full });
-      lastPos = Math.max(lastPos, snap.pos);
-    }
-    if (lastPos < displayContent.length) {
-      const remaining = displayContent.slice(lastPos).trim();
-      if (remaining) result.push({ type: "text", text: remaining });
-    }
-    return result;
-  }, [tcSnapshot, displayContent, message.toolCalls]);
-
   return (
     <>
       {segments.map((seg, i) => {
@@ -488,17 +509,6 @@ function ToolCallInterleavedBody({
           }
           return <InlineToolCall key={seg.tc.toolCallId} tc={seg.tc} />;
         }
-        if (isStreaming) {
-          return (
-            <div key={`text-${i}`} className="w-full">
-              <SegmentedAssistantText
-                content={seg.text}
-                messageId={messageId}
-                isStreaming={false}
-              />
-            </div>
-          );
-        }
         return (
           <div key={`text-${i}`} className="w-full">
             <SegmentedAssistantText
@@ -512,6 +522,121 @@ function ToolCallInterleavedBody({
       {isStreaming && segments.length > 0 && (
         <span className="streaming-cursor" />
       )}
+    </>
+  );
+}
+
+function AgentTurnView({
+  message,
+  isStreaming,
+  messageId,
+}: {
+  message: Message;
+  isStreaming: boolean;
+  messageId: string;
+}) {
+  const displayContent = useThrottledContent(message.content, isStreaming);
+  const segments = useMemo(
+    () => buildInterleavedSegments(message, displayContent),
+    [message, displayContent],
+  );
+  const { traceSegments, summaryText } = useMemo(
+    () => (isStreaming ? { traceSegments: segments, summaryText: "" } : splitTraceAndSummary(segments)),
+    [segments, isStreaming],
+  );
+
+  const [traceExpanded, setTraceExpanded] = useState(isStreaming);
+  useEffect(() => {
+    if (isStreaming) setTraceExpanded(true);
+    else setTraceExpanded(false);
+  }, [isStreaming]);
+
+  const hasThinking =
+    !!message.thinkingContent && message.thinkingContent.trim().length > 0;
+  const thinkingRunning = isStreaming && message.content.length === 0;
+  const thinkingElapsed = useElapsedLabel(
+    thinkingRunning ? message.createdAt : null,
+    thinkingRunning,
+  );
+
+  const durationMs =
+    message.turnDurationMs ?? message.streamingDurationMs ?? 0;
+  const workedLabel = formatDurationMs(durationMs);
+
+  if (isStreaming) {
+    return (
+      <>
+        <WorkingHeader
+          startedAt={message.createdAt}
+          running
+          label="Working"
+        />
+        {hasThinking && (
+          <ThinkingBlock
+            content={message.thinkingContent}
+            elapsed={thinkingElapsed}
+            running={thinkingRunning}
+          />
+        )}
+        <TraceSegmentList
+          segments={segments}
+          messageId={messageId}
+          isStreaming
+        />
+      </>
+    );
+  }
+
+  const summary =
+    summaryText.trim() ||
+    (segments.length === 0 ? displayContent.trim() : "");
+
+  return (
+    <>
+      <div className="my-1.5">
+        <button
+          type="button"
+          onClick={() => setTraceExpanded((v) => !v)}
+          className="flex items-center gap-1.5 w-full text-left group/worked cursor-pointer"
+          aria-expanded={traceExpanded}
+        >
+          <ChevronRight
+            size={12}
+            strokeWidth={2}
+            className={`text-[#888] shrink-0 transition-transform duration-200 ${traceExpanded ? "rotate-90" : ""}`}
+            aria-hidden
+          />
+          <span className="text-[13px] font-medium text-[#a0a0a0]">
+            {durationMs > 0 ? `Worked for ${workedLabel}` : "Worked"}
+          </span>
+        </button>
+        {traceExpanded && (
+          <div className="mt-2 ml-4 flex flex-col gap-1 border-l border-white/[0.06] pl-3">
+            {hasThinking && (
+              <ThinkingBlock
+                content={message.thinkingContent}
+                elapsed={thinkingElapsed}
+                running={false}
+              />
+            )}
+            <TraceSegmentList
+              segments={traceSegments}
+              messageId={messageId}
+              isStreaming={false}
+            />
+          </div>
+        )}
+      </div>
+      {summary.length > 0 && (
+        <div className="w-full mt-2">
+          <SegmentedAssistantText
+            content={summary}
+            messageId={messageId}
+            isStreaming={false}
+          />
+        </div>
+      )}
+      <ReviewChanges message={message} />
     </>
   );
 }

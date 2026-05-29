@@ -8,7 +8,7 @@ import { SafeArtifactPanel } from "./SafeArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
-import { Settings as SettingsIcon, ArrowRight, Upload, Folder, Sparkles, X } from "lucide-react";
+import { Settings as SettingsIcon, ArrowRight, Upload, Folder, X } from "lucide-react";
 import { SubagentPanel } from "./SubagentPanel";
 import { ToolActivityIndicator } from "./ToolActivityIndicator";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
@@ -52,9 +52,9 @@ function ActiveSkillsBar() {
       {activeSkillNames.map((skillName) => (
         <span
           key={skillName}
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f59e42]/10 text-[11px] text-[#f59e42] border border-[#f59e42]/20"
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] text-[11px] text-text-2 border border-white/[0.06]"
         >
-          <Sparkles size={10} strokeWidth={2} />
+          <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
           {skillName}
           <button
             onClick={() => {
@@ -63,7 +63,7 @@ function ActiveSkillsBar() {
                 setConversationSkills(activeId, next);
               }
             }}
-            className="ml-0.5 p-0.5 rounded-sm hover:bg-[#f59e42]/20 transition-colors"
+            className="ml-0.5 p-0.5 rounded-sm hover:bg-white/10 transition-colors text-text-3 hover:text-text-2"
             aria-label={`Remove ${skillName} skill`}
           >
             <X size={9} strokeWidth={2} />
@@ -177,6 +177,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   // Centered hero is reserved for the "no conversation selected" onboarding state.
   const showHero = !activeId;
+  const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
 
@@ -282,12 +283,41 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
             </div>
           ) : (
             <>
-              <div className={`min-w-0 min-h-0 flex flex-col overflow-hidden relative ${
-                artifactPanelOpen || attachmentPanelOpen ? "basis-[34%] grow-0 shrink-0" : "flex-1"
-              }`}>
-                <TodoWidget />
-                <MessageList />
-                <div className="shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3">
+              <div
+                className={`min-w-0 min-h-0 overflow-hidden relative ${
+                  sidePanelOpen
+                    ? "basis-[34%] grow-0 shrink-0 flex flex-col"
+                    : "flex-1 w-full grid min-h-0"
+                }`}
+                style={
+                  sidePanelOpen
+                    ? undefined
+                    : {
+                        gridTemplateColumns: "1fr min(860px, 100%) 1fr",
+                        gridTemplateRows: "1fr auto",
+                      }
+                }
+              >
+                {!sidePanelOpen && (
+                  <div className="col-start-1 row-span-full min-w-0" aria-hidden="true" />
+                )}
+                <div
+                  className={
+                    sidePanelOpen
+                      ? "flex flex-1 min-h-0 flex-col overflow-hidden relative"
+                      : "col-start-2 col-end-4 row-start-1 min-h-0 flex flex-col overflow-hidden relative"
+                  }
+                >
+                  <TodoWidget />
+                  <MessageList edgeScroll={!sidePanelOpen} />
+                </div>
+                <div
+                  className={
+                    sidePanelOpen
+                      ? "shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3"
+                      : "col-start-2 row-start-2 flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3"
+                  }
+                >
                   <ActiveSkillsBar />
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
@@ -303,7 +333,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       )}
 
       {showHero && (
-        <div className="shrink-0 flex flex-col items-center w-full flex-1 justify-center px-6 pb-6 gap-3 relative">
+        <div className="shrink-0 flex flex-col items-center w-full max-w-[860px] mx-auto flex-1 justify-center px-6 pb-6 gap-3 relative">
           {/* Workspace context badge — pinned near the top of the hero area,
               above the welcome message, so the user always knows which
               project folder they're working inside. */}

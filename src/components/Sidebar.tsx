@@ -1562,12 +1562,16 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
   // bodies score conversations alongside title/preview matches. Falls back to
   // simple title/preview filter if conversations.length differs (chat-mode
   // sidebar excludes workspace-tagged conversations from `conversations`).
-  const allFiltered = useChatStore((s) => s.getFilteredConversations());
-  const filteredConversations = (() => {
+  const conversationIds = useChatStore((s) => s.conversations.map((c) => c.id).join("|"));
+  const allFiltered = useMemo(
+    () => useChatStore.getState().getFilteredConversations(),
+    [searchQuery, conversationIds],
+  );
+  const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
     const ids = new Set(conversations.map((c) => c.id));
     return allFiltered.filter((c) => ids.has(c.id));
-  })();
+  }, [allFiltered, conversations, searchQuery]);
   const trimmedQuery = searchInput.trim();
   const hasQuery = trimmedQuery.length > 0;
 

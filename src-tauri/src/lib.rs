@@ -50,6 +50,8 @@ struct DbMessage {
     #[serde(default)]
     pinned: bool,
     thinking_content: Option<String>,
+    turn_duration_ms: Option<i64>,
+    edited_files: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -176,6 +178,13 @@ fn init_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, String> {
             .map_err(|e| format!("Failed to update schema version: {}", e))?;
     }
 
+    if version < 8 {
+        conn.execute_batch(include_str!("../migrations/008_turn_metadata.sql"))
+            .map_err(|e| format!("Database migration 008 failed: {}. You may need to remove the database file and restart.", e))?;
+        conn.pragma_update(None, "user_version", 8)
+            .map_err(|e| format!("Failed to update schema version: {}", e))?;
+    }
+
     Ok(conn)
 }
 
@@ -210,7 +219,7 @@ fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData, String> {
         .collect();
 
     let mut msg_stmt = db
-        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content FROM messages ORDER BY created_at ASC")
+        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files FROM messages ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
 
     let messages: Vec<DbMessage> = msg_stmt
@@ -225,6 +234,8 @@ fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData, String> {
                 created_at: row.get(6)?,
                 pinned: row.get::<_, i64>(7)? != 0,
                 thinking_content: row.get(8)?,
+                turn_duration_ms: row.get(9)?,
+                edited_files: row.get(10)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -273,13 +284,15 @@ fn save_message(
     created_at: i64,
     pinned: Option<bool>,
     thinking_content: Option<String>,
+    turn_duration_ms: Option<i64>,
+    edited_files: Option<String>,
     state: tauri::State<'_, DbState>,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let pin_int: i64 = if pinned.unwrap_or(false) { 1 } else { 0 };
     db.execute(
-        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        rusqlite::params![id, conversation_id, role, content, tool_calls, attachments, created_at, pin_int, thinking_content],
+        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        rusqlite::params![id, conversation_id, role, content, tool_calls, attachments, created_at, pin_int, thinking_content, turn_duration_ms, edited_files],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -296,7 +309,7 @@ fn load_messages_for_conversation(
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut stmt = db
         .prepare(
-            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content \
+            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files \
              FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -312,6 +325,8 @@ fn load_messages_for_conversation(
                 created_at: row.get(6)?,
                 pinned: row.get::<_, i64>(7)? != 0,
                 thinking_content: row.get(8)?,
+                turn_duration_ms: row.get(9)?,
+                edited_files: row.get(10)?,
             })
         })
         .map_err(|e| e.to_string())?

@@ -134,3 +134,37 @@ export function formatDiffPreview(
 
   return output.join("\n");
 }
+
+/**
+ * Parse unified git diff text into a DiffResult for display.
+ */
+export function parseUnifiedDiff(diffText: string): DiffResult {
+  const lines: DiffLine[] = [];
+  let added = 0;
+  let removed = 0;
+
+  for (const raw of diffText.split("\n")) {
+    if (
+      raw.startsWith("+++") ||
+      raw.startsWith("---") ||
+      raw.startsWith("@@") ||
+      raw.startsWith("diff --git") ||
+      raw.startsWith("index ")
+    ) {
+      continue;
+    }
+    if (raw.startsWith("+")) {
+      lines.push({ type: "added", content: raw.slice(1) });
+      added++;
+    } else if (raw.startsWith("-")) {
+      lines.push({ type: "removed", content: raw.slice(1) });
+      removed++;
+    } else if (raw.startsWith(" ")) {
+      lines.push({ type: "unchanged", content: raw.slice(1) });
+    } else if (raw.length > 0) {
+      lines.push({ type: "unchanged", content: raw });
+    }
+  }
+
+  return { lines, added, removed };
+}

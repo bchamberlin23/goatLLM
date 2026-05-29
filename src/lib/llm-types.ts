@@ -66,7 +66,7 @@ export interface StreamCallbacks {
    *  generationMs is the cumulative time the model spent generating tokens
    *  (excludes tool execution time). Used for accurate tokens/second. */
   onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheRead?: number; cacheWrite?: number; generationMs?: number }) => void;
-  onDone: (fullText: string) => void;
+  onDone: (fullText: string, summary?: string) => void;
   onError: (error: Error) => void;
 }
 

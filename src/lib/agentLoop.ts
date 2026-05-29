@@ -71,6 +71,20 @@ const CONTEXT_PRESSURE_THRESHOLD = 0.8;
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
 
+/** Pull the summary arg from a `done` tool call, if present. */
+function extractDoneSummary(
+  steps: Array<{ toolCalls?: Array<{ toolName: string; input?: unknown }> }> | undefined,
+): string | undefined {
+  if (!steps) return undefined;
+  for (const step of steps) {
+    for (const tc of step.toolCalls ?? []) {
+      if (tc.toolName === "done") {
+        return (tc.input as { summary?: string } | undefined)?.summary;
+      }
+    }
+  }
+  return undefined;
+}
 
 
 /**
@@ -500,7 +514,7 @@ export async function agentLoop(
 
         if (doneCalled) {
           emitUsage();
-          callbacks.onDone(doneSummary || fullText);
+          callbacks.onDone(fullText, doneSummary);
           return;
         }
 
@@ -679,9 +693,24 @@ export async function agentLoop(
             } satisfies ToolErrorInfo);
             break;
 
-          case "error":
-            callbacks.onError((chunk as Record<string, unknown>).error as Error);
+          case "error": {
+            const raw = (chunk as Record<string, unknown>).error;
+            const err =
+              raw instanceof Error
+                ? raw
+                : new Error(
+                    typeof raw === "string"
+                      ? raw
+                      : raw &&
+                          typeof raw === "object" &&
+                          "message" in raw &&
+                          (raw as { message?: unknown }).message != null
+                        ? String((raw as { message: unknown }).message)
+                        : JSON.stringify(raw ?? "Unknown stream error"),
+                  );
+            callbacks.onError(err);
             return;
+          }
 
           case "abort":
             callbacks.onDone(fullText);
@@ -704,7 +733,9 @@ export async function agentLoop(
         }
       }
 
-      callbacks.onDone(fullText);
+      const stepResults = await result.steps;
+      const doneSummary = extractDoneSummary(stepResults);
+      callbacks.onDone(fullText, doneSummary);
     }
   } catch (error) {
     // Treat any throw as a clean stop when the caller (or parent) aborted us.

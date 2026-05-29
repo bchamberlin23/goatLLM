@@ -111,6 +111,10 @@ export interface Message {
   inputTokens?: number;
   /** Streaming duration in milliseconds (from first token to onDone). */
   streamingDurationMs?: number;
+  /** Wall-clock turn duration including tool execution (ms). */
+  turnDurationMs?: number;
+  /** Workspace-relative paths written/edited during this turn. */
+  editedFiles?: string[];
   /** True for user messages that were sent via "Steer" — i.e. they
    *  interrupted an in-flight turn to redirect it. Surfaced as a small badge
    *  so the thread makes clear the conversation was steered mid-stream. */
