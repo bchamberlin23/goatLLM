@@ -13,7 +13,15 @@ import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
 import { InlineToolCall } from "./InlineToolCall";
 import { SubagentTranscriptView } from "./SubagentTranscript";
+import { AgentTurnRollbackButton, AgentTurnTimelineHeader } from "./AgentTurnTimeline";
 import { useThrottledContent } from "../hooks/useThrottledContent";
+import { requestSuggestedCheckApproval } from "../lib/tools/approval";
+import {
+  shouldExpandThinking,
+  setThinkingPref,
+  shouldExpandTrace,
+  setTracePref,
+} from "../lib/thinking-ui";
 import "./MessageBubble.css";
 
 function stripMarkdown(md: string): string {
@@ -48,28 +56,29 @@ interface MessageBubbleProps { message: Message; }
  * toggles open to reveal the model's reasoning content. Follows DESIGN.md
  * tokens: sunken surface, tertiary text, hairline borders.
  */
-function ThinkingBlock({ content, elapsed, running }: {
+function ThinkingBlock({ messageId, content, elapsed, running }: {
+  messageId: string;
   content?: string;
   elapsed: string;
   running: boolean;
 }) {
-  // Auto-expand while the model is actively thinking so the reasoning streams
-  // in as normal content; collapse once finished — unless the user has
-  // manually toggled, in which case we respect their choice.
-  const [expanded, setExpanded] = useState(running);
-  const userToggled = useRef(false);
   const hasContent = !!content && content.trim().length > 0;
+  const [expanded, setExpanded] = useState(() =>
+    shouldExpandThinking(messageId, running),
+  );
 
   useEffect(() => {
-    if (userToggled.current) return;
-    setExpanded(running);
-  }, [running]);
+    setExpanded(shouldExpandThinking(messageId, running));
+  }, [messageId, running]);
 
   const toggle = useCallback(() => {
     if (!hasContent) return;
-    userToggled.current = true;
-    setExpanded((v) => !v);
-  }, [hasContent]);
+    setExpanded((v) => {
+      const next = !v;
+      setThinkingPref(messageId, next);
+      return next;
+    });
+  }, [hasContent, messageId]);
 
   return (
     <div className="my-1.5">
@@ -187,6 +196,10 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     store.updateMessage(message.conversationId, message.id, { pinned: !message.pinned });
   }, [message.conversationId, message.id, message.pinned]);
 
+  const handleContinue = useCallback(() => {
+    useChatStore.getState().triggerContinue(message.conversationId);
+  }, [message.conversationId]);
+
   const handleFork = useCallback(() => {
     const store = useChatStore.getState();
     const allMessages = store.messages[message.conversationId] ?? [];
@@ -274,6 +287,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         {/* Thinking block — plain turns only; tool turns embed thinking in AgentTurnView */}
         {isAssistant && !hasToolCalls && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
           <ThinkingBlock
+            messageId={message.id}
             content={message.thinkingContent}
             elapsed={thinkingElapsed}
             running={isStreaming && message.content.length === 0}
@@ -335,6 +349,18 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
               </>
             )}
+          </div>
+        )}
+        {isAssistant && message.interrupted && (
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-[12px] text-[#a0a0a0]">Response stopped early.</span>
+            <button
+              type="button"
+              className="px-2.5 py-1 rounded-md text-[12px] font-medium text-[#1a1a1c] bg-[#f59e42] hover:bg-[#fbbf24] transition-colors"
+              onClick={handleContinue}
+            >
+              Continue
+            </button>
           </div>
         )}
         {/* Action buttons + streaming stats — one row; buttons on hover, stats pinned right */}
@@ -545,11 +571,12 @@ function AgentTurnView({
     [segments, isStreaming],
   );
 
-  const [traceExpanded, setTraceExpanded] = useState(isStreaming);
+  const [traceExpanded, setTraceExpanded] = useState(() =>
+    shouldExpandTrace(messageId, isStreaming),
+  );
   useEffect(() => {
-    if (isStreaming) setTraceExpanded(true);
-    else setTraceExpanded(false);
-  }, [isStreaming]);
+    setTraceExpanded(shouldExpandTrace(messageId, isStreaming));
+  }, [messageId, isStreaming]);
 
   const hasThinking =
     !!message.thinkingContent && message.thinkingContent.trim().length > 0;
@@ -562,6 +589,13 @@ function AgentTurnView({
   const durationMs =
     message.turnDurationMs ?? message.streamingDurationMs ?? 0;
   const workedLabel = formatDurationMs(durationMs);
+  const handleRunSuggestedCheck = useCallback((command: string) => {
+    requestSuggestedCheckApproval({
+      conversationId: message.conversationId,
+      messageId: message.id,
+      command,
+    });
+  }, [message.conversationId, message.id]);
 
   if (isStreaming) {
     return (
@@ -573,6 +607,7 @@ function AgentTurnView({
         />
         {hasThinking && (
           <ThinkingBlock
+            messageId={messageId}
             content={message.thinkingContent}
             elapsed={thinkingElapsed}
             running={thinkingRunning}
@@ -594,26 +629,25 @@ function AgentTurnView({
   return (
     <>
       <div className="my-1.5">
-        <button
-          type="button"
-          onClick={() => setTraceExpanded((v) => !v)}
-          className="flex items-center gap-1.5 w-full text-left group/worked cursor-pointer"
-          aria-expanded={traceExpanded}
-        >
-          <ChevronRight
-            size={12}
-            strokeWidth={2}
-            className={`text-[#888] shrink-0 transition-transform duration-200 ${traceExpanded ? "rotate-90" : ""}`}
-            aria-hidden
-          />
-          <span className="text-[13px] font-medium text-[#a0a0a0]">
-            {durationMs > 0 ? `Worked for ${workedLabel}` : "Worked"}
-          </span>
-        </button>
+        <AgentTurnTimelineHeader
+          message={message}
+          durationLabel={workedLabel}
+          expanded={traceExpanded}
+          onToggle={() => {
+            setTraceExpanded((v) => {
+              const next = !v;
+              setTracePref(messageId, next);
+              return next;
+            });
+          }}
+          onRunSuggestedCheck={handleRunSuggestedCheck}
+        />
+        <AgentTurnRollbackButton message={message} />
         {traceExpanded && (
           <div className="mt-2 ml-4 flex flex-col gap-1 border-l border-white/[0.06] pl-3">
             {hasThinking && (
               <ThinkingBlock
+                messageId={messageId}
                 content={message.thinkingContent}
                 elapsed={thinkingElapsed}
                 running={false}

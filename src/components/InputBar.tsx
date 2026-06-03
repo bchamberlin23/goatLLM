@@ -16,6 +16,7 @@ import { compactMessages, summarizeWithLlm } from "../lib/context-manager";
 import { extractAndAppend } from "../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../lib/url-fetch";
 import { isLikelyScannedPdf } from "../lib/attachment-cache";
+import { providerSupportsNativePdf } from "../lib/native-pdf";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
@@ -303,7 +304,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const handleSendRef = useRef<((overrides?: { content?: string; attachments?: Attachment[] }) => void) | null>(null);
   // Tracks the last artifact scan timestamp so we can throttle the full-content
   // splitContentByArtifacts regex to ~80ms during streaming.
-  const artifactScanRef = useRef({ lastScan: 0 });
+  const artifactScanRef = useRef({ lastScan: 0, rafPending: false });
 
   // Auto-dismiss the error notice. Cancellations briefly flash then disappear;
   // real errors stick around longer in case the user wants to read them.
@@ -467,6 +468,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         setPendingSkills([]);
         try { localStorage.removeItem("goatllm-pending-skills"); } catch {}
       }
+    }
+    if (selectedModelId) {
+      useChatStore.getState().setConversationModel(convId, selectedModelId);
     }
 
     // Slash command: /skill:name [optional message].
@@ -833,13 +837,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         //   to the inlined `(no extractable text)` note plus a hint.
         const origMsg = history.find((h) => h.role === "user" && h.content === m.content);
         const imgs = origMsg?.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-        const scannedPdfs =
-          llmConfig.provider === "anthropic"
-            ? (origMsg?.attachments?.filter((a) =>
-                (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
-                isLikelyScannedPdf(convId!, a.filename),
-              ) ?? [])
-            : [];
+        const nativePdf =
+          modelIsVision && providerSupportsNativePdf(llmConfig.provider);
+        const scannedPdfs = nativePdf
+          ? (origMsg?.attachments?.filter((a) =>
+              (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
+              isLikelyScannedPdf(convId!, a.filename),
+            ) ?? [])
+          : [];
         if (imgs.length > 0 || scannedPdfs.length > 0) {
           const parts: LlmContentPart[] = [];
           for (const img of imgs) parts.push({ type: "image", image: img.dataUrl, mimeType: img.mimeType });
@@ -1121,11 +1126,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const artifactScanNow = artifactScanRef.current.lastScan === 0 ||
           /```/.test(chunk) ||
           performance.now() - artifactScanRef.current.lastScan > 80;
-        if (artifactScanNow) {
-          artifactScanRef.current.lastScan = performance.now();
-          const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-          const content = live?.content || "";
-          if (content.length > 0) {
+        if (artifactScanNow && !artifactScanRef.current.rafPending) {
+          artifactScanRef.current.rafPending = true;
+          requestAnimationFrame(() => {
+            artifactScanRef.current.rafPending = false;
+            artifactScanRef.current.lastScan = performance.now();
+            const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+            const content = live?.content || "";
+            if (content.length === 0) return;
             const segments = splitContentByArtifacts(content);
             let fenceIndex = 0;
             for (const seg of segments) {
@@ -1142,7 +1150,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               }
               fenceIndex++;
             }
-          }
+          });
         }
       },
       onThinking: (chunk) => {
@@ -1264,7 +1272,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           if (!currentContent.trim() && !hasToolActivity && !hasThinking) {
             deleteMessage(convId!, assistantMsg.id);
           } else {
-            updateMessage(convId!, assistantMsg.id, { content: currentContent, isStreaming: false });
+            updateMessage(convId!, assistantMsg.id, {
+              content: currentContent,
+              isStreaming: false,
+              interrupted: true,
+            });
           }
           stopStreaming(convId!);
           endJjAgentSessionIfNeeded();

@@ -17,6 +17,8 @@
  * subagent code can share one approval surface without a circular import.
  */
 import { useChatStore } from "../../stores/chat";
+import type { ToolCallEntry } from "../../stores/chat";
+import { rememberCheckResult } from "../agent-session";
 import { logApproval } from "../event-log";
 
 export type DeferredOperation = () => Promise<unknown>;
@@ -26,6 +28,7 @@ interface PendingApproval {
   operation: DeferredOperation;
   conversationId: string;
   messageId: string;
+  autoExecuteOnApproval?: boolean;
 }
 
 const pendingApprovals = new Map<string, PendingApproval>();
@@ -90,7 +93,7 @@ export function shouldAutoApprove(toolName: string, mode: PermissionMode): boole
 }
 
 /** Find a tool call entry in the store by toolCallId. */
-function findToolCall(toolCallId: string): { toolName: string } | undefined {
+function findToolCall(toolCallId: string): ToolCallEntry | undefined {
   const store = useChatStore.getState();
   for (const msgs of Object.values(store.messages)) {
     for (const m of msgs) {
@@ -99,6 +102,53 @@ function findToolCall(toolCallId: string): { toolName: string } | undefined {
     }
   }
   return undefined;
+}
+
+function inputString(input: unknown, field: string): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = (input as Record<string, unknown>)[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+async function captureRollbackSnapshot(toolCallId: string): Promise<void> {
+  const store = useChatStore.getState();
+  const tc = findToolCall(toolCallId);
+  if (!tc || (tc.toolName !== "write_file" && tc.toolName !== "edit_file")) return;
+  if (tc.rollbackSnapshot) return;
+
+  const path = inputString(tc.input, "path");
+  const workspace = store.workspacePath;
+  if (!path || !workspace) return;
+
+  const { conversationId, messageId } = locateToolCall(toolCallId);
+  if (!conversationId || !messageId) return;
+
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const content = await invoke<string>("read_file", {
+      workspace,
+      path,
+      offset: null,
+      limit: null,
+    });
+    useChatStore.getState().updateToolCall(conversationId, messageId, toolCallId, {
+      rollbackSnapshot: {
+        path,
+        existed: true,
+        content,
+        capturedAt: Date.now(),
+      },
+    });
+  } catch {
+    useChatStore.getState().updateToolCall(conversationId, messageId, toolCallId, {
+      rollbackSnapshot: {
+        path,
+        existed: false,
+        content: "",
+        capturedAt: Date.now(),
+      },
+    });
+  }
 }
 
 /** Locate the (conversationId, messageId) that contains a given toolCallId. */
@@ -130,6 +180,36 @@ export function approveExecution(toolCallId: string): void {
   );
   const tc = findToolCall(toolCallId);
   logApproval(pending.conversationId, toolCallId, tc?.toolName ?? "unknown", true);
+  if (pending.autoExecuteOnApproval) {
+    const op = pending.operation;
+    pendingApprovals.delete(toolCallId);
+    void op()
+      .then((output) => {
+        useChatStore
+          .getState()
+          .completeToolCall(pending.conversationId, pending.messageId, toolCallId, output);
+        const done = findToolCall(toolCallId);
+        const command = inputString(done?.input, "command");
+        if (command && (done?.toolName === "bash" || done?.toolName === "exec_command")) {
+          const store = useChatStore.getState();
+          store.setProjectCheckMemory(rememberCheckResult(store.projectCheckMemory, command, "done"));
+        }
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        useChatStore.getState().updateToolCall(pending.conversationId, pending.messageId, toolCallId, {
+          output: message,
+          state: "error",
+        });
+        const failed = findToolCall(toolCallId);
+        const command = inputString(failed?.input, "command");
+        if (command && (failed?.toolName === "bash" || failed?.toolName === "exec_command")) {
+          const store = useChatStore.getState();
+          store.setProjectCheckMemory(rememberCheckResult(store.projectCheckMemory, command, "error"));
+        }
+      });
+    return;
+  }
   pending.resolveApproval(true);
 }
 
@@ -149,6 +229,7 @@ export function denyExecution(toolCallId: string): void {
   );
   const tc = findToolCall(toolCallId);
   logApproval(pending.conversationId, toolCallId, tc?.toolName ?? "unknown", false);
+  pendingApprovals.delete(toolCallId);
   pending.resolveApproval(false);
 }
 
@@ -174,6 +255,7 @@ export async function withApproval(
     const { conversationId, messageId } = locateToolCall(toolCallId);
     store.updateToolCallState(conversationId, messageId, toolCallId, "running");
     logApproval(conversationId, toolCallId, toolName, true);
+    await captureRollbackSnapshot(toolCallId);
     return operation();
   }
 
@@ -196,5 +278,44 @@ export async function withApproval(
   const op = pendingApprovals.get(toolCallId)?.operation;
   pendingApprovals.delete(toolCallId);
   if (!op) return "Operation expired.";
+  await captureRollbackSnapshot(toolCallId);
   return op();
+}
+
+export function requestSuggestedCheckApproval({
+  conversationId,
+  messageId,
+  command,
+}: {
+  conversationId: string;
+  messageId: string;
+  command: string;
+}): string {
+  const toolCallId = `suggested-check-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const store = useChatStore.getState();
+  store.addToolCallToMessage(conversationId, messageId, {
+    toolCallId,
+    toolName: "bash",
+    input: { command },
+    state: "pending_approval",
+    dangerLevel: "safe",
+    dangerReason: "Suggested verification check",
+  });
+  pendingApprovals.set(toolCallId, {
+    conversationId,
+    messageId,
+    autoExecuteOnApproval: true,
+    resolveApproval: () => {},
+    operation: async () => {
+      const workspace = useChatStore.getState().workspacePath;
+      if (!workspace) throw new Error("No workspace selected.");
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<string>("exec_command", {
+        workspace,
+        command,
+        timeoutMs: 120_000,
+      });
+    },
+  });
+  return toolCallId;
 }

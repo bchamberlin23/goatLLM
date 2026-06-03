@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   parseSetCookie,
   buildCookieHeader,
@@ -6,7 +6,15 @@ import {
   openSession,
   closeSession,
   listSessions,
+  navigate,
 } from "../lib/browser-session";
+
+const adapterFetch = vi.hoisted(() => vi.fn());
+const initFetch = vi.hoisted(() => vi.fn(async () => adapterFetch));
+
+vi.mock("../lib/fetch-adapter", () => ({
+  initFetch,
+}));
 
 describe("parseSetCookie", () => {
   const url = new URL("https://example.com/foo");
@@ -53,6 +61,10 @@ describe("parseSetCookie", () => {
     expect(parseSetCookie("=novalue", url)).toBeNull();
     expect(parseSetCookie("noequals", url)).toBeNull();
   });
+
+  it("rejects Domain attributes outside the response host", () => {
+    expect(parseSetCookie("a=1; Domain=other.org", url)).toBeNull();
+  });
 });
 
 describe("buildCookieHeader", () => {
@@ -67,6 +79,11 @@ describe("buildCookieHeader", () => {
     const c = parseSetCookie("a=1; Domain=example.com", setUrl)!;
     const reqUrl = new URL("https://api.example.com/v1");
     expect(buildCookieHeader([c], reqUrl)).toBe("a=1");
+  });
+
+  it("does not send host-only cookies to subdomains", () => {
+    const c = parseSetCookie("a=1", new URL("https://example.com/"))!;
+    expect(buildCookieHeader([c], new URL("https://api.example.com/"))).toBe("");
   });
 
   it("excludes cookies for unrelated hosts", () => {
@@ -128,6 +145,11 @@ describe("session lifecycle", () => {
     for (const s of listSessions()) closeSession(s.id);
   });
 
+  afterEach(() => {
+    adapterFetch.mockReset();
+    initFetch.mockClear();
+  });
+
   it("opens a session with a unique id", () => {
     const a = openSession();
     const b = openSession();
@@ -154,5 +176,36 @@ describe("session lifecycle", () => {
     // The oldest (ids[0]) should have been evicted.
     expect(remaining).not.toContain(ids[0]);
     expect(remaining).toContain(ids[8]);
+  });
+
+  it("blocks redirects to private network targets before following them", async () => {
+    const id = openSession();
+    adapterFetch.mockResolvedValue(
+      new Response("", {
+        status: 302,
+        headers: { Location: "http://127.0.0.1/admin" },
+      }),
+    );
+
+    await expect(navigate({ sessionId: id, url: "https://example.com/start" })).rejects.toThrow(/redirect/i);
+    expect(adapterFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the Tauri fetch adapter for navigation requests", async () => {
+    const id = openSession();
+    const globalFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("wrong fetch"));
+    adapterFetch.mockResolvedValue(
+      new Response("<main>session</main>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    const result = await navigate({ sessionId: id, url: "https://example.com/start" });
+
+    expect(initFetch).toHaveBeenCalled();
+    expect(adapterFetch).toHaveBeenCalledWith("https://example.com/start", expect.objectContaining({ method: "GET" }));
+    expect(globalFetch).not.toHaveBeenCalled();
+    expect(result.content).toBe("session");
   });
 });

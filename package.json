@@ -25,6 +25,7 @@
     "@tauri-apps/plugin-store": "^2",
     "ai": "^6.0.190",
     "clsx": "^2.1.1",
+    "dev": "^0.1.5",
     "docx": "9.5.1",
     "katex": "^0.17.0",
     "lucide-react": "^1.16.0",
@@ -40,6 +41,7 @@
     "shiki": "^1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
+    "tauri": "^0.15.0",
     "xlsx": "0.18.5",
     "zod": "^3",
     "zustand": "^5"

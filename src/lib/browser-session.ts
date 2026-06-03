@@ -13,6 +13,7 @@
  */
 
 import { validateBrowserUrl, extractText, extractBySelector } from "./browser-fetch";
+import { initFetch } from "./fetch-adapter";
 
 const MAX_BYTES = 200_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -24,6 +25,7 @@ interface CookieRecord {
   name: string;
   value: string;
   domain: string;     // host the cookie applies to (lowercased)
+  hostOnly: boolean;  // true when the cookie had no Domain attribute
   path: string;       // prefix path
   expiresAt?: number; // ms epoch; undefined = session cookie
   secure: boolean;
@@ -102,6 +104,7 @@ export function parseSetCookie(raw: string, requestUrl: URL): CookieRecord | nul
     name,
     value,
     domain: requestUrl.hostname.toLowerCase(),
+    hostOnly: true,
     path: "/",
     secure: false,
   };
@@ -114,7 +117,12 @@ export function parseSetCookie(raw: string, requestUrl: URL): CookieRecord | nul
       case "domain": {
         // Strip leading dot per RFC 6265 4.1.2.3.
         const d = v.replace(/^\./, "").toLowerCase();
-        if (d) cookie.domain = d;
+        const host = requestUrl.hostname.toLowerCase();
+        if (d) {
+          if (host !== d && !host.endsWith("." + d)) return null;
+          cookie.domain = d;
+          cookie.hostOnly = false;
+        }
         break;
       }
       case "path":
@@ -139,10 +147,11 @@ export function parseSetCookie(raw: string, requestUrl: URL): CookieRecord | nul
   return cookie;
 }
 
-/** Domain-match per RFC 6265 5.1.3 (subdomain match). */
-function domainMatches(cookieDomain: string, host: string): boolean {
+/** Domain-match per RFC 6265 5.1.3. Host-only cookies must match exactly. */
+function domainMatches(cookie: CookieRecord, host: string): boolean {
   host = host.toLowerCase();
-  cookieDomain = cookieDomain.toLowerCase();
+  const cookieDomain = cookie.domain.toLowerCase();
+  if (cookie.hostOnly) return cookieDomain === host;
   if (cookieDomain === host) return true;
   return host.endsWith("." + cookieDomain);
 }
@@ -164,7 +173,7 @@ export function buildCookieHeader(jar: CookieRecord[], url: URL): string {
   for (const c of jar) {
     if (c.expiresAt !== undefined && c.expiresAt < now) continue;
     if (c.secure && !isHttps) continue;
-    if (!domainMatches(c.domain, url.hostname)) continue;
+    if (!domainMatches(c, url.hostname)) continue;
     if (!pathMatches(c.path, url.pathname)) continue;
     hits.push(`${c.name}=${c.value}`);
   }
@@ -248,6 +257,7 @@ export async function navigate(opts: NavOptions): Promise<NavResult> {
 
   let currentUrl = v.url;
   let resp: Response | null = null;
+  const requestFetch = await initFetch();
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const controller = new AbortController();
@@ -268,7 +278,7 @@ export async function navigate(opts: NavOptions): Promise<NavResult> {
 
     let r: Response;
     try {
-      r = await fetch(currentUrl.toString(), {
+      r = await requestFetch(currentUrl.toString(), {
         method: hop === 0 ? method : "GET",
         headers,
         body: hop === 0 ? body : undefined,
@@ -302,10 +312,12 @@ export async function navigate(opts: NavOptions): Promise<NavResult> {
         resp = r;
         break;
       }
-      const okScheme = next.protocol === "http:" || next.protocol === "https:";
-      if (!okScheme) { resp = r; break; }
-      redirects.push(next.toString());
-      currentUrl = next;
+      const nextValidation = validateBrowserUrl(next.toString());
+      if (!nextValidation.ok) {
+        throw new Error(`Redirect blocked: ${nextValidation.error}`);
+      }
+      redirects.push(nextValidation.url.toString());
+      currentUrl = nextValidation.url;
       // Drain body so the connection can be reused.
       try { await r.text(); } catch { /* ignore */ }
       if (hop === MAX_REDIRECTS) {

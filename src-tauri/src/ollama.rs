@@ -102,13 +102,9 @@ fn system_binary() -> Option<String> {
     // 2. Standard install locations the upstream installers use. First hit
     //    wins. Order matters — prefer the symlinks the installer drops in
     //    PATH-like locations, fall back to the bundle's internal binary.
-    for candidate in standard_install_paths() {
-        if PathBuf::from(&candidate).exists() {
-            return Some(candidate);
-        }
-    }
-
-    None
+    standard_install_paths()
+        .into_iter()
+        .find(|candidate| PathBuf::from(candidate).exists())
 }
 
 /// Paths the upstream Ollama installers write to. Kept in priority order.
@@ -226,7 +222,12 @@ fn probe_cpu_and_ram() -> (u64, Option<String>, usize) {
                 .args(["-n", "hw.memsize"])
                 .output()
                 .ok()
-                .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
+                .and_then(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .trim()
+                        .parse::<u64>()
+                        .ok()
+                })
                 .unwrap_or(0);
             let brand = Command::new("sysctl")
                 .args(["-n", "machdep.cpu.brand_string"])
@@ -387,21 +388,13 @@ fn probe_amd_windows() -> Option<(String, u64)> {
     // wmic outputs columns: AdapterRAM  Name
     // followed by rows:    4293918720  AMD Radeon RX 7900 XTX
     let out = Command::new("wmic")
-        .args([
-            "path",
-            "win32_videocontroller",
-            "get",
-            "Name,AdapterRAM",
-        ])
+        .args(["path", "win32_videocontroller", "get", "Name,AdapterRAM"])
         .output()
         .ok()?;
     let body = String::from_utf8_lossy(&out.stdout);
     for line in body.lines() {
         let line = line.trim();
-        if line.is_empty()
-            || line.starts_with("AdapterRAM")
-            || line.starts_with("Name")
-        {
+        if line.is_empty() || line.starts_with("AdapterRAM") || line.starts_with("Name") {
             continue;
         }
         let lower = line.to_lowercase();

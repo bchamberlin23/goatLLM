@@ -118,6 +118,15 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       const isPlanMode = store.planMode;
       const hasWrite = permissionMode !== "manual" && !isPlanMode;
       const subagentTools = getSubagentTools(hasWrite);
+      const parentLocation = locateToolCallInStore(toolCallId);
+      if (parentLocation.conversationId && parentLocation.messageId) {
+        useChatStore.getState().updateToolCall(
+          parentLocation.conversationId,
+          parentLocation.messageId,
+          toolCallId,
+          { approvalBypassed: hasWrite },
+        );
+      }
 
       // Inject recursive spawn_subagent when depth allows
       if (ctx.depth + 1 < 2) {
@@ -176,6 +185,7 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
             toolName: tc.toolName,
             input: tc.input,
             state: "done",
+            approvalBypassed: hasWrite,
           });
           flushTranscript();
         },

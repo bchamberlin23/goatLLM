@@ -52,9 +52,7 @@ pub fn jj_new(workspace: String, description: String) -> Result<String, String> 
             line.strip_prefix("Working copy now at: ")
                 .or_else(|| line.strip_prefix("Created new commit "))
         })
-        .and_then(|rest| {
-            rest.split_whitespace().next().map(|s| s.to_string())
-        })
+        .and_then(|rest| rest.split_whitespace().next().map(|s| s.to_string()))
         .unwrap_or_default();
 
     if change_id.is_empty() {
@@ -71,7 +69,11 @@ pub fn jj_new(workspace: String, description: String) -> Result<String, String> 
 
 /// Update the description of a jj change (adds/updates the Claude-session-id trailer).
 #[tauri::command]
-pub fn jj_describe(workspace: String, change_id: String, description: String) -> Result<(), String> {
+pub fn jj_describe(
+    workspace: String,
+    change_id: String,
+    description: String,
+) -> Result<(), String> {
     let output = Command::new("jj")
         .args(["describe", "-m", &description, "-r", &change_id])
         .current_dir(&workspace)

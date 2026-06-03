@@ -1,4 +1,10 @@
 allowBuilds:
   '@google/genai': set this to true or false
   esbuild: true
+  inotify: set this to true or false
+  optipng-bin: set this to true or false
+  pngquant-bin: set this to true or false
   protobufjs: set this to true or false
+  sharp: set this to true or false
+  tauri: set this to true or false
+  zopflipng-bin: set this to true or false

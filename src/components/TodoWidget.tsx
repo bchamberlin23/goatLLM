@@ -35,8 +35,6 @@ export function TodoWidget() {
       .filter((t: any) => t && t.status !== "deleted");
   }, [board]);
 
-  if (!activeId || boardEmpty) return null;
-
   const completedCount = visibleTasks.filter((t: any) => t.status === "completed").length;
   const allDone = completedCount === visibleTasks.length;
   const inProgressCount = visibleTasks.filter((t: any) => t.status === "in_progress").length;
@@ -57,6 +55,8 @@ export function TodoWidget() {
       cancelled = true;
     };
   }, [activeId, allDone, isStreaming, visibleTasks.length]);
+
+  if (!activeId || boardEmpty) return null;
 
   return (
     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[320px] w-[280px] flex flex-col items-center">

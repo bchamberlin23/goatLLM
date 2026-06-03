@@ -37,6 +37,10 @@ const TOOL_ARG_KEYS = new Set([
   "todos",
   "thought",
   "max_matches",
+  "offset",
+  "limit",
+  "max_results",
+  "context_lines",
 ]);
 
 /** Match a tool-arg key at the start of a JSON object (quoted or unquoted). */
@@ -152,8 +156,33 @@ function stripJsonFromRegion(region: string): string {
  * Remove leaked tool-argument JSON from assistant text, preserving fenced
  * code blocks verbatim. Safe to call on partial streaming content.
  */
+/** Bare tool-call syntax some models leak as visible text. */
+const LEAKED_TOOL_CALL_RE =
+  /\b(?:read_attachment|search_attachment|web_search|load_skill)\s*(?:\{\s*\}|\(\s*\))/gi;
+const LEAKED_TOOL_CALL_OPEN_RE =
+  /\b(?:read_attachment|search_attachment|web_search|load_skill)\s*(?:\{\s*|\(\s*)/gi;
+/** Bare snake_case tool names (avoid matching English words like "done"). */
+const LEAKED_TOOL_NAME_RE =
+  /\b(?:read_attachment|search_attachment|web_search|load_skill)\b/gi;
+
+function stripLeakedToolInvocations(region: string): string {
+  return region
+    .replace(LEAKED_TOOL_CALL_RE, "")
+    .replace(LEAKED_TOOL_CALL_OPEN_RE, "")
+    .replace(LEAKED_TOOL_NAME_RE, "");
+}
+
 export function stripLeakedToolJson(text: string): string {
-  if (!text || text.indexOf("{") === -1) return text;
+  if (!text) return text;
+  const hasJson = text.indexOf("{") !== -1;
+  const hasToolLeak =
+    LEAKED_TOOL_CALL_RE.test(text) ||
+    LEAKED_TOOL_CALL_OPEN_RE.test(text) ||
+    LEAKED_TOOL_NAME_RE.test(text);
+  LEAKED_TOOL_CALL_RE.lastIndex = 0;
+  LEAKED_TOOL_CALL_OPEN_RE.lastIndex = 0;
+  LEAKED_TOOL_NAME_RE.lastIndex = 0;
+  if (!hasJson && !hasToolLeak) return text;
 
   // Split on fenced code blocks (```...```), keeping the fences. Even indices
   // are prose regions we sanitize; odd indices are code we leave alone.
@@ -161,8 +190,13 @@ export function stripLeakedToolJson(text: string): string {
   let changed = false;
   const rebuilt = parts.map((part, idx) => {
     if (idx % 2 === 1) return part; // fenced code — leave as-is
-    const cleaned = stripJsonFromRegion(part);
-    if (cleaned !== part) changed = true;
+    let cleaned = hasJson ? stripJsonFromRegion(part) : part;
+    const noTools = stripLeakedToolInvocations(cleaned);
+    if (noTools !== cleaned) {
+      cleaned = noTools;
+      changed = true;
+    }
+    if (hasJson && cleaned !== part) changed = true;
     return cleaned;
   });
   return changed ? rebuilt.join("") : text;

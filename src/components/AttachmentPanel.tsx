@@ -386,14 +386,25 @@ function PreviewSurface({
     if (text === null) {
       return <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading preview…</div>;
     }
+    const svgHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: #0f0f10; }
+    body { display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; overflow: auto; }
+    svg { max-width: 100%; max-height: 100%; }
+  </style>
+</head>
+<body>${text}</body>
+</html>`;
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center bg-[#0f0f10] p-4 overflow-auto">
-        {/* eslint-disable-next-line react/no-danger */}
-        <div
-          className="max-w-full max-h-full [&>svg]:max-w-full [&>svg]:max-h-full"
-          dangerouslySetInnerHTML={{ __html: text }}
-        />
-      </div>
+      <iframe
+        className="flex-1 w-full border-none bg-[#0f0f10]"
+        srcDoc={svgHtml}
+        sandbox=""
+        title={attachment.filename}
+      />
     );
   }
   if (kind === "markdown") {

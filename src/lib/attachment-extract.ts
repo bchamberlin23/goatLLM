@@ -360,7 +360,7 @@ export async function extractAttachment(att: Attachment): Promise<ExtractedAttac
       // <500 chars on anything more than a cover page).
       const looksScanned = kind === "pdf" && trimmed.length < 500;
       const scannedNote =
-        "(this PDF appears to be scanned/image-based and yielded little extractable text. Anthropic models can still read it directly via native PDF support; on other models, please use a vision model or OCR the file first.)";
+        "(this PDF appears to be scanned/image-based and yielded little extractable text. Vision models with native PDF support — Claude, GPT-4o, Gemini — receive the file directly; otherwise use read_attachment/search_attachment on the extracted preview or switch to a vision model.)";
       const fallback = kind === "pdf" ? scannedNote : "(no extractable text)";
       const body =
         looksScanned && trimmed.length > 0

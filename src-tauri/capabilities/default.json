@@ -9,16 +9,8 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://opencode.ai/**" },
-        { "url": "https://api.openai.com/**" },
-        { "url": "https://api.anthropic.com/**" },
-        { "url": "https://api.groq.com/**" },
-        { "url": "https://api.tavily.com/**" },
-        { "url": "https://deepcode.vegamo.cn/**" },
-        { "url": "https://github.com/**" },
-        { "url": "https://objects.githubusercontent.com/**" },
-        { "url": "http://localhost:*/**" },
-        { "url": "http://127.0.0.1:*/**" }
+        { "url": "https://*:*" },
+        { "url": "http://*:*" }
       ]
     },
     "shell:allow-open",

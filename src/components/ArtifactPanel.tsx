@@ -98,11 +98,12 @@ const OFFICE_KINDS = new Set<ArtifactKind>(["docx", "pptx", "xlsx"]);
 function ArtifactContent({
   artifact,
   view,
-  htmlReloadKey,
+  previewKey,
 }: {
   artifact: Artifact;
   view: "preview" | "code";
-  htmlReloadKey: number;
+  /** Bumps when preview should reload (manual refresh or code change). */
+  previewKey: number;
 }) {
   const activeId = useChatStore((s) => s.activeId);
   const updateArtifact = useChatStore((s) => s.updateArtifact);
@@ -203,7 +204,7 @@ function ArtifactContent({
       }
     })();
     return () => { cancelled = true; };
-  }, [artifact.id, artifact.kind, artifact.code]);
+  }, [artifact.id, artifact.kind, artifact.code, previewKey]);
 
   const handleRunPython = useCallback(async () => {
     if (pyRunning) return;
@@ -338,7 +339,7 @@ function ArtifactContent({
               </div>
             </div>
             <iframe
-              key={htmlReloadKey}
+              key={`html-${previewKey}`}
               className="flex-1 w-full border-none bg-white"
               srcDoc={preppedHtml}
               sandbox={sandboxAttr}
@@ -350,7 +351,7 @@ function ArtifactContent({
 
       return (
         <iframe
-          key={htmlReloadKey}
+          key={`html-${previewKey}`}
           className="flex-1 w-full border-none bg-white"
           srcDoc={preppedHtml}
           sandbox={sandboxAttr}
@@ -368,7 +369,14 @@ function ArtifactContent({
               <span className="text-[11px] text-[#888888]">First run downloads the LaTeX engine ({String.fromCharCode(0x007e)}30 MB)</span>
             </div>
           )}
-          {pdfDataUrl && <iframe className="flex-1 w-full border-none" src={pdfDataUrl} title="PDF Preview" />}
+          {pdfDataUrl && (
+            <iframe
+              key={`latex-pdf-${previewKey}`}
+              className="flex-1 w-full border-none"
+              src={pdfDataUrl}
+              title="PDF Preview"
+            />
+          )}
           {pdfError && (
             <div className="flex flex-col gap-2 p-4">
               <p className="text-[12px] text-[#f87171] whitespace-pre-wrap leading-relaxed">{pdfError}</p>
@@ -414,7 +422,7 @@ function ArtifactContent({
       }
       return (
         <iframe
-          key={`${artifact.id}-office`}
+          key={`office-${artifact.id}-${previewKey}`}
           className="flex-1 w-full border-none"
           srcDoc={officeHtml}
           sandbox="allow-scripts"
@@ -439,7 +447,7 @@ function ArtifactContent({
               </div>
             </div>
             <iframe
-              key={htmlReloadKey}
+              key={`deck-${previewKey}`}
               className="flex-1 w-full border-none bg-white"
               srcDoc={preppedHtml}
               sandbox="allow-scripts allow-same-origin allow-popups"
@@ -451,7 +459,7 @@ function ArtifactContent({
 
       return (
         <iframe
-          key={htmlReloadKey}
+          key={`deck-${previewKey}`}
           className="flex-1 w-full border-none bg-white"
           srcDoc={preppedHtml}
           sandbox="allow-scripts allow-same-origin allow-popups"
@@ -474,7 +482,7 @@ function ArtifactContent({
 </html>`;
       return (
         <iframe
-          key={htmlReloadKey}
+          key={`preview-${previewKey}`}
           className="flex-1 w-full border-none bg-white"
           srcDoc={svgHtml}
           sandbox=""
@@ -522,7 +530,7 @@ function ArtifactContent({
 </html>`;
       return (
         <iframe
-          key={htmlReloadKey}
+          key={`preview-${previewKey}`}
           className="flex-1 w-full border-none bg-white"
           srcDoc={markdownHtml}
           sandbox=""
@@ -889,7 +897,7 @@ export function ArtifactPanel() {
   );
 
   const [view, setView] = useState<"preview" | "code">("preview");
-  const [htmlReloadKey, setHtmlReloadKey] = useState(0);
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [flashed, setFlashed] = useState<string | null>(null);
@@ -910,6 +918,12 @@ export function ArtifactPanel() {
 
   useEffect(() => () => {
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
+  }, []);
+
+  useEffect(() => {
+    const onRefresh = () => setPreviewReloadKey((k) => k + 1);
+    window.addEventListener("goatllm:refresh-artifact-preview", onRefresh);
+    return () => window.removeEventListener("goatllm:refresh-artifact-preview", onRefresh);
   }, []);
 
   // Reset the user's view preference whenever the active artifact changes —
@@ -1008,6 +1022,11 @@ export function ArtifactPanel() {
   if (!activeArtifact) return null;
   const Icon = KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html;
 
+  const previewKey =
+    previewReloadKey * 1_000_000 +
+    activeArtifact.code.length +
+    (activeArtifact.activeVersionIndex ?? 0);
+
   const versions = activeArtifact.versions ?? [];
   const verIdx = activeArtifact.activeVersionIndex ?? versions.length - 1;
   const canUndo = verIdx > 0;
@@ -1020,7 +1039,10 @@ export function ArtifactPanel() {
   const handleClose = () => { flash("close"); setActiveArtifact(null); };
   const handleUndo = () => { flash("undo"); undoArtifact(activeId, activeArtifact.id); };
   const handleRedo = () => { flash("redo"); redoArtifact(activeId, activeArtifact.id); };
-  const handleReload = () => { flash("reload"); setHtmlReloadKey((k) => k + 1); };
+  const handleReload = () => {
+    flash("reload");
+    setPreviewReloadKey((k) => k + 1);
+  };
 
   const handleCopy = () => {
     flash("copy");
@@ -1212,8 +1234,8 @@ export function ArtifactPanel() {
           }}
         />
 
-        {/* Refresh — HTML preview only */}
-        {activeArtifact.kind === "html" && view === "preview" && (
+        {/* Refresh preview (HTML, LaTeX PDF, office, deck, etc.) */}
+        {view === "preview" && activeArtifact.kind !== "python" && (
           <button
             onClick={handleReload}
             aria-label="Reload preview"
@@ -1390,7 +1412,7 @@ export function ArtifactPanel() {
             <ArtifactContent
               artifact={activeArtifact}
               view={view}
-              htmlReloadKey={htmlReloadKey}
+              previewKey={previewKey}
             />
           )}
         </div>

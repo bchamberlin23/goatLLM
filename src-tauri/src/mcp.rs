@@ -57,21 +57,21 @@ impl McpProcesses {
 
 async fn kill_child(mut child: Child) {
     if let Err(e) = child.start_kill() {
-        eprintln!("SIGTERM failed for MCP child {}: {}", child.id().unwrap_or(0), e);
+        eprintln!(
+            "SIGTERM failed for MCP child {}: {}",
+            child.id().unwrap_or(0),
+            e
+        );
     }
     let five_sec = sleep(Duration::from_secs(5));
     tokio::pin!(five_sec);
-    loop {
-        tokio::select! {
-            _ = &mut five_sec => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                return;
-            }
-            result = child.wait() => {
-                let _ = result;
-                return;
-            }
+    tokio::select! {
+        _ = &mut five_sec => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+        }
+        result = child.wait() => {
+            let _ = result;
         }
     }
 }

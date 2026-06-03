@@ -9,20 +9,25 @@
  */
 const queues = new Map<string, Promise<unknown>>();
 
+export function pendingFileMutationQueueCount(): number {
+  return queues.size;
+}
+
 export async function withFileMutationQueue<T>(absolutePath: string, fn: () => Promise<T>): Promise<T> {
   const previous = queues.get(absolutePath) ?? Promise.resolve();
   let release: () => void = () => {};
   const next = new Promise<void>((resolve) => {
     release = resolve;
   });
-  queues.set(absolutePath, previous.then(() => next));
+  const tail = previous.then(() => next);
+  queues.set(absolutePath, tail);
   try {
     await previous;
     return await fn();
   } finally {
     release();
     // Clean up if we're the tail of the chain so the map doesn't grow forever.
-    if (queues.get(absolutePath) === previous.then(() => next)) {
+    if (queues.get(absolutePath) === tail) {
       queues.delete(absolutePath);
     }
   }

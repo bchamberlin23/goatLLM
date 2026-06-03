@@ -28,7 +28,9 @@ describe("formatSkillsForPrompt", () => {
     expect(out).toContain("<name>a</name>");
     expect(out).toContain("<description>first</description>");
     expect(out).toContain("<name>b</name>");
-    expect(out).toContain("<location>/y/SKILL.md</location>");
+    expect(out).toContain("load_skill");
+    expect(out).not.toContain("<location>");
+    expect(out).not.toContain("/y/SKILL.md");
   });
 
   it("excludes disable-model-invocation skills from the prompt", () => {

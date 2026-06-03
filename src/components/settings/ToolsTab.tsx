@@ -5,6 +5,7 @@ import { SemanticIndexSection } from "./SemanticIndexSection";
 import { McpSettingsSection } from "./McpSettingsSection";
 import { SkillsSection } from "./SkillsSection";
 import { SettingsGroup } from "./SettingsGroup";
+import { AgentPolicyPanel } from "../AgentPolicyPanel";
 
 export function ToolsTab() {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
@@ -45,6 +46,10 @@ export function ToolsTab() {
           title="Subagents"
           description="Spawn child agents for parallel work in Agent and Design modes only."
         />
+      </SettingsGroup>
+
+      <SettingsGroup title="Agent policy" description="Verification, permission, path, and budget defaults for agent mode.">
+        <AgentPolicyPanel embedded />
       </SettingsGroup>
 
       <SettingsGroup title="Integrations" description="External tools and reusable agent capabilities.">

@@ -170,6 +170,15 @@ interface AllData {
   messages: DbMessage[];
 }
 
+function parseOptionalJson<T>(raw: string | null): T | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
+}
+
 function fromDbConversation(d: DbConversation): Conversation {
   let tags: string[] | undefined;
   if (d.tags) {
@@ -209,8 +218,8 @@ function fromDbMessage(d: DbMessage): Message {
     role: d.role as Message["role"],
     content: d.content,
     createdAt: d.created_at,
-    toolCalls: d.tool_calls ? JSON.parse(d.tool_calls) : undefined,
-    attachments: d.attachments ? JSON.parse(d.attachments) : undefined,
+    toolCalls: parseOptionalJson<Message["toolCalls"]>(d.tool_calls),
+    attachments: parseOptionalJson<Message["attachments"]>(d.attachments),
     pinned: d.pinned ? true : undefined,
     thinkingContent: d.thinking_content || undefined,
     turnDurationMs: d.turn_duration_ms ?? undefined,
@@ -351,37 +360,41 @@ export async function loadMessagesForConversation(conversationId: string): Promi
 async function invokeSaveConversation(c: Conversation): Promise<void> {
   const invoke = await getInvoke();
   await invoke("save_conversation", {
-    id: c.id,
-    title: c.title,
-    lastMessagePreview: c.lastMessagePreview,
-    lastMessageAt: c.lastMessageAt,
-    createdAt: c.createdAt,
-    modelId: c.modelId,
-    systemPrompt: c.systemPrompt,
-    archived: c.archived ? 1 : 0,
-    tags: JSON.stringify(c.tags ?? []),
-    mode: c.mode ?? "chat",
-    workspacePath: c.workspacePath ?? "",
+    payload: {
+      id: c.id,
+      title: c.title,
+      lastMessagePreview: c.lastMessagePreview,
+      lastMessageAt: c.lastMessageAt,
+      createdAt: c.createdAt,
+      modelId: c.modelId,
+      systemPrompt: c.systemPrompt,
+      archived: c.archived ? 1 : 0,
+      tags: JSON.stringify(c.tags ?? []),
+      mode: c.mode ?? "chat",
+      workspacePath: c.workspacePath ?? "",
+    },
   });
 }
 
 async function invokeSaveMessage(m: Message): Promise<void> {
   const invoke = await getInvoke();
   await invoke("save_message", {
-    id: m.id,
-    conversationId: m.conversationId,
-    role: m.role,
-    content: m.content,
-    toolCalls: m.toolCalls ? JSON.stringify(m.toolCalls) : null,
-    attachments: m.attachments ? JSON.stringify(m.attachments) : null,
-    createdAt: m.createdAt,
-    pinned: m.pinned ?? false,
-    thinkingContent: m.thinkingContent ?? null,
-    turnDurationMs: m.turnDurationMs ?? null,
-    editedFiles:
-      m.editedFiles && m.editedFiles.length > 0
-        ? JSON.stringify(m.editedFiles)
-        : null,
+    payload: {
+      id: m.id,
+      conversationId: m.conversationId,
+      role: m.role,
+      content: m.content,
+      toolCalls: m.toolCalls ? JSON.stringify(m.toolCalls) : null,
+      attachments: m.attachments ? JSON.stringify(m.attachments) : null,
+      createdAt: m.createdAt,
+      pinned: m.pinned ?? false,
+      thinkingContent: m.thinkingContent ?? null,
+      turnDurationMs: m.turnDurationMs ?? null,
+      editedFiles:
+        m.editedFiles && m.editedFiles.length > 0
+          ? JSON.stringify(m.editedFiles)
+          : null,
+    },
   });
 }
 

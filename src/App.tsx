@@ -51,6 +51,17 @@ export default function App() {
     }
   }, [_hydrated]);
 
+  // Minimizing the window must not cancel in-flight streams — only explicit
+  // Stop does. When the tab becomes visible again, nudge artifact previews.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      window.dispatchEvent(new CustomEvent("goatllm:refresh-artifact-preview"));
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
   const handleFocusInput = useCallback(() => useChatStore.getState().focusInput(), []);

@@ -16,6 +16,7 @@ function estimateTokens(text: string): number {
 
 function estimateMessageTokens(msg: Message): number {
   let tokens = estimateTokens(msg.content);
+  if (msg.thinkingContent) tokens += estimateTokens(msg.thinkingContent);
   // Tool call overhead
   if (msg.toolCalls) {
     for (const tc of msg.toolCalls) {
@@ -353,16 +354,32 @@ function buildSummary(messages: Message[]): string {
 
 // ── Helpers ──
 
+/** Fold persisted reasoning into assistant content so "continue" reuses prior analysis. */
+function assistantContentForLlm(m: Message): string {
+  const thinking = m.thinkingContent?.trim();
+  const body = m.content?.trim() ?? "";
+  if (!thinking) return m.content;
+  const marker = "[Prior reasoning";
+  if (body.includes(marker)) return m.content;
+  const prefix =
+    `${marker} — do not repeat this analysis; build on it and continue the response]\n` +
+    `${thinking}\n\n[Response]\n`;
+  return body ? `${prefix}${m.content}` : `${prefix}(no answer text yet — continue from the reasoning above)`;
+}
+
 function messagesToLlm(messages: Message[]): LlmMessage[] {
   return messages
     .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
     .map((m) => {
       if (m.role !== "assistant" || !m.toolCalls?.length) {
-        return { role: m.role as "user" | "assistant" | "system", content: m.content };
+        const content =
+          m.role === "assistant" ? assistantContentForLlm(m) : m.content;
+        return { role: m.role as "user" | "assistant" | "system", content };
       }
       const doneTools = m.toolCalls.filter((tc) => tc.state === "done");
+      const baseContent = assistantContentForLlm(m);
       if (!doneTools.length) {
-        return { role: m.role, content: m.content };
+        return { role: m.role, content: baseContent };
       }
       const toolLines = doneTools.map((tc) => {
         const prefix = tc.toolName === "write_file" || tc.toolName === "edit_file"
@@ -371,8 +388,8 @@ function messagesToLlm(messages: Message[]): LlmMessage[] {
         const result = typeof tc.output === "string" ? tc.output.slice(0, 250) : "";
         return result ? `${prefix} ${result}${tc.output && (typeof tc.output === "string") && tc.output.length >= 250 ? "…" : ""}` : prefix;
       }).join("\n");
-      const content = m.content
-        ? `${m.content}\n${toolLines}`
+      const content = baseContent
+        ? `${baseContent}\n${toolLines}`
         : toolLines;
       return { role: "assistant", content };
     });

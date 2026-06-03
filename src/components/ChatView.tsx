@@ -11,6 +11,8 @@ import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder, X } from "lucide-react";
 import { SubagentPanel } from "./SubagentPanel";
 import { ToolActivityIndicator } from "./ToolActivityIndicator";
+import { ApprovalQueue } from "./ApprovalQueue";
+import { WorkspaceHealthPanel } from "./WorkspaceHealthPanel";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
 
@@ -319,6 +321,8 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                   }
                 >
                   <ActiveSkillsBar />
+                  {agentMode && <ApprovalQueue />}
+                  {agentMode && <WorkspaceHealthPanel />}
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>

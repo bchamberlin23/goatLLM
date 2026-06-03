@@ -355,6 +355,18 @@ export function InlineToolCall({
           )}
         </button>
         {isSubagent && (isDone || isRunning) && (
+          <>
+            {tc.approvalBypassed && (
+              <span
+                className="shrink-0 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-[#f59e0b]"
+                title="This subagent ran write-capable tools without individual approval cards."
+              >
+                Auto-ran tools
+              </span>
+            )}
+          </>
+        )}
+        {isSubagent && (isDone || isRunning) && (
           <button
             type="button"
             onClick={handleOpenPanel}

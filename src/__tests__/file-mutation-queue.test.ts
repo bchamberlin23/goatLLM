@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { withFileMutationQueue } from "../lib/file-mutation-queue";
+import { pendingFileMutationQueueCount, withFileMutationQueue } from "../lib/file-mutation-queue";
 
 describe("withFileMutationQueue", () => {
   it("serializes operations targeting the same path", async () => {
@@ -43,5 +43,11 @@ describe("withFileMutationQueue", () => {
     const [a, b] = await Promise.all([failing, ok]);
     expect(a).toBe("caught");
     expect(b).toBe("ok");
+  });
+
+  it("cleans up completed path queues", async () => {
+    await withFileMutationQueue("/cleanup", async () => "ok");
+
+    expect(pendingFileMutationQueueCount()).toBe(0);
   });
 });

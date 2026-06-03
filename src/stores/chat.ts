@@ -4,6 +4,8 @@ import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders } from "../lib/providers";
 import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
+import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
+import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
 import {
   loadAllFromDb,
   loadMessagesForConversation,
@@ -16,6 +18,30 @@ import {
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
+const VERIFICATION_POLICY_KEY = "goatllm-verification-policy";
+const PROJECT_CHECK_MEMORY_KEY = "goatllm-project-check-memory";
+const PERMISSION_PROFILE_KEY = "goatllm-permission-profile";
+const CHECKPOINT_NAMES_KEY = "goatllm-checkpoint-names";
+const PATH_PERMISSION_RULES_KEY = "goatllm-path-permission-rules";
+const AGENT_BUDGET_CONTROLS_KEY = "goatllm-agent-budget-controls";
+
+const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
+  requireBuildForWeb: true,
+  requireRustTests: true,
+  customCommands: [],
+};
+
+const DEFAULT_PROJECT_CHECK_MEMORY: ProjectCheckMemory = {
+  successfulCommands: [],
+  flakyCommands: [],
+  failedCommands: {},
+};
+
+const DEFAULT_AGENT_BUDGET_CONTROLS: AgentBudgetControls = {
+  maxToolCalls: 24,
+  maxSubagents: 3,
+  maxMinutes: 20,
+};
 
 function loadProviderConfigs(): Record<string, ProviderConfig> {
   try {
@@ -51,6 +77,57 @@ function saveModelOverrides(overrides: Record<string, ModelOverride>) {
   }
 }
 
+function loadVerificationPolicy(): VerificationPolicy {
+  try {
+    const raw = localStorage.getItem(VERIFICATION_POLICY_KEY);
+    return raw ? { ...DEFAULT_VERIFICATION_POLICY, ...JSON.parse(raw) } : DEFAULT_VERIFICATION_POLICY;
+  } catch {
+    return DEFAULT_VERIFICATION_POLICY;
+  }
+}
+
+function saveVerificationPolicy(policy: VerificationPolicy) {
+  try {
+    localStorage.setItem(VERIFICATION_POLICY_KEY, JSON.stringify(policy));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function loadProjectCheckMemory(): ProjectCheckMemory {
+  try {
+    const raw = localStorage.getItem(PROJECT_CHECK_MEMORY_KEY);
+    return raw ? { ...DEFAULT_PROJECT_CHECK_MEMORY, ...JSON.parse(raw) } : DEFAULT_PROJECT_CHECK_MEMORY;
+  } catch {
+    return DEFAULT_PROJECT_CHECK_MEMORY;
+  }
+}
+
+function saveProjectCheckMemory(memory: ProjectCheckMemory) {
+  try {
+    localStorage.setItem(PROJECT_CHECK_MEMORY_KEY, JSON.stringify(memory));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function loadJsonSetting<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJsonSetting(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface Attachment {
@@ -66,6 +143,15 @@ export interface ToolCallEntry {
   input: unknown;
   output?: unknown;
   state: "running" | "done" | "error" | "pending_approval";
+  /** For write/edit calls, the file state captured immediately before execution. */
+  rollbackSnapshot?: {
+    path: string;
+    existed: boolean;
+    content: string;
+    capturedAt: number;
+  };
+  /** True when a tool ran under the subagent approval bypass. */
+  approvalBypassed?: boolean;
   /** Danger classification for exec_command (set during onToolCall). */
   dangerLevel?: "safe" | "suspicious" | "destructive";
   /** Human-readable danger reason. */
@@ -115,6 +201,13 @@ export interface Message {
   turnDurationMs?: number;
   /** Workspace-relative paths written/edited during this turn. */
   editedFiles?: string[];
+  /** Result of restoring this turn's rollback checkpoint, if attempted. */
+  rollbackResult?: {
+    status: "done" | "error";
+    files: string[];
+    completedAt: number;
+    error?: string;
+  };
   /** True for user messages that were sent via "Steer" — i.e. they
    *  interrupted an in-flight turn to redirect it. Surfaced as a small badge
    *  so the thread makes clear the conversation was steered mid-stream. */
@@ -483,6 +576,8 @@ interface ChatStore {
   setSystemPrompt: (id: string, systemPrompt: string) => void;
   /** Set or clear the conversation-scoped active skills. */
   setConversationSkills: (id: string, skillNames: string[]) => void;
+  /** Remember which model this conversation last used. */
+  setConversationModel: (id: string, modelId: string | null) => void;
   setActiveConversation: (id: string | null) => void;
 
   /** Per-message branch management for tree-structured sessions. */
@@ -507,6 +602,12 @@ interface ChatStore {
   addToolCallToMessage: (conversationId: string, messageId: string, tc: ToolCallEntry) => void;
   completeToolCall: (conversationId: string, messageId: string, toolCallId: string, output: unknown) => void;
   updateToolCallState: (conversationId: string, messageId: string, toolCallId: string, state: ToolCallEntry["state"]) => void;
+  updateToolCall: (
+    conversationId: string,
+    messageId: string,
+    toolCallId: string,
+    updates: Partial<ToolCallEntry>,
+  ) => void;
   /** Mark any tool calls still in "running" state on the given message as done. Used to recover when a stream ends without a tool-result chunk. */
   finalizeStuckToolCalls: (conversationId: string, messageId: string) => void;
   /** Attach a subagent transcript to a spawn_subagent tool call entry.
@@ -555,6 +656,8 @@ interface ChatStore {
   dequeueMessage: (conversationId: string) => { content: string } | undefined;
   steerMessage: (conversationId: string, content: string) => void;
   setSteerPayload: (payload: { conversationId: string; content: string; steered?: boolean } | null) => void;
+  /** Resume a partial assistant turn (uses existing thread + reasoning in context). */
+  triggerContinue: (conversationId: string) => void;
 
   // Artifacts (non-persisted) — auto-detected code blocks rendered in side panel
   artifacts: Record<string, Artifact[]>;
@@ -701,6 +804,18 @@ interface ChatStore {
   // but still gate shell commands, yolo = approve everything without prompting.
   permissionMode: "manual" | "auto" | "yolo";
   setPermissionMode: (mode: "manual" | "auto" | "yolo") => void;
+  permissionProfile: "strict" | "default" | "fast";
+  setPermissionProfile: (profile: "strict" | "default" | "fast") => void;
+  verificationPolicy: VerificationPolicy;
+  setVerificationPolicy: (policy: VerificationPolicy) => void;
+  projectCheckMemory: ProjectCheckMemory;
+  setProjectCheckMemory: (memory: ProjectCheckMemory) => void;
+  checkpointNames: Record<string, string>;
+  setCheckpointName: (messageId: string, name: string) => void;
+  pathPermissionRules: PathPermissionRule[];
+  setPathPermissionRules: (rules: PathPermissionRule[]) => void;
+  agentBudgetControls: AgentBudgetControls;
+  setAgentBudgetControls: (controls: AgentBudgetControls) => void;
   // Legacy boolean kept for backward compat with older event log entries; mirrors
   // permissionMode === "yolo".
   autoApprove: boolean;
@@ -1006,6 +1121,29 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       activeDirectionId: null,
       autoApprove: false,
       permissionMode: "manual",
+      permissionProfile: "default",
+      verificationPolicy: loadVerificationPolicy(),
+      projectCheckMemory: loadProjectCheckMemory(),
+      checkpointNames: (() => {
+        try {
+          const raw = localStorage.getItem(CHECKPOINT_NAMES_KEY);
+          return raw ? JSON.parse(raw) : {};
+        } catch {
+          return {};
+        }
+      })(),
+      pathPermissionRules: (() => {
+        try {
+          const raw = localStorage.getItem(PATH_PERMISSION_RULES_KEY);
+          return raw ? JSON.parse(raw) : [
+            { pattern: ".env", action: "ask" },
+            { pattern: "src/**", action: "auto" },
+          ];
+        } catch {
+          return [];
+        }
+      })(),
+      agentBudgetControls: loadJsonSetting(AGENT_BUDGET_CONTROLS_KEY, DEFAULT_AGENT_BUDGET_CONTROLS),
       providerHealth: {},
       messageSearchResults: [],
       messageSearchLoading: false,
@@ -1170,6 +1308,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      setConversationModel: (id: string, modelId: string | null) => {
+        set((state) => {
+          const updated = state.conversations.map((c) =>
+            c.id === id ? { ...c, modelId } : c,
+          );
+          const changed = updated.find((c) => c.id === id);
+          if (changed) persistConversation(changed);
+          return { conversations: updated };
+        });
+      },
+
       setActiveConversation: (id: string | null) => {
         // Save outgoing conversation's artifact panel state so we can restore it
         // when the user navigates back.
@@ -1186,8 +1335,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // Restore incoming conversation's artifact state (default: closed)
         const restored = id ? nextArtifactState[id] : undefined;
 
+        const incomingConv = id ? prev.conversations.find((c) => c.id === id) : undefined;
+        const restoreModelId = incomingConv?.modelId ?? null;
+
         set((state) => ({
           activeId: id,
+          ...(restoreModelId ? { selectedModelId: restoreModelId } : {}),
           focusNonce: state.focusNonce + 1,
           artifactPanelOpen: restored?.panelOpen ?? false,
           activeArtifactId: restored?.activeId ?? null,
@@ -1207,6 +1360,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           activeDirectionId: id === null ? null : state.activeDirectionId,
         }));
         try { localStorage.setItem("goatllm-active-conversation", id ?? ""); } catch {}
+        if (restoreModelId) {
+          try { localStorage.setItem("goatllm-selected-model", restoreModelId); } catch {}
+        }
 
         // Safety net: if the in-memory store has no messages for this
         // conversation, hit the DB. Hydration can miss messages if it raced
@@ -1523,6 +1679,29 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      updateToolCall: (conversationId, messageId, toolCallId, updates) => {
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          const updated = convMessages.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  toolCalls: m.toolCalls?.map((tc) =>
+                    tc.toolCallId === toolCallId
+                      ? { ...tc, ...updates }
+                      : tc,
+                  ),
+                }
+              : m,
+          );
+          const changed = updated.find((m) => m.id === messageId);
+          if (changed) persistMessage(changed);
+          return {
+            messages: { ...state.messages, [conversationId]: updated },
+          };
+        });
+      },
+
       finalizeStuckToolCalls: (conversationId, messageId) => {
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
@@ -1610,6 +1789,25 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       setSteerPayload: (payload) => set({ steerPayload: payload }),
+
+      triggerContinue: (conversationId) => {
+        const msgs = get().messages[conversationId] ?? [];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (m.role === "assistant" && m.interrupted) {
+            get().updateMessage(conversationId, m.id, { interrupted: false });
+            break;
+          }
+        }
+        set({
+          steerPayload: {
+            conversationId,
+            content:
+              "Continue your previous response exactly where it stopped. Do not repeat prior analysis or re-read attachments unless necessary.",
+            steered: false,
+          },
+        });
+      },
 
       addPendingDroppedFiles: (files) => {
         set((state) => ({ pendingDroppedFiles: [...state.pendingDroppedFiles, ...files] }));
@@ -2347,6 +2545,42 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-permission-mode", mode); } catch {}
       },
 
+      setPermissionProfile: (profile) => {
+        const mode = profile === "strict" ? "manual" : profile === "fast" ? "yolo" : "auto";
+        set({ permissionProfile: profile, permissionMode: mode, autoApprove: mode === "yolo" });
+        try {
+          localStorage.setItem(PERMISSION_PROFILE_KEY, profile);
+          localStorage.setItem("goatllm-permission-mode", mode);
+        } catch {}
+      },
+
+      setVerificationPolicy: (policy) => {
+        set({ verificationPolicy: policy });
+        saveVerificationPolicy(policy);
+      },
+
+      setProjectCheckMemory: (memory) => {
+        set({ projectCheckMemory: memory });
+        saveProjectCheckMemory(memory);
+      },
+
+      setCheckpointName: (messageId, name) => {
+        const next = { ...get().checkpointNames, [messageId]: name };
+        if (!name.trim()) delete next[messageId];
+        set({ checkpointNames: next });
+        saveJsonSetting(CHECKPOINT_NAMES_KEY, next);
+      },
+
+      setPathPermissionRules: (rules) => {
+        set({ pathPermissionRules: rules });
+        saveJsonSetting(PATH_PERMISSION_RULES_KEY, rules);
+      },
+
+      setAgentBudgetControls: (controls) => {
+        set({ agentBudgetControls: controls });
+        saveJsonSetting(AGENT_BUDGET_CONTROLS_KEY, controls);
+      },
+
       // ── Provider health checks ──
 
       checkProviderHealth: async (providerId, baseUrl) => {
@@ -2925,6 +3159,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const savedModeRaw = localStorage.getItem("goatllm-permission-mode");
         const savedMode: "manual" | "auto" | "yolo" =
           savedModeRaw === "auto" || savedModeRaw === "yolo" ? savedModeRaw : "manual";
+        const savedProfileRaw = localStorage.getItem(PERMISSION_PROFILE_KEY);
+        const savedProfile: "strict" | "default" | "fast" =
+          savedProfileRaw === "strict" || savedProfileRaw === "fast" ? savedProfileRaw : "default";
         // Artifact toggles: default on. Only an explicit "false" disables them.
         const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
@@ -3108,6 +3345,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
+            permissionProfile: savedProfile,
+            verificationPolicy: loadVerificationPolicy(),
+            projectCheckMemory: loadProjectCheckMemory(),
             autoApprove: savedMode === "yolo",
             artifacts: restoredArtifacts,
             agentMode,
@@ -3191,6 +3431,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
+            permissionProfile: savedProfile,
+            verificationPolicy: loadVerificationPolicy(),
+            projectCheckMemory: loadProjectCheckMemory(),
             agentMode,
             designMode,
             activeSkillId,

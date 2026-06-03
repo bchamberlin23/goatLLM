@@ -86,6 +86,12 @@ function extractDoneSummary(
   return undefined;
 }
 
+function isDoneResultAllowed(output: unknown): boolean {
+  if (!output || typeof output !== "object") return true;
+  const result = output as { done?: unknown; blocked?: unknown };
+  return result.done !== false && result.blocked !== true;
+}
+
 
 /**
  * Clamp a cache key to OpenAI's 64-character limit.
@@ -500,13 +506,17 @@ export async function agentLoop(
         const stepResults = await result.steps;
         totalSteps += stepResults.length;
 
-        // Check if the model called the `done` tool this batch.
+        // Check if the model called the `done` tool this batch. The tool can
+        // reject premature completion, so only exit when its result allows it.
         for (const step of stepResults) {
           for (const tc of step.toolCalls ?? []) {
             if (tc.toolName === "done") {
-              doneCalled = true;
-              doneSummary = (tc.input as { summary?: string })?.summary;
-              break;
+              const result = step.toolResults?.find((tr) => tr.toolCallId === tc.toolCallId);
+              if (isDoneResultAllowed(result?.output)) {
+                doneCalled = true;
+                doneSummary = (tc.input as { summary?: string })?.summary;
+                break;
+              }
             }
           }
           if (doneCalled) break;

@@ -61,4 +61,9 @@ describe("stripLeakedToolJson", () => {
     const t = "Summarizing {summary";
     expect(stripLeakedToolJson(t)).toBe("Summarizing ");
   });
+
+  it("strips bare read_attachment{} leaks", () => {
+    const t = "Done analyzing. read_attachment{}";
+    expect(stripLeakedToolJson(t)).toBe("Done analyzing. ");
+  });
 });

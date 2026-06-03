@@ -78,6 +78,7 @@ export interface SubagentToolCall {
   input: unknown;
   output?: unknown;
   state: "done" | "error";
+  approvalBypassed?: boolean;
 }
 
 /** One turn in a subagent conversation transcript. */

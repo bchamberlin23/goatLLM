@@ -7,6 +7,8 @@
  */
 import { tool } from "ai";
 import { z } from "zod";
+import { canMarkAgentDone } from "../../agent-session";
+import { useChatStore } from "../../../stores/chat";
 
 export const done = tool({
   description:
@@ -16,6 +18,16 @@ export const done = tool({
     summary: z.string().describe("Brief summary of what was accomplished."),
   }),
   execute: async ({ summary }: { summary: string }) => {
+    const state = useChatStore.getState();
+    const latestAssistant = state.activeId
+      ? [...(state.messages[state.activeId] ?? [])].reverse().find((message) => message.role === "assistant")
+      : undefined;
+    if (latestAssistant) {
+      const gate = canMarkAgentDone(latestAssistant);
+      if (!gate.allowed) {
+        return { done: false, blocked: true, reason: gate.reason, summary };
+      }
+    }
     return { done: true, summary };
   },
 });

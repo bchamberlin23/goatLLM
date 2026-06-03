@@ -4,28 +4,56 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import type { BundledLanguage, HighlighterGeneric } from "shiki";
+import type { HighlighterCore } from "shiki/core";
+import type { LanguageRegistration, ThemeRegistration } from "shiki/types";
 
-let highlighterPromise: Promise<HighlighterGeneric<any, any>> | null = null;
+type LanguageModule = { default: LanguageRegistration[] };
+type ThemeModule = { default: ThemeRegistration };
+
+const LANGUAGE_LOADERS: Array<() => Promise<LanguageModule>> = [
+  () => import("shiki/dist/langs/javascript.mjs"),
+  () => import("shiki/dist/langs/typescript.mjs"),
+  () => import("shiki/dist/langs/tsx.mjs"),
+  () => import("shiki/dist/langs/jsx.mjs"),
+  () => import("shiki/dist/langs/python.mjs"),
+  () => import("shiki/dist/langs/rust.mjs"),
+  () => import("shiki/dist/langs/go.mjs"),
+  () => import("shiki/dist/langs/bash.mjs"),
+  () => import("shiki/dist/langs/sh.mjs"),
+  () => import("shiki/dist/langs/json.mjs"),
+  () => import("shiki/dist/langs/yaml.mjs"),
+  () => import("shiki/dist/langs/toml.mjs"),
+  () => import("shiki/dist/langs/css.mjs"),
+  () => import("shiki/dist/langs/html.mjs"),
+  () => import("shiki/dist/langs/markdown.mjs"),
+  () => import("shiki/dist/langs/sql.mjs"),
+  () => import("shiki/dist/langs/dockerfile.mjs"),
+  () => import("shiki/dist/langs/c.mjs"),
+  () => import("shiki/dist/langs/cpp.mjs"),
+  () => import("shiki/dist/langs/java.mjs"),
+  () => import("shiki/dist/langs/swift.mjs"),
+  () => import("shiki/dist/langs/kotlin.mjs"),
+];
+
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
 function getHighlighter() {
   if (!highlighterPromise) {
-    highlighterPromise = import("shiki").then(
-      ({ createHighlighter }) =>
-        createHighlighter({
-          themes: ["github-dark-dimmed"],
-          langs: [
-            "javascript", "typescript", "tsx", "jsx", "python", "rust", "go",
-            "bash", "sh", "json", "yaml", "toml", "css", "html", "markdown",
-            "sql", "dockerfile", "c", "cpp", "java", "swift", "kotlin",
-          ],
-        })
+    highlighterPromise = Promise.all([
+      import("shiki/core"),
+      import("shiki/engine/javascript"),
+      Promise.all(LANGUAGE_LOADERS.map((load) => load())),
+      import("shiki/dist/themes/github-dark-dimmed.mjs") as Promise<ThemeModule>,
+    ]).then(([{ createHighlighterCore }, { createJavaScriptRegexEngine }, languageModules, theme]) =>
+      createHighlighterCore({
+        themes: [theme.default],
+        langs: languageModules.flatMap((module) => module.default),
+        engine: createJavaScriptRegexEngine(),
+      }),
     );
   }
   return highlighterPromise;
 }
-
-getHighlighter().catch(() => {});
 
 interface CodeBlockProps {
   language: string;
@@ -52,7 +80,7 @@ const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = fal
           const langs = highlighter.getLoadedLanguages() as string[];
           const lang = langs.includes(language) ? language : "text";
           const highlighted = highlighter.codeToHtml(code, {
-            lang: lang as BundledLanguage,
+            lang,
             theme: "github-dark-dimmed",
           });
           if (!cancelled) setHtml(highlighted);

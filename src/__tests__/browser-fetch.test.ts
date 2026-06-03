@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { validateBrowserUrl, extractText, extractBySelector } from "../lib/browser-fetch";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { validateBrowserUrl, browserFetch, extractText, extractBySelector } from "../lib/browser-fetch";
+
+const adapterFetch = vi.hoisted(() => vi.fn());
+const initFetch = vi.hoisted(() => vi.fn(async () => adapterFetch));
+
+vi.mock("../lib/fetch-adapter", () => ({
+  initFetch,
+}));
 
 describe("validateBrowserUrl", () => {
   it("accepts plain http and https", () => {
@@ -47,6 +54,62 @@ describe("validateBrowserUrl", () => {
   it("blocks metadata.google.internal", () => {
     const r = validateBrowserUrl("http://metadata.google.internal/computeMetadata/v1/");
     expect(r.ok).toBe(false);
+  });
+
+  it("blocks localhost and private network targets", () => {
+    const blocked = [
+      "http://localhost:8080/",
+      "http://127.0.0.1:11434/api/tags",
+      "http://2130706433/",
+      "http://0x7f000001/",
+      "http://127.1/",
+      "http://10.0.0.5/",
+      "http://172.16.4.2/",
+      "http://192.168.1.10/",
+      "http://[::1]/",
+      "http://[::ffff:7f00:1]/",
+      "http://[fc00::1]/",
+    ];
+
+    for (const url of blocked) {
+      expect(validateBrowserUrl(url).ok, url).toBe(false);
+    }
+  });
+});
+
+describe("browserFetch", () => {
+  afterEach(() => {
+    adapterFetch.mockReset();
+    initFetch.mockClear();
+  });
+
+  it("blocks redirects to private network targets before following them", async () => {
+    adapterFetch.mockResolvedValue(
+      new Response("", {
+        status: 302,
+        headers: { Location: "http://127.0.0.1/admin" },
+      }),
+    );
+
+    await expect(browserFetch({ url: "https://example.com/start" })).rejects.toThrow(/redirect/i);
+    expect(adapterFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the Tauri fetch adapter instead of global fetch", async () => {
+    const globalFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("wrong fetch"));
+    adapterFetch.mockResolvedValue(
+      new Response("<p>ok</p>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+
+    const result = await browserFetch({ url: "https://example.com/page" });
+
+    expect(initFetch).toHaveBeenCalled();
+    expect(adapterFetch).toHaveBeenCalledWith("https://example.com/page", expect.objectContaining({ method: "GET" }));
+    expect(globalFetch).not.toHaveBeenCalled();
+    expect(result.content).toBe("ok");
   });
 });
 

@@ -4,9 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
 
-mod ollama;
-mod mcp;
 mod jj;
+mod mcp;
+mod ollama;
 
 const WORKSPACES_DIR: &str = "workspaces";
 const WORKSPACES_FILE: &str = "workspaces.json";
@@ -60,6 +60,38 @@ struct AllData {
     messages: Vec<DbMessage>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveConversationRequest {
+    id: String,
+    title: String,
+    last_message_preview: String,
+    last_message_at: i64,
+    created_at: i64,
+    model_id: Option<String>,
+    system_prompt: String,
+    archived: Option<i64>,
+    tags: Option<String>,
+    mode: Option<String>,
+    workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveMessageRequest {
+    id: String,
+    conversation_id: String,
+    role: String,
+    content: String,
+    tool_calls: Option<String>,
+    attachments: Option<String>,
+    created_at: i64,
+    pinned: Option<bool>,
+    thinking_content: Option<String>,
+    turn_duration_ms: Option<i64>,
+    edited_files: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct DirEntry {
     name: String,
@@ -93,6 +125,17 @@ struct MessageSearchResult {
     created_at: i64,
 }
 
+fn escape_sql_like_query(query: &str) -> String {
+    let mut escaped = String::with_capacity(query.len());
+    for ch in query.chars() {
+        if matches!(ch, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    format!("%{}%", escaped)
+}
+
 struct DbState {
     db: Mutex<rusqlite::Connection>,
 }
@@ -115,8 +158,7 @@ fn init_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, String> {
         .path()
         .app_data_dir()
         .map_err(|e| format!("Cannot determine app data directory: {}", e))?;
-    fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("Cannot create data directory: {}", e))?;
+    fs::create_dir_all(&data_dir).map_err(|e| format!("Cannot create data directory: {}", e))?;
     let db_path = data_dir.join("goatllm.db");
 
     let conn = rusqlite::Connection::open(&db_path)
@@ -242,32 +284,37 @@ fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData, String> {
         .filter_map(|r| r.ok())
         .collect();
 
-    Ok(AllData { conversations, messages })
+    Ok(AllData {
+        conversations,
+        messages,
+    })
 }
 
 #[tauri::command]
 fn save_conversation(
-    id: String,
-    title: String,
-    last_message_preview: String,
-    last_message_at: i64,
-    created_at: i64,
-    model_id: Option<String>,
-    system_prompt: String,
-    archived: Option<i64>,
-    tags: Option<String>,
-    mode: Option<String>,
-    workspace_path: Option<String>,
+    payload: SaveConversationRequest,
     state: tauri::State<'_, DbState>,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
-    let arch = archived.unwrap_or(0);
-    let tags_json = tags.unwrap_or_else(|| "[]".to_string());
-    let mode_val = mode.unwrap_or_else(|| "chat".to_string());
-    let workspace_val = workspace_path.unwrap_or_default();
+    let arch = payload.archived.unwrap_or(0);
+    let tags_json = payload.tags.unwrap_or_else(|| "[]".to_string());
+    let mode_val = payload.mode.unwrap_or_else(|| "chat".to_string());
+    let workspace_val = payload.workspace_path.unwrap_or_default();
     db.execute(
         "INSERT OR REPLACE INTO conversations (id, title, last_message_preview, last_message_at, created_at, model_id, system_prompt, archived, tags, mode, workspace_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-        rusqlite::params![id, title, last_message_preview, last_message_at, created_at, model_id, system_prompt, arch, tags_json, mode_val, workspace_val],
+        rusqlite::params![
+            payload.id,
+            payload.title,
+            payload.last_message_preview,
+            payload.last_message_at,
+            payload.created_at,
+            payload.model_id,
+            payload.system_prompt,
+            arch,
+            tags_json,
+            mode_val,
+            workspace_val
+        ],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -275,24 +322,30 @@ fn save_conversation(
 
 #[tauri::command]
 fn save_message(
-    id: String,
-    conversation_id: String,
-    role: String,
-    content: String,
-    tool_calls: Option<String>,
-    attachments: Option<String>,
-    created_at: i64,
-    pinned: Option<bool>,
-    thinking_content: Option<String>,
-    turn_duration_ms: Option<i64>,
-    edited_files: Option<String>,
+    payload: SaveMessageRequest,
     state: tauri::State<'_, DbState>,
 ) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
-    let pin_int: i64 = if pinned.unwrap_or(false) { 1 } else { 0 };
+    let pin_int: i64 = if payload.pinned.unwrap_or(false) {
+        1
+    } else {
+        0
+    };
     db.execute(
         "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-        rusqlite::params![id, conversation_id, role, content, tool_calls, attachments, created_at, pin_int, thinking_content, turn_duration_ms, edited_files],
+        rusqlite::params![
+            payload.id,
+            payload.conversation_id,
+            payload.role,
+            payload.content,
+            payload.tool_calls,
+            payload.attachments,
+            payload.created_at,
+            pin_int,
+            payload.thinking_content,
+            payload.turn_duration_ms,
+            payload.edited_files
+        ],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -338,10 +391,16 @@ fn load_messages_for_conversation(
 #[tauri::command]
 fn delete_conversation_db(id: String, state: tauri::State<'_, DbState>) -> Result<(), String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
-    db.execute("DELETE FROM messages WHERE conversation_id = ?1", rusqlite::params![id])
-        .map_err(|e| e.to_string())?;
-    db.execute("DELETE FROM conversations WHERE id = ?1", rusqlite::params![id])
-        .map_err(|e| e.to_string())?;
+    db.execute(
+        "DELETE FROM messages WHERE conversation_id = ?1",
+        rusqlite::params![id],
+    )
+    .map_err(|e| e.to_string())?;
+    db.execute(
+        "DELETE FROM conversations WHERE id = ?1",
+        rusqlite::params![id],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -359,12 +418,12 @@ fn search_messages(
     state: tauri::State<'_, DbState>,
 ) -> Result<Vec<MessageSearchResult>, String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
-    let like = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
+    let like = escape_sql_like_query(&query);
     let mut stmt = db
         .prepare(
             "SELECT m.id, m.conversation_id, c.title, m.role, m.content, m.created_at \
              FROM messages m JOIN conversations c ON m.conversation_id = c.id \
-             WHERE m.content LIKE ?1 \
+             WHERE m.content LIKE ?1 ESCAPE '\\' \
              ORDER BY m.created_at DESC \
              LIMIT 50",
         )
@@ -373,7 +432,8 @@ fn search_messages(
         .query_map(rusqlite::params![like], |row| {
             let content: String = row.get(4)?;
             let preview = if content.len() > 200 {
-                format!("{}…", &content[..200])
+                let cut = floor_char_boundary(&content, 200);
+                format!("{}…", &content[..cut])
             } else {
                 content
             };
@@ -395,22 +455,99 @@ fn search_messages(
 // ── Write / execute commands (MVP 3) ──
 
 #[tauri::command]
-fn write_file(workspace: String, path: String, content: String, ws_state: tauri::State<'_, Mutex<WorkspaceState>>) -> Result<String, String> {
+fn write_file(
+    workspace: String,
+    path: String,
+    content: String,
+    ws_state: tauri::State<'_, Mutex<WorkspaceState>>,
+) -> Result<String, String> {
     let full = resolve_write_path(&workspace, &path)?;
     let ws_patterns = get_ws_patterns(&workspace, &ws_state);
     check_denylist_ws(&full, &ws_patterns)?;
 
     // Create parent directories if needed
     if let Some(parent) = full.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Cannot create parent dirs: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Cannot create parent dirs: {}", e))?;
     }
 
-    fs::write(&full, &content)
-        .map_err(|e| format!("Cannot write '{}': {}", path, e))?;
+    fs::write(&full, &content).map_err(|e| format!("Cannot write '{}': {}", path, e))?;
 
     let size = content.len();
     Ok(format!("Wrote {} bytes to {}", size, path))
+}
+
+#[tauri::command]
+fn delete_file(
+    workspace: String,
+    path: String,
+    ws_state: tauri::State<'_, Mutex<WorkspaceState>>,
+) -> Result<String, String> {
+    let full = resolve_path(&workspace, &path)?;
+    let ws_patterns = get_ws_patterns(&workspace, &ws_state);
+    check_denylist_ws(&full, &ws_patterns)?;
+
+    if full.is_dir() {
+        return Err(format!(
+            "Cannot delete '{}': directories are not supported",
+            path
+        ));
+    }
+
+    fs::remove_file(&full).map_err(|e| format!("Cannot delete '{}': {}", path, e))?;
+
+    Ok(format!("Deleted {}", path))
+}
+
+fn normalize_absolute_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            std::path::Component::RootDir => normalized.push(component.as_os_str()),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                let _ = normalized.pop();
+            }
+            std::path::Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
+}
+
+fn resolve_child_path(base: &Path, relative: &str, label: &str) -> Result<PathBuf, String> {
+    let rel = Path::new(relative);
+    if rel.is_absolute() {
+        return Err(format!("{}: absolute paths are not allowed", label));
+    }
+
+    fs::create_dir_all(base).map_err(|e| format!("{}: cannot create base dir: {}", label, e))?;
+    let canonical_base =
+        fs::canonicalize(base).map_err(|e| format!("{}: cannot resolve base dir: {}", label, e))?;
+    let full = normalize_absolute_path(&canonical_base.join(rel));
+    if !full.starts_with(&canonical_base) {
+        return Err(format!("{}: path escapes base directory", label));
+    }
+
+    let check_path = if full.exists() {
+        full.clone()
+    } else {
+        full.parent()
+            .map(|x| x.to_path_buf())
+            .unwrap_or_else(|| canonical_base.clone())
+    };
+    let mut existing = check_path.as_path();
+    while !existing.exists() {
+        existing = existing
+            .parent()
+            .ok_or_else(|| format!("{}: cannot validate path", label))?;
+    }
+    let canonical_existing = fs::canonicalize(existing)
+        .map_err(|e| format!("{}: cannot validate path: {}", label, e))?;
+    if !canonical_existing.starts_with(&canonical_base) {
+        return Err(format!("{}: path escapes base directory", label));
+    }
+
+    Ok(full)
 }
 
 /// Write to a temp-dir path. Used by the bash-output spillover so a giant
@@ -420,20 +557,50 @@ fn write_file(workspace: String, path: String, content: String, ws_state: tauri:
 #[tauri::command]
 fn write_temp_file(path: String, content: String) -> Result<String, String> {
     let p = std::path::PathBuf::from(&path);
-    let parent = p.parent().map(|x| x.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("/"));
-    let tmp = std::env::temp_dir();
-    let allowed = parent.starts_with(&tmp) || parent.starts_with("/tmp");
-    if !allowed {
+    if !p.is_absolute() {
+        return Err(format!(
+            "write_temp_file requires an absolute temp path: got '{}'",
+            path
+        ));
+    }
+
+    let normalized = normalize_absolute_path(&p);
+    let tmp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let tmp_fallback =
+        fs::canonicalize("/tmp").unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+    let allowed_roots = [tmp, tmp_fallback];
+
+    let check_path = if normalized.exists() {
+        normalized.clone()
+    } else {
+        normalized
+            .parent()
+            .map(|x| x.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("/"))
+    };
+    let mut existing = check_path.as_path();
+    while !existing.exists() {
+        existing = existing
+            .parent()
+            .ok_or_else(|| format!("Cannot validate temp path '{}'", path))?;
+    }
+    let canonical_existing =
+        fs::canonicalize(existing).map_err(|e| format!("Cannot validate '{}': {}", path, e))?;
+
+    if !allowed_roots
+        .iter()
+        .any(|root| canonical_existing.starts_with(root))
+    {
         return Err(format!(
             "write_temp_file refuses paths outside the temp dir: got '{}', expected under '{}' or /tmp",
             path,
-            tmp.display()
+            allowed_roots[0].display()
         ));
     }
-    if let Some(dir) = p.parent() {
+    if let Some(dir) = normalized.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("Cannot create '{}': {}", dir.display(), e))?;
     }
-    fs::write(&p, &content).map_err(|e| format!("Cannot write '{}': {}", path, e))?;
+    fs::write(&normalized, &content).map_err(|e| format!("Cannot write '{}': {}", path, e))?;
     Ok(format!("Wrote {} bytes to {}", content.len(), path))
 }
 
@@ -535,8 +702,8 @@ fn copy_dir_abs(src: String, dst: String) -> Result<u32, String> {
         if src.is_dir() {
             fs::create_dir_all(dst)
                 .map_err(|e| format!("Cannot create '{}': {}", dst.display(), e))?;
-            for entry in fs::read_dir(src)
-                .map_err(|e| format!("Cannot read '{}': {}", src.display(), e))?
+            for entry in
+                fs::read_dir(src).map_err(|e| format!("Cannot read '{}': {}", src.display(), e))?
             {
                 let entry = entry.map_err(|e| format!("Read error: {}", e))?;
                 let from = entry.path();
@@ -551,7 +718,12 @@ fn copy_dir_abs(src: String, dst: String) -> Result<u32, String> {
                         .map_err(|e| format!("Cannot create '{}': {}", parent.display(), e))?;
                 }
                 fs::copy(src, dst).map_err(|e| {
-                    format!("Cannot copy '{}' → '{}': {}", src.display(), dst.display(), e)
+                    format!(
+                        "Cannot copy '{}' → '{}': {}",
+                        src.display(),
+                        dst.display(),
+                        e
+                    )
                 })?;
                 count += 1;
             }
@@ -568,28 +740,9 @@ fn copy_dir_abs(src: String, dst: String) -> Result<u32, String> {
 fn write_skill_file(relative_path: String, content: String) -> Result<String, String> {
     let home = dirs::home_dir().ok_or_else(|| "Cannot resolve home directory".to_string())?;
     let base = home.join(".goat").join("agent").join("skills");
-    let full = base.join(&relative_path);
-    // Canonicalize to prevent .. escapes
-    let canonical_base = fs::canonicalize(&base).unwrap_or_else(|_| base.clone());
-    let canonical_full = match fs::canonicalize(full.parent().unwrap_or(&base)) {
-        Ok(p) => p,
-        Err(_) => {
-            // Parent doesn't exist yet — that's fine, we'll create it.
-            // Just check the non-canonical form doesn't escape.
-            let full_str: &str = &full.to_string_lossy();
-            let base_str: &str = &canonical_base.to_string_lossy();
-            if !full_str.starts_with(base_str) {
-                return Err("write_skill_file: path escapes skills directory".to_string());
-            }
-            full.parent().unwrap_or(&base).to_path_buf()
-        }
-    };
-    if !canonical_full.starts_with(&canonical_base) {
-        return Err("write_skill_file: path escapes skills directory".to_string());
-    }
+    let full = resolve_child_path(&base, &relative_path, "write_skill_file")?;
     if let Some(parent) = full.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Cannot create parent: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Cannot create parent: {}", e))?;
     }
     fs::write(&full, &content).map_err(|e| format!("Cannot write: {}", e))?;
     Ok(format!("Wrote {} bytes", content.len()))
@@ -633,7 +786,8 @@ fn normalize_for_fuzzy_match(s: &str) -> String {
             // Smart single quotes / apostrophes → ASCII '
             '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}' => '\'',
             // Various dashes → ASCII -
-            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2015}' | '\u{2212}' => '-',
+            '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2015}'
+            | '\u{2212}' => '-',
             // Non-breaking space, en-quad, em-quad, thin space, etc. → ASCII space
             '\u{00A0}' | '\u{2000}'..='\u{200B}' | '\u{202F}' | '\u{205F}' | '\u{3000}' => ' ',
             other => other,
@@ -662,15 +816,18 @@ fn edit_file(
     let ws_patterns = get_ws_patterns(&workspace, &ws_state);
     check_denylist_ws(&full, &ws_patterns)?;
 
-    let current = fs::read_to_string(&full)
-        .map_err(|e| format!("Cannot read '{}': {}", path, e))?;
+    let current =
+        fs::read_to_string(&full).map_err(|e| format!("Cannot read '{}': {}", path, e))?;
 
     // Build edit list: prefer edits[] array, fall back to single old_text/new_text
     let replacements: Vec<(String, String)> = if let Some(edit_list) = edits {
         if edit_list.is_empty() {
             return Err("edits must contain at least one replacement.".to_string());
         }
-        edit_list.into_iter().map(|e| (e.old_text, e.new_text)).collect()
+        edit_list
+            .into_iter()
+            .map(|e| (e.old_text, e.new_text))
+            .collect()
     } else if let (Some(old), Some(new)) = (old_text, new_text) {
         vec![(old, new)]
     } else {
@@ -726,8 +883,7 @@ fn edit_file(
         return Err(format!("No replacements were applied to '{}'.", path));
     }
 
-    fs::write(&full, &new_content)
-        .map_err(|e| format!("Cannot write '{}': {}", path, e))?;
+    fs::write(&full, &new_content).map_err(|e| format!("Cannot write '{}': {}", path, e))?;
 
     let mut msg = format!(
         "Successfully edited {}: {} replacement(s) applied.",
@@ -824,11 +980,7 @@ fn diff_file(workspace: String, path: String) -> Result<String, String> {
 // ── Git management commands ──
 
 #[tauri::command]
-fn git_branch(
-    workspace: String,
-    action: String,
-    name: Option<String>,
-) -> Result<String, String> {
+fn git_branch(workspace: String, action: String, name: Option<String>) -> Result<String, String> {
     use std::process::Command;
 
     match action.as_str() {
@@ -885,7 +1037,10 @@ fn git_branch(
             let stdout = String::from_utf8_lossy(&output.stdout);
             Ok(stdout.trim().to_string())
         }
-        _ => Err(format!("Unknown git_branch action: '{}'. Use list, current, create, or switch.", action)),
+        _ => Err(format!(
+            "Unknown git_branch action: '{}'. Use list, current, create, or switch.",
+            action
+        )),
     }
 }
 
@@ -1089,8 +1244,12 @@ fn git_blame(
     cmd.arg("--show-email");
 
     if let Some(range) = line_range.as_deref().filter(|s| !s.is_empty()) {
-        let (start, end) = parse_line_range(range)
-            .ok_or_else(|| format!("Invalid line_range '{}'. Use 'N' or 'N-M' (1-indexed).", range))?;
+        let (start, end) = parse_line_range(range).ok_or_else(|| {
+            format!(
+                "Invalid line_range '{}'. Use 'N' or 'N-M' (1-indexed).",
+                range
+            )
+        })?;
         cmd.arg(format!("-L{},{}", start, end));
     }
 
@@ -1125,7 +1284,9 @@ fn read_lints(workspace: String) -> Result<String, String> {
 
     // Try cargo check first (most common for Rust projects)
     let has_cargo = std::path::Path::new(&workspace).join("Cargo.toml").exists();
-    let has_package_json = std::path::Path::new(&workspace).join("package.json").exists();
+    let has_package_json = std::path::Path::new(&workspace)
+        .join("package.json")
+        .exists();
 
     if has_cargo {
         let output = Command::new("cargo")
@@ -1191,10 +1352,14 @@ fn get_events(
 ) -> Result<Vec<String>, String> {
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut stmt = db
-        .prepare("SELECT payload FROM agent_events WHERE conversation_id = ?1 ORDER BY created_at ASC")
+        .prepare(
+            "SELECT payload FROM agent_events WHERE conversation_id = ?1 ORDER BY created_at ASC",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(rusqlite::params![conversation_id], |row| row.get::<_, String>(0))
+        .query_map(rusqlite::params![conversation_id], |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(|e| e.to_string())?;
     let mut events = Vec::new();
     for row in rows {
@@ -1246,13 +1411,16 @@ fn resolve_path(workspace: &str, relative: &str) -> Result<PathBuf, String> {
     // Strip workspace prefix if the model passed an absolute path
     let cleaned = strip_workspace_prefix(relative, workspace);
     let resolved = ws.join(&cleaned);
-    let canonical =
-        fs::canonicalize(&resolved).map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
+    let canonical = fs::canonicalize(&resolved)
+        .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
     let ws_canonical =
         fs::canonicalize(ws).map_err(|e| format!("Cannot resolve workspace: {}", e))?;
 
     if !canonical.starts_with(&ws_canonical) {
-        return Err(format!("Access denied: '{}' is outside workspace", relative));
+        return Err(format!(
+            "Access denied: '{}' is outside workspace",
+            relative
+        ));
     }
     Ok(canonical)
 }
@@ -1272,7 +1440,9 @@ fn strip_workspace_prefix(path: &str, workspace: &str) -> String {
             continue;
         }
         if result.starts_with(workspace) && result.len() > workspace.len() {
-            result = result[workspace.len()..].trim_start_matches('/').to_string();
+            result = result[workspace.len()..]
+                .trim_start_matches('/')
+                .to_string();
             continue;
         }
         // Handle "Users/bench/Desktop/project/src/file.ts" (no leading slash).
@@ -1286,7 +1456,9 @@ fn strip_workspace_prefix(path: &str, workspace: &str) -> String {
             continue;
         }
         if result.starts_with(ws_no_slash) {
-            result = result[ws_no_slash.len()..].trim_start_matches('/').to_string();
+            result = result[ws_no_slash.len()..]
+                .trim_start_matches('/')
+                .to_string();
             continue;
         }
     }
@@ -1311,59 +1483,17 @@ fn strip_workspace_prefix(path: &str, workspace: &str) -> String {
 /// Canonicalizes the workspace root, then validates the joined path stays within it.
 fn resolve_write_path(workspace: &str, relative: &str) -> Result<PathBuf, String> {
     let ws = Path::new(workspace);
-    let ws_canonical =
-        fs::canonicalize(ws).map_err(|e| format!("Cannot resolve workspace: {}", e))?;
-
-    // Strip workspace prefix if the model passed an absolute path
     let cleaned = strip_workspace_prefix(relative, workspace);
-    let resolved = ws.join(&cleaned);
-
-    // If the resolved path exists, canonicalize it and check it's within workspace
-    if resolved.exists() {
-        let canonical = fs::canonicalize(&resolved)
-            .map_err(|e| format!("Cannot resolve path '{}': {}", relative, e))?;
-        if !canonical.starts_with(&ws_canonical) {
-            return Err(format!("Access denied: '{}' is outside workspace", relative));
-        }
-        return Ok(canonical);
-    }
-
-    // Path doesn't exist yet — manually validate it stays within workspace
-    // Resolve .. and . components without canonicalize
-    let mut parts: Vec<&str> = Vec::new();
-    for part in resolved.components() {
-        match part {
-            std::path::Component::ParentDir => {
-                if parts.is_empty() {
-                    return Err(format!("Access denied: '{}' escapes workspace", relative));
-                }
-                parts.pop();
-            }
-            std::path::Component::CurDir => {}
-            std::path::Component::Normal(c) => {
-                parts.push(c.to_str().unwrap_or(""));
-            }
-            _ => {}
-        }
-    }
-
-    // Rebuild from workspace root to check containment
-    let mut check = ws_canonical.clone();
-    for part in &parts {
-        check.push(part);
-    }
-
-    // Verify the check path starts with workspace root
-    if !check.starts_with(&ws_canonical) {
-        return Err(format!("Access denied: '{}' is outside workspace", relative));
-    }
-
-    Ok(check)
+    resolve_child_path(ws, &cleaned, "resolve_write_path")
+        .map_err(|e| format!("Access denied: '{}': {}", relative, e))
 }
 
 fn check_patterns(path: &Path, patterns: &[String]) -> Result<(), String> {
     let path_str = path.to_string_lossy();
-    let file_name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
     for pattern in patterns {
         let (dir_part, file_pattern) = if let Some(slash) = pattern.rfind('/') {
             (&pattern[..slash], &pattern[slash + 1..])
@@ -1402,7 +1532,13 @@ fn get_ws_patterns(workspace: &str, state: &Mutex<WorkspaceState>) -> Vec<String
 
 fn check_denylist_ws(path: &Path, ws_patterns: &[String]) -> Result<(), String> {
     // Check built-in hardcoded patterns first (always enforced)
-    check_patterns(path, &DENY_PATTERNS.iter().map(|s| s.to_string()).collect::<Vec<_>>())?;
+    check_patterns(
+        path,
+        &DENY_PATTERNS
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+    )?;
     // Then check workspace-specific patterns
     check_patterns(path, ws_patterns)
 }
@@ -1495,7 +1631,11 @@ fn guess_mime_type(path: &str) -> &'static str {
 }
 
 #[tauri::command]
-fn list_dir(workspace: String, path: String, ws_state: tauri::State<'_, Mutex<WorkspaceState>>) -> Result<Vec<DirEntry>, String> {
+fn list_dir(
+    workspace: String,
+    path: String,
+    ws_state: tauri::State<'_, Mutex<WorkspaceState>>,
+) -> Result<Vec<DirEntry>, String> {
     let full = resolve_path(&workspace, &path)?;
     let ws_patterns = get_ws_patterns(&workspace, &ws_state);
     check_denylist_ws(&full, &ws_patterns)?;
@@ -1523,6 +1663,26 @@ fn search_content(
     file_pattern: Option<String>,
     context_lines: Option<u32>,
     case_insensitive: Option<bool>,
+    ws_state: tauri::State<'_, Mutex<WorkspaceState>>,
+) -> Result<Vec<SearchMatch>, String> {
+    let ws_patterns = get_ws_patterns(&workspace, &ws_state);
+    search_content_impl(
+        workspace,
+        pattern,
+        file_pattern,
+        context_lines,
+        case_insensitive,
+        &ws_patterns,
+    )
+}
+
+fn search_content_impl(
+    workspace: String,
+    pattern: String,
+    file_pattern: Option<String>,
+    context_lines: Option<u32>,
+    case_insensitive: Option<bool>,
+    ws_patterns: &[String],
 ) -> Result<Vec<SearchMatch>, String> {
     let ws_path = Path::new(&workspace);
     let ws_canonical =
@@ -1563,6 +1723,9 @@ fn search_content(
     for entry in walker {
         let entry = entry.map_err(|e| format!("Walk error: {}", e))?;
         if entry.file_type().is_dir() {
+            continue;
+        }
+        if check_denylist_ws(entry.path(), ws_patterns).is_err() {
             continue;
         }
         if let Ok(meta) = entry.metadata() {
@@ -1731,10 +1894,12 @@ fn resolve_latex_engine(app: &tauri::AppHandle) -> Result<(String, &'static str)
         ("macos", "x86_64") => "tectonic-0.15.0-x86_64-apple-darwin.tar.gz",
         ("linux", "x86_64") => "tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz",
         ("linux", "aarch64") => "tectonic-0.15.0-aarch64-unknown-linux-musl.tar.gz",
-        (os, arch) => return Err(format!(
+        (os, arch) => {
+            return Err(format!(
             "No portable LaTeX engine available for {} {}. Install tectonic or pdflatex manually.",
             os, arch,
-        )),
+        ))
+        }
     };
     let url = format!(
         "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/{}",
@@ -1748,8 +1913,12 @@ fn resolve_latex_engine(app: &tauri::AppHandle) -> Result<(String, &'static str)
     // dedicated HTTP client crate would balloon the bundle for one feature.
     let curl_status = Command::new("curl")
         .args([
-            "-L", "--fail", "--silent", "--show-error",
-            "-o", archive_path.to_str().unwrap_or(""),
+            "-L",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "-o",
+            archive_path.to_str().unwrap_or(""),
             &url,
         ])
         .status()
@@ -1761,8 +1930,10 @@ fn resolve_latex_engine(app: &tauri::AppHandle) -> Result<(String, &'static str)
     // Extract the single `tectonic` binary from the tarball.
     let tar_status = Command::new("tar")
         .args([
-            "-xzf", archive_path.to_str().unwrap_or(""),
-            "-C", bin_dir.to_str().unwrap_or(""),
+            "-xzf",
+            archive_path.to_str().unwrap_or(""),
+            "-C",
+            bin_dir.to_str().unwrap_or(""),
             "tectonic",
         ])
         .status()
@@ -1796,20 +1967,28 @@ fn compile_latex(content: String, app: tauri::AppHandle) -> Result<String, Strin
     let dir = tempfile::tempdir().map_err(|e| format!("Cannot create temp dir: {}", e))?;
     let tex_path = dir.path().join("document.tex");
 
-    fs::write(&tex_path, &content)
-        .map_err(|e| format!("Cannot write .tex file: {}", e))?;
+    fs::write(&tex_path, &content).map_err(|e| format!("Cannot write .tex file: {}", e))?;
 
     let (engine, kind) = resolve_latex_engine(&app)?;
 
     let result = if kind == "tectonic" {
         Command::new(&engine)
-            .args(["-o", dir.path().to_str().unwrap_or("."), tex_path.to_str().unwrap_or("document.tex")])
+            .args([
+                "-o",
+                dir.path().to_str().unwrap_or("."),
+                tex_path.to_str().unwrap_or("document.tex"),
+            ])
             .current_dir(dir.path())
             .output()
             .map_err(|e| format!("Failed to run LaTeX engine ({}): {}", engine, e))?
     } else {
         Command::new(&engine)
-            .args(["-interaction=nonstopmode", "-output-directory", dir.path().to_str().unwrap_or("."), tex_path.to_str().unwrap_or("document.tex")])
+            .args([
+                "-interaction=nonstopmode",
+                "-output-directory",
+                dir.path().to_str().unwrap_or("."),
+                tex_path.to_str().unwrap_or("document.tex"),
+            ])
             .current_dir(dir.path())
             .output()
             .map_err(|e| format!("Failed to run LaTeX engine ({}): {}", engine, e))?
@@ -1818,11 +1997,18 @@ fn compile_latex(content: String, app: tauri::AppHandle) -> Result<String, Strin
     let pdf_path = dir.path().join("document.pdf");
     if !pdf_path.exists() {
         let stderr = String::from_utf8_lossy(&result.stderr);
-        return Err(format!("LaTeX compilation failed. The document may have syntax errors.\n\n{}", stderr.lines().filter(|l| l.starts_with('!')).take(5).collect::<Vec<_>>().join("\n")));
+        return Err(format!(
+            "LaTeX compilation failed. The document may have syntax errors.\n\n{}",
+            stderr
+                .lines()
+                .filter(|l| l.starts_with('!'))
+                .take(5)
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
     }
 
-    let pdf_bytes = fs::read(&pdf_path)
-        .map_err(|e| format!("Cannot read compiled PDF: {}", e))?;
+    let pdf_bytes = fs::read(&pdf_path).map_err(|e| format!("Cannot read compiled PDF: {}", e))?;
 
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&pdf_bytes);
@@ -1921,16 +2107,23 @@ fn should_index_path(name: &str, is_dir: bool) -> bool {
     }
     let lower = name.to_lowercase();
     let bad_ext = [
-        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".pdf", ".zip",
-        ".tar", ".gz", ".bz2", ".7z", ".woff", ".woff2", ".ttf", ".otf", ".eot",
-        ".mp3", ".mp4", ".mov", ".avi", ".webm", ".wasm", ".so", ".dll", ".dylib",
-        ".exe", ".o", ".a", ".rlib", ".lock",
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg", ".pdf", ".zip", ".tar", ".gz",
+        ".bz2", ".7z", ".woff", ".woff2", ".ttf", ".otf", ".eot", ".mp3", ".mp4", ".mov", ".avi",
+        ".webm", ".wasm", ".so", ".dll", ".dylib", ".exe", ".o", ".a", ".rlib", ".lock",
     ];
     !bad_ext.iter().any(|e| lower.ends_with(e))
 }
 
 #[tauri::command]
-fn workspace_chunks(workspace: String) -> Result<Vec<Chunk>, String> {
+fn workspace_chunks(
+    workspace: String,
+    ws_state: tauri::State<'_, Mutex<WorkspaceState>>,
+) -> Result<Vec<Chunk>, String> {
+    let ws_patterns = get_ws_patterns(&workspace, &ws_state);
+    workspace_chunks_impl(workspace, &ws_patterns)
+}
+
+fn workspace_chunks_impl(workspace: String, ws_patterns: &[String]) -> Result<Vec<Chunk>, String> {
     use walkdir::WalkDir;
 
     let ws = std::path::Path::new(&workspace);
@@ -1949,6 +2142,9 @@ fn workspace_chunks(workspace: String) -> Result<Vec<Chunk>, String> {
             Err(_) => continue,
         };
         if !entry.file_type().is_file() {
+            continue;
+        }
+        if check_denylist_ws(entry.path(), ws_patterns).is_err() {
             continue;
         }
         let metadata = match entry.metadata() {
@@ -2124,7 +2320,11 @@ fn embeddings_search(
         })
         .collect();
 
-    scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     scored.truncate(k);
     Ok(scored)
 }
@@ -2200,20 +2400,20 @@ fn read_pdf(
     let ws_patterns = get_ws_patterns(&workspace, &ws_state);
     check_denylist_ws(&resolved, &ws_patterns)?;
 
-    let metadata = fs::metadata(&resolved)
-        .map_err(|e| format!("Cannot stat '{}': {}", path, e))?;
+    let metadata = fs::metadata(&resolved).map_err(|e| format!("Cannot stat '{}': {}", path, e))?;
     if !metadata.is_file() {
         return Err(format!("'{}' is not a file", path));
     }
     if metadata.len() > MAX_PDF_BYTES {
         return Err(format!(
             "PDF '{}' is {} bytes; max supported is {} bytes (~50MB).",
-            path, metadata.len(), MAX_PDF_BYTES
+            path,
+            metadata.len(),
+            MAX_PDF_BYTES
         ));
     }
 
-    let bytes = fs::read(&resolved)
-        .map_err(|e| format!("Cannot read '{}': {}", path, e))?;
+    let bytes = fs::read(&resolved).map_err(|e| format!("Cannot read '{}': {}", path, e))?;
 
     // pdf-extract panics on some malformed PDFs. Catch the panic so we surface
     // a clean error instead of taking the renderer down.
@@ -2337,10 +2537,11 @@ fn cap_text(text: String, cap: usize) -> String {
     if bytes_total <= cap {
         text
     } else {
+        let cut = floor_char_boundary(&text, cap);
         format!(
             "{}\n\n… [{} more characters truncated; total extracted text was {} bytes]",
-            &text[..cap],
-            bytes_total - cap,
+            &text[..cut],
+            bytes_total - cut,
             bytes_total
         )
     }
@@ -2390,14 +2591,20 @@ fn xml_to_text(xml: &[u8]) -> Result<String, String> {
                     out.push('\t');
                 }
             }
-            Ok(Event::Text(t)) => {
-                if in_text_run {
-                    let s = t.unescape().map_err(|e| format!("XML decode failed: {}", e))?;
-                    out.push_str(&s);
-                }
+            Ok(Event::Text(t)) if in_text_run => {
+                let s = t
+                    .unescape()
+                    .map_err(|e| format!("XML decode failed: {}", e))?;
+                out.push_str(&s);
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(format!("XML parse failed at {}: {}", reader.buffer_position(), e)),
+            Err(e) => {
+                return Err(format!(
+                    "XML parse failed at {}: {}",
+                    reader.buffer_position(),
+                    e
+                ))
+            }
             _ => {}
         }
         buf.clear();
@@ -2428,8 +2635,8 @@ fn extract_docx_text(data_url: String) -> Result<String, String> {
     use std::io::Read;
     let bytes = decode_attachment_b64(&data_url, MAX_OFFICE_BYTES, "DOCX")?;
     let cursor = std::io::Cursor::new(&bytes);
-    let mut zip = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("DOCX is not a valid zip: {}", e))?;
+    let mut zip =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("DOCX is not a valid zip: {}", e))?;
     let mut document_xml = Vec::new();
     {
         let mut entry = zip
@@ -2454,8 +2661,8 @@ fn extract_pptx_text(data_url: String) -> Result<String, String> {
     use std::io::Read;
     let bytes = decode_attachment_b64(&data_url, MAX_OFFICE_BYTES, "PPTX")?;
     let cursor = std::io::Cursor::new(&bytes);
-    let mut zip = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("PPTX is not a valid zip: {}", e))?;
+    let mut zip =
+        zip::ZipArchive::new(cursor).map_err(|e| format!("PPTX is not a valid zip: {}", e))?;
 
     // Collect slide names so we can emit them in order: slide1, slide2, …
     let mut slide_names: Vec<String> = (0..zip.len())
@@ -2517,7 +2724,10 @@ fn extract_xlsx_text(data_url: String) -> Result<String, String> {
         let range = match wb.worksheet_range(name) {
             Ok(r) => r,
             Err(e) => {
-                out.push_str(&format!("--- Sheet: {} ---\n(failed to read: {})\n\n", name, e));
+                out.push_str(&format!(
+                    "--- Sheet: {} ---\n(failed to read: {})\n\n",
+                    name, e
+                ));
                 continue;
             }
         };
@@ -2527,8 +2737,7 @@ fn extract_xlsx_text(data_url: String) -> Result<String, String> {
             continue;
         }
         // Cap rows so a 100k-row sheet doesn't blow the output cap on its own.
-        let mut rows = 0usize;
-        for row in range.rows() {
+        for (rows, row) in range.rows().enumerate() {
             if rows >= 5_000 {
                 out.push_str("… (additional rows truncated)\n");
                 break;
@@ -2555,7 +2764,6 @@ fn extract_xlsx_text(data_url: String) -> Result<String, String> {
                 .collect();
             out.push_str(&cells.join("\t"));
             out.push('\n');
-            rows += 1;
         }
         out.push('\n');
     }
@@ -2597,8 +2805,10 @@ fn ocr_image(data_url: String) -> Result<String, String> {
     let dir = tempfile::tempdir().map_err(|e| format!("Cannot create temp dir: {}", e))?;
     let img_path = dir.path().join("input.png");
     {
-        let mut f = fs::File::create(&img_path).map_err(|e| format!("Cannot write image: {}", e))?;
-        f.write_all(&bytes).map_err(|e| format!("Cannot write image: {}", e))?;
+        let mut f =
+            fs::File::create(&img_path).map_err(|e| format!("Cannot write image: {}", e))?;
+        f.write_all(&bytes)
+            .map_err(|e| format!("Cannot write image: {}", e))?;
     }
 
     let out_stem = dir.path().join("out");
@@ -2646,8 +2856,8 @@ fn ocr_image(data_url: String) -> Result<String, String> {
     }
 
     let txt_path = dir.path().join("out.txt");
-    let text = fs::read_to_string(&txt_path)
-        .map_err(|e| format!("Cannot read OCR output: {}", e))?;
+    let text =
+        fs::read_to_string(&txt_path).map_err(|e| format!("Cannot read OCR output: {}", e))?;
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
         return Err("OCR produced no text — image may be too low-resolution or contain no recognizable characters.".to_string());
@@ -2664,17 +2874,15 @@ fn ocr_image(data_url: String) -> Result<String, String> {
 ///  - `whisper.cpp` (occasional alias)
 fn whisper_binary() -> Option<&'static str> {
     use std::process::Command;
-    for candidate in ["whisper-cpp", "whisper.cpp", "whisper"] {
-        if Command::new(candidate)
-            .arg("--help")
-            .output()
-            .map(|o| o.status.success() || !o.stderr.is_empty())
-            .unwrap_or(false)
-        {
-            return Some(candidate);
-        }
-    }
-    None
+    ["whisper-cpp", "whisper.cpp", "whisper"]
+        .into_iter()
+        .find(|candidate| {
+            Command::new(candidate)
+                .arg("--help")
+                .output()
+                .map(|o| o.status.success() || !o.stderr.is_empty())
+                .unwrap_or(false)
+        })
 }
 
 #[tauri::command]
@@ -2709,9 +2917,10 @@ fn transcribe_audio(data_url: String, filename: String) -> Result<String, String
         .unwrap_or("mp3");
     let audio_path = dir.path().join(format!("input.{}", ext));
     {
-        let mut f = fs::File::create(&audio_path)
+        let mut f =
+            fs::File::create(&audio_path).map_err(|e| format!("Cannot write audio: {}", e))?;
+        f.write_all(&bytes)
             .map_err(|e| format!("Cannot write audio: {}", e))?;
-        f.write_all(&bytes).map_err(|e| format!("Cannot write audio: {}", e))?;
     }
 
     // The two whisper variants take very different flags. Probe by binary
@@ -2720,14 +2929,18 @@ fn transcribe_audio(data_url: String, filename: String) -> Result<String, String
     let stem_str = stem.to_str().unwrap_or("input");
     let mut cmd = Command::new(bin);
     if bin == "whisper-cpp" || bin == "whisper.cpp" {
-        cmd.arg("-f").arg(audio_path.to_str().unwrap_or(""))
+        cmd.arg("-f")
+            .arg(audio_path.to_str().unwrap_or(""))
             .arg("-otxt")
-            .arg("-of").arg(stem_str);
+            .arg("-of")
+            .arg(stem_str);
     } else {
         // openai-whisper Python package CLI.
         cmd.arg(audio_path.to_str().unwrap_or(""))
-            .arg("--output_format").arg("txt")
-            .arg("--output_dir").arg(dir.path().to_str().unwrap_or(""));
+            .arg("--output_format")
+            .arg("txt")
+            .arg("--output_dir")
+            .arg(dir.path().to_str().unwrap_or(""));
     }
 
     let mut child = cmd
@@ -2764,8 +2977,8 @@ fn transcribe_audio(data_url: String, filename: String) -> Result<String, String
 
     // Both variants drop a `.txt` next to the input stem.
     let txt_path = std::path::PathBuf::from(format!("{}.txt", stem_str));
-    let text = fs::read_to_string(&txt_path)
-        .map_err(|e| format!("Cannot read transcript: {}", e))?;
+    let text =
+        fs::read_to_string(&txt_path).map_err(|e| format!("Cannot read transcript: {}", e))?;
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
         return Err("Transcript was empty (audio may be silent or unintelligible).".to_string());
@@ -2789,7 +3002,12 @@ fn run_python(code: String) -> Result<String, String> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("python3 not found. Install Python 3: brew install python3. Error: {}", e))?;
+        .map_err(|e| {
+            format!(
+                "python3 not found. Install Python 3: brew install python3. Error: {}",
+                e
+            )
+        })?;
 
     let timeout = Duration::from_secs(30);
     let start = std::time::Instant::now();
@@ -2800,9 +3018,13 @@ fn run_python(code: String) -> Result<String, String> {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 let mut result = String::new();
-                if !stdout.is_empty() { result.push_str(&stdout); }
+                if !stdout.is_empty() {
+                    result.push_str(&stdout);
+                }
                 if !stderr.is_empty() {
-                    if !result.is_empty() { result.push('\n'); }
+                    if !result.is_empty() {
+                        result.push('\n');
+                    }
                     result.push_str(&stderr);
                 }
                 if result.is_empty() {
@@ -2843,8 +3065,7 @@ pub fn run() {
                         .title("Database Error")
                         .kind(tauri_plugin_dialog::MessageDialogKind::Error)
                         .blocking_show();
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
+                    return Err(Box::new(std::io::Error::other(
                         "Database initialization failed",
                     )));
                 }
@@ -2885,6 +3106,7 @@ pub fn run() {
             git_log,
             git_blame,
             write_file,
+            delete_file,
             edit_file,
             write_temp_file,
             os_temp_dir,
@@ -2972,9 +3194,8 @@ mod tests {
         // Resolve a path that definitely exists within the workspace
         let result = resolve_path(&workspace_str, "src-tauri");
         // src-tauri might not exist relative to cwd, but the function should not panic
-        match result {
-            Ok(p) => assert!(p.to_string_lossy().contains("src-tauri")),
-            Err(_) => {} // acceptable if path doesn't exist
+        if let Ok(p) = result {
+            assert!(p.to_string_lossy().contains("src-tauri"));
         }
     }
 
@@ -2984,6 +3205,76 @@ mod tests {
         let workspace_str = workspace.to_string_lossy().to_string();
         let result = resolve_path(&workspace_str, "../etc/passwd");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_write_path_allows_new_workspace_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        let resolved = resolve_write_path(&workspace, "src/new-file.txt").unwrap();
+        assert!(resolved.starts_with(tmp.path().canonicalize().unwrap()));
+        assert!(resolved.ends_with("src/new-file.txt"));
+    }
+
+    #[test]
+    fn test_resolve_write_path_rejects_parent_traversal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        let result = resolve_write_path(&workspace, "../escape.txt");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_write_temp_file_allows_temp_path() {
+        let path =
+            std::env::temp_dir().join(format!("goatllm-write-temp-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let result = write_temp_file(path.to_string_lossy().to_string(), "ok".to_string());
+        assert!(result.is_ok());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "ok");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_temp_file_rejects_parent_dir_escape() {
+        let cwd = std::env::current_dir().unwrap();
+        let filename = format!("goatllm-temp-escape-{}.txt", std::process::id());
+        let target = cwd.join(&filename);
+        let escaped = std::path::Path::new("/tmp")
+            .join("..")
+            .join(cwd.strip_prefix("/").unwrap())
+            .join(&filename);
+
+        let _ = std::fs::remove_file(&target);
+        let result = write_temp_file(escaped.to_string_lossy().to_string(), "nope".to_string());
+
+        assert!(result.is_err());
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn test_resolve_child_path_allows_nested_relative_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let resolved =
+            resolve_child_path(tmp.path(), "skills/impeccable/SKILL.md", "test").unwrap();
+        assert!(resolved.starts_with(tmp.path().canonicalize().unwrap()));
+        assert!(resolved.ends_with("skills/impeccable/SKILL.md"));
+    }
+
+    #[test]
+    fn test_resolve_child_path_rejects_parent_escape_before_parent_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = format!("goatllm-child-escape-{}", std::process::id());
+        let result = resolve_child_path(tmp.path(), &format!("../{}/skill.md", outside), "test");
+        assert!(result.is_err());
+        assert!(!tmp.path().parent().unwrap().join(outside).exists());
+    }
+
+    #[test]
+    fn test_escape_sql_like_query_escapes_wildcards() {
+        assert_eq!(escape_sql_like_query("100%_done"), "%100\\%\\_done%");
+        assert_eq!(escape_sql_like_query(r"C:\tmp"), r"%C:\\tmp%");
     }
 
     #[test]
@@ -3013,9 +3304,9 @@ mod tests {
         assert_eq!(parse_line_range("abc"), None);
         assert_eq!(parse_line_range("10-abc"), None);
         assert_eq!(parse_line_range(""), None);
-        assert_eq!(parse_line_range("0"), None);          // 0-line not allowed
+        assert_eq!(parse_line_range("0"), None); // 0-line not allowed
         assert_eq!(parse_line_range("0-5"), None);
-        assert_eq!(parse_line_range("50-10"), None);      // end < start
+        assert_eq!(parse_line_range("50-10"), None); // end < start
     }
 
     #[test]
@@ -3035,7 +3326,10 @@ mod tests {
 
     #[test]
     fn test_chunk_file_window_overlap() {
-        let body = (1..=200).map(|i| format!("line{}", i)).collect::<Vec<_>>().join("\n");
+        let body = (1..=200)
+            .map(|i| format!("line{}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
         let chunks = chunk_file("big.rs", &body);
         assert!(chunks.len() >= 2);
         // Overlap: last chunk's start_line should be before previous chunk's end_line
@@ -3071,8 +3365,21 @@ mod tests {
     }
 
     #[test]
+    fn test_workspace_chunks_skip_denylisted_files() {
+        let tmp = make_test_workspace();
+        write_test_file(tmp.path(), ".env", "SECRET_TOKEN=abc\n");
+        write_test_file(tmp.path(), "src.txt", "visible token\n");
+        let ws = tmp.path().to_string_lossy().to_string();
+
+        let chunks = workspace_chunks_impl(ws, &[]).unwrap();
+
+        assert!(chunks.iter().any(|chunk| chunk.file_path == "src.txt"));
+        assert!(!chunks.iter().any(|chunk| chunk.file_path == ".env"));
+    }
+
+    #[test]
     fn test_f32_blob_roundtrip() {
-        let v = vec![1.0f32, -2.5, 0.0, 3.14159, f32::MIN_POSITIVE];
+        let v = vec![1.0f32, -2.5, 0.0, std::f32::consts::PI, f32::MIN_POSITIVE];
         let blob = f32_to_blob(&v);
         let back = blob_to_f32(&blob);
         assert_eq!(v, back);
@@ -3089,6 +3396,22 @@ mod tests {
 
         let d = vec![-1.0f32, 0.0, 0.0];
         assert!((cosine(&a, &d) + 1.0).abs() < 1e-6); // anti-parallel
+    }
+
+    #[test]
+    fn test_floor_char_boundary_handles_multibyte_text() {
+        let text = "hello नमस्ते";
+        let mid_codepoint = "hello न".len() - 1;
+        let cut = floor_char_boundary(text, mid_codepoint);
+        assert!(text.is_char_boundary(cut));
+        assert_eq!(&text[..cut], "hello ");
+    }
+
+    #[test]
+    fn test_cap_text_does_not_split_utf8() {
+        let capped = cap_text("नमस्ते world".to_string(), 5);
+        assert!(capped.starts_with("न"));
+        assert!(capped.contains("more characters truncated"));
     }
 
     #[test]
@@ -3125,7 +3448,7 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "alpha\nbeta\ngamma\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "beta".to_string(), None, None, None).unwrap();
+        let hits = search_content_impl(ws, "beta".to_string(), None, None, None, &[]).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].line, 2);
         assert_eq!(hits[0].content, "beta");
@@ -3137,16 +3460,18 @@ mod tests {
     #[test]
     fn test_search_content_context_lines_mid_file() {
         let tmp = make_test_workspace();
-        write_test_file(
-            tmp.path(),
-            "a.txt",
-            "l1\nl2\nl3\nMATCH\nl5\nl6\nl7\n",
-        );
+        write_test_file(tmp.path(), "a.txt", "l1\nl2\nl3\nMATCH\nl5\nl6\nl7\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "MATCH".to_string(), None, Some(2), None).unwrap();
+        let hits = search_content_impl(ws, "MATCH".to_string(), None, Some(2), None, &[]).unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].context_before, vec!["l2".to_string(), "l3".to_string()]);
-        assert_eq!(hits[0].context_after, vec!["l5".to_string(), "l6".to_string()]);
+        assert_eq!(
+            hits[0].context_before,
+            vec!["l2".to_string(), "l3".to_string()]
+        );
+        assert_eq!(
+            hits[0].context_after,
+            vec!["l5".to_string(), "l6".to_string()]
+        );
     }
 
     #[test]
@@ -3154,11 +3479,14 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "MATCH\nl2\nl3\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "MATCH".to_string(), None, Some(5), None).unwrap();
+        let hits = search_content_impl(ws, "MATCH".to_string(), None, Some(5), None, &[]).unwrap();
         assert_eq!(hits.len(), 1);
         // No lines before line 1 — must be empty, not panic, not negative-index.
         assert!(hits[0].context_before.is_empty());
-        assert_eq!(hits[0].context_after, vec!["l2".to_string(), "l3".to_string()]);
+        assert_eq!(
+            hits[0].context_after,
+            vec!["l2".to_string(), "l3".to_string()]
+        );
     }
 
     #[test]
@@ -3166,9 +3494,12 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "l1\nl2\nMATCH\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "MATCH".to_string(), None, Some(5), None).unwrap();
+        let hits = search_content_impl(ws, "MATCH".to_string(), None, Some(5), None, &[]).unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0].context_before, vec!["l1".to_string(), "l2".to_string()]);
+        assert_eq!(
+            hits[0].context_before,
+            vec!["l1".to_string(), "l2".to_string()]
+        );
         // No lines after the match — must be empty, not panic on out-of-bounds.
         assert!(hits[0].context_after.is_empty());
     }
@@ -3178,11 +3509,18 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "hello\nHELLO\nHelloWorld\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let sensitive =
-            search_content(ws.clone(), "hello".to_string(), None, None, Some(false)).unwrap();
+        let sensitive = search_content_impl(
+            ws.clone(),
+            "hello".to_string(),
+            None,
+            None,
+            Some(false),
+            &[],
+        )
+        .unwrap();
         assert_eq!(sensitive.len(), 1);
         let insensitive =
-            search_content(ws, "hello".to_string(), None, None, Some(true)).unwrap();
+            search_content_impl(ws, "hello".to_string(), None, None, Some(true), &[]).unwrap();
         assert_eq!(insensitive.len(), 3);
     }
 
@@ -3193,7 +3531,8 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "WORLD\nworld\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "(?i)world".to_string(), None, None, Some(true)).unwrap();
+        let hits =
+            search_content_impl(ws, "(?i)world".to_string(), None, None, Some(true), &[]).unwrap();
         assert_eq!(hits.len(), 2);
     }
 
@@ -3202,10 +3541,29 @@ mod tests {
         let tmp = make_test_workspace();
         write_test_file(tmp.path(), "a.txt", "l1\nFOO\nl3\n");
         let ws = tmp.path().to_string_lossy().to_string();
-        let hits = search_content(ws, "foo".to_string(), None, Some(1), Some(true)).unwrap();
+        let hits =
+            search_content_impl(ws, "foo".to_string(), None, Some(1), Some(true), &[]).unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].content, "FOO");
         assert_eq!(hits[0].context_before, vec!["l1".to_string()]);
         assert_eq!(hits[0].context_after, vec!["l3".to_string()]);
+    }
+
+    #[test]
+    fn test_search_content_skips_denylisted_files() {
+        let tmp = make_test_workspace();
+        write_test_file(tmp.path(), ".env", "SECRET_TOKEN=abc\n");
+        write_test_file(
+            tmp.path(),
+            "visible.txt",
+            "SECRET_TOKEN is mentioned here too\n",
+        );
+        let ws = tmp.path().to_string_lossy().to_string();
+
+        let hits =
+            search_content_impl(ws, "SECRET_TOKEN".to_string(), None, None, None, &[]).unwrap();
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].file, "visible.txt");
     }
 }
