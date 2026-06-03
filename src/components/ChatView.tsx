@@ -155,6 +155,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const activeId = useChatStore((s) => s.activeId);
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
+  const workspaceHealthEnabled = useChatStore((s) => s.workspaceHealthEnabled);
   const workspacePath = useChatStore((s) => s.workspacePath);
   const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
@@ -322,7 +323,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                 >
                   <ActiveSkillsBar />
                   {agentMode && <ApprovalQueue />}
-                  {agentMode && <WorkspaceHealthPanel />}
+                  {agentMode && workspaceHealthEnabled && <WorkspaceHealthPanel />}
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>

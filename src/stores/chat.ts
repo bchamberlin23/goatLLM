@@ -15,6 +15,7 @@ import {
   deleteMessageFromDb,
   searchMessages,
 } from "../lib/db";
+import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
@@ -703,6 +704,12 @@ interface ChatStore {
    *  stays in sync with files on disk. */
   upsertDesignArtifact: (conversationId: string, title: string, code: string) => void;
 
+  // Workspace file viewer (non-persisted) — opens a workspace file in the
+  // artifact panel canvas. Set from the sidebar WorkspaceFileTree or the
+  // in-panel WorkspaceFileBrowser. Mutually exclusive with attachments.
+  workspaceFile: { path: string; name: string; content: string } | null;
+  setWorkspaceFile: (f: { path: string; name: string; content: string } | null) => void;
+
   // Attachment viewer (non-persisted) — opens an attachment from a message bubble
   // in the same side panel slot as artifacts. Mutually exclusive with the
   // artifact panel; opening one closes the other.
@@ -842,6 +849,16 @@ interface ChatStore {
   setFreeWebSearch: (enabled: boolean) => void;
   /** Stable per-install token sent as the `Token` header. Generated on first use. */
   freeWebSearchToken: string;
+
+  // Search Backend & Memory Manager Settings
+  searchBackend: "searxng" | "tavily";
+  setSearchBackend: (backend: "searxng" | "tavily") => void;
+  memoryEnabled: boolean;
+  setMemoryEnabled: (enabled: boolean) => void;
+  searxngStatus: string | null;
+  setSearxngStatus: (status: string | null) => void;
+  workspaceHealthEnabled: boolean;
+  setWorkspaceHealthEnabled: (enabled: boolean) => void;
 
   /** Per-turn web search call counter. Resets on each send. Caps the model at
    *  2 searches per turn to prevent runaway search loops. */
@@ -1093,6 +1110,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       artifactPanelOpen: false,
       activeArtifactId: null,
       _artifactStatePerConv: {},
+      workspaceFile: null,
       activeAttachment: null,
       attachmentPanelOpen: false,
       subagentPanelOpen: false,
@@ -1151,6 +1169,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       freeWebSearch: false,
       chatCodeExec: false,
       freeWebSearchToken: "",
+      searchBackend: "searxng",
+      memoryEnabled: true,
+      searxngStatus: null,
+      workspaceHealthEnabled: false,
       webSearchCount: 0,
       autoArtifacts: true,
       officeArtifacts: true,
@@ -1878,10 +1900,24 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({
           activeArtifactId: id,
           artifactPanelOpen: !!id,
-          // Opening an artifact closes the attachment viewer (one side panel slot).
+          // Opening an artifact closes the attachment/workspace viewer.
           activeAttachment: id ? null : get().activeAttachment,
           attachmentPanelOpen: id ? false : get().attachmentPanelOpen,
+          workspaceFile: id ? null : get().workspaceFile,
           sidebarOpen: id ? false : get().sidebarOpen,
+        });
+      },
+
+      setWorkspaceFile: (f) => {
+        set({
+          workspaceFile: f,
+          // Opening a workspace file shows the artifact panel.
+          artifactPanelOpen: !!f,
+          // Mutual exclusion: clear other panel state.
+          activeArtifactId: f ? null : get().activeArtifactId,
+          activeAttachment: f ? null : get().activeAttachment,
+          attachmentPanelOpen: f ? false : get().attachmentPanelOpen,
+          sidebarOpen: f ? false : get().sidebarOpen,
         });
       },
 
@@ -1892,6 +1928,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // Mutual exclusion with the artifact panel.
           activeArtifactId: a ? null : get().activeArtifactId,
           artifactPanelOpen: a ? false : get().artifactPanelOpen,
+          workspaceFile: a ? null : get().workspaceFile,
           sidebarOpen: a ? false : get().sidebarOpen,
         });
       },
@@ -2086,6 +2123,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           for (let i = 0; i < blocks.length; i++) {
             const { kind, code, title } = blocks[i];
 
+            // ── Edit-mode detection ───────────────────────────────────────
+            // When the fence body contains <<<EDIT>>> markers, apply the
+            // edits surgically to the existing artifact instead of doing a
+            // full replacement.  Falls through to normal replacement if the
+            // target artifact doesn't exist yet (can't edit what doesn't
+            // exist) or if edit application produces no change.
+            const editMode = isEditArtifact(code);
+
             const targetIdx = (() => {
               const want = normalizeTitle(title);
               for (let j = next.length - 1; j >= 0; j--) {
@@ -2101,6 +2146,105 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             })();
 
             const now = Date.now();
+
+            if (editMode && targetIdx >= 0) {
+              // ── Selective edit path ───────────────────────────────────
+              const target = next[targetIdx];
+              const edits = parseEditBlocks(code);
+
+              const versions = target.versions ?? [];
+              const activeIdx = target.activeVersionIndex ?? versions.length - 1;
+              const last = versions[activeIdx];
+              const isCurrentStream = last &&
+                last.streaming &&
+                last.messageId === messageId &&
+                last.fenceIndex === i;
+
+              // If it is currently streaming, its code has already been updated
+              // to the incremental edit markers. We need the base version from
+              // before streaming started.
+              const baseCode = isCurrentStream && activeIdx > 0
+                ? versions[activeIdx - 1].code
+                : target.code;
+
+              let finalPatchedCode = baseCode;
+              let applySuccess = false;
+
+              if (edits.length > 0) {
+                const result = applyEditBlocks(baseCode, edits);
+                if (result.applied > 0) {
+                  finalPatchedCode = result.code;
+                  applySuccess = true;
+                }
+              }
+
+              if (applySuccess) {
+                if (isCurrentStream) {
+                  const promoted: ArtifactVersion = {
+                    ...last,
+                    code: finalPatchedCode,
+                    title,
+                    createdAt: now,
+                    streaming: false,
+                  };
+                  const newVersions = [...versions.slice(0, activeIdx), promoted, ...versions.slice(activeIdx + 1)];
+                  next[targetIdx] = {
+                    ...target,
+                    code: finalPatchedCode,
+                    title,
+                    messageId,
+                    createdAt: now,
+                    versions: newVersions,
+                    activeVersionIndex: activeIdx,
+                  };
+                } else {
+                  const trimmed = activeIdx < versions.length - 1 ? versions.slice(0, activeIdx + 1) : versions;
+                  const newVersion: ArtifactVersion = {
+                    code: finalPatchedCode,
+                    title,
+                    createdAt: now,
+                    source: "agent",
+                    messageId,
+                    fenceIndex: i,
+                  };
+                  const newVersions = [...trimmed, newVersion];
+                  next[targetIdx] = {
+                    ...target,
+                    code: finalPatchedCode,
+                    title,
+                    messageId,
+                    createdAt: now,
+                    versions: newVersions,
+                    activeVersionIndex: newVersions.length - 1,
+                  };
+                }
+              } else {
+                // Edit failed to apply or parse. Revert the streaming version
+                // (if present) so it doesn't display raw <<<EDIT>>> markers.
+                if (isCurrentStream) {
+                  const promoted: ArtifactVersion = {
+                    ...last,
+                    code: baseCode,
+                    title,
+                    createdAt: now,
+                    streaming: false,
+                  };
+                  const newVersions = [...versions.slice(0, activeIdx), promoted, ...versions.slice(activeIdx + 1)];
+                  next[targetIdx] = {
+                    ...target,
+                    code: baseCode,
+                    title,
+                    messageId,
+                    createdAt: now,
+                    versions: newVersions,
+                    activeVersionIndex: activeIdx,
+                  };
+                }
+              }
+              updatedIds.add(target.id);
+              if (activeId === null) activeId = target.id;
+              continue; // edit mode processed — skip normal paths
+            }
 
             if (targetIdx >= 0) {
               const target = next[targetIdx];
@@ -2161,6 +2305,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               updatedIds.add(target.id);
               if (activeId === null) activeId = target.id;
             } else {
+              // Edit-mode with no existing artifact to patch — skip rather
+              // than creating a new artifact whose "code" is raw edit markers.
+              if (editMode) continue;
               const id = `${messageId}-${i}`;
               const newVersion: ArtifactVersion = {
                 code,
@@ -2326,9 +2473,32 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             const last = versions[activeIdx];
             if (!last || !last.streaming || last.messageId !== messageId) return a;
             touched = true;
-            const cleared: ArtifactVersion = { ...last, streaming: false };
+
+            // ── Edit-mode resolution ─────────────────────────────────────
+            // If the streaming version's code contains <<<EDIT>>> markers,
+            // apply the edits against the prior version's code.  This is the
+            // streaming counterpart of the edit path in detectArtifacts.
+            let finalCode = last.code;
+            if (isEditArtifact(last.code) && activeIdx > 0) {
+              const baseVersion = versions[activeIdx - 1];
+              if (baseVersion) {
+                const edits = parseEditBlocks(last.code);
+                if (edits.length > 0) {
+                  const result = applyEditBlocks(baseVersion.code, edits);
+                  if (result.applied > 0) {
+                    finalCode = result.code;
+                  } else {
+                    finalCode = baseVersion.code;
+                  }
+                } else {
+                  finalCode = baseVersion.code;
+                }
+              }
+            }
+
+            const cleared: ArtifactVersion = { ...last, code: finalCode, streaming: false };
             const newVersions = [...versions.slice(0, activeIdx), cleared, ...versions.slice(activeIdx + 1)];
-            return { ...a, versions: newVersions };
+            return { ...a, code: finalCode, versions: newVersions };
           });
           if (!touched) return {};
           return { artifacts: { ...state.artifacts, [conversationId]: next } };
@@ -2650,6 +2820,21 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       setFreeWebSearch: (enabled) => {
         set({ freeWebSearch: enabled });
         try { localStorage.setItem("goatllm-free-web-search", enabled ? "true" : "false"); } catch {}
+      },
+      setSearchBackend: (backend) => {
+        set({ searchBackend: backend });
+        try { localStorage.setItem("goatllm-search-backend", backend); } catch {}
+      },
+      setMemoryEnabled: (enabled) => {
+        set({ memoryEnabled: enabled });
+        try { localStorage.setItem("goatllm-memory-enabled", enabled ? "true" : "false"); } catch {}
+      },
+      setSearxngStatus: (status) => {
+        set({ searxngStatus: status });
+      },
+      setWorkspaceHealthEnabled: (enabled) => {
+        set({ workspaceHealthEnabled: enabled });
+        try { localStorage.setItem("goatllm-workspace-health-enabled", enabled ? "true" : "false"); } catch {}
       },
       incrementWebSearchCount: () => {
         set((s) => ({ webSearchCount: s.webSearchCount + 1 }));
@@ -3180,6 +3365,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          let searchBackend = localStorage.getItem("goatllm-search-backend") as any;
+          if (searchBackend !== "searxng" && searchBackend !== "tavily") {
+            searchBackend = "searxng";
+          }
+          const memoryEnabled = localStorage.getItem("goatllm-memory-enabled") !== "false";
+          const workspaceHealthEnabled = localStorage.getItem("goatllm-workspace-health-enabled") === "true";
           if (!freeWebSearchToken) {
             try {
               freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -3339,6 +3530,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearch,
             chatCodeExec,
             freeWebSearchToken,
+            searchBackend,
+            memoryEnabled,
+            searxngStatus: null,
+            workspaceHealthEnabled,
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
@@ -3399,6 +3594,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          let searchBackend = localStorage.getItem("goatllm-search-backend") as any;
+          if (searchBackend !== "searxng" && searchBackend !== "tavily") {
+            searchBackend = "searxng";
+          }
+          const memoryEnabled = localStorage.getItem("goatllm-memory-enabled") !== "false";
+          const workspaceHealthEnabled = localStorage.getItem("goatllm-workspace-health-enabled") === "true";
           if (!freeWebSearchToken) {
             try {
               freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -3425,6 +3626,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearch,
             chatCodeExec,
             freeWebSearchToken,
+            searchBackend,
+            memoryEnabled,
+            searxngStatus: null,
+            workspaceHealthEnabled,
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,

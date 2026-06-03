@@ -538,4 +538,75 @@ export const WRITE_TOOLS = {
       });
     },
   }),
+
+  manage_memory: tool({
+    description:
+      "Manage the assistant's long-term memory. Actions: 'add' (args: text, category), 'delete' (args: id), 'list' (args: category filter), 'search' (args: query). Valid categories: 'fact', 'contact', 'preference', 'task'.",
+    inputSchema: z.object({
+      action: z.enum(["add", "delete", "list", "search"]),
+      text: z.string().optional().describe("Text of the memory to add"),
+      category: z.string().optional().describe("Category of the memory to add (default 'fact')"),
+      id: z.string().optional().describe("Unique ID of the memory to delete"),
+      query: z.string().optional().describe("Query to search memories with"),
+    }),
+    execute: async ({ action, text, category, id, query }) => {
+      const { addMemory, deleteMemory, listMemories, searchMemories } = await import("../../memory");
+      
+      try {
+        if (action === "add") {
+          if (!text) return "Error: 'text' parameter is required for 'add' action.";
+          const cat = category || "fact";
+          await addMemory(text, cat);
+          return `Successfully remembered: [${cat}] ${text}`;
+        }
+        
+        if (action === "delete") {
+          if (!id) return "Error: 'id' parameter is required for 'delete' action.";
+          await deleteMemory(id);
+          return `Successfully deleted memory with ID: ${id}`;
+        }
+        
+        if (action === "list") {
+          const memories = await listMemories(category);
+          if (memories.length === 0) {
+            return category ? `No memories found in category '${category}'.` : "No memories found.";
+          }
+          return JSON.stringify(
+            memories.map((m) => ({
+              id: m.id,
+              category: m.category,
+              text: m.text,
+              uses: m.uses,
+              created_at: new Date(m.created_at * 1000).toISOString().slice(0, 10),
+            })),
+            null,
+            2
+          );
+        }
+        
+        if (action === "search") {
+          if (!query) return "Error: 'query' parameter is required for 'search' action.";
+          const results = await searchMemories(query);
+          if (results.length === 0) {
+            return `No memories matched query: "${query}"`;
+          }
+          return JSON.stringify(
+            results.map((r) => ({
+              id: r.id,
+              category: r.category,
+              text: r.text,
+              score: Number(r.score.toFixed(3)),
+              uses: r.uses,
+            })),
+            null,
+            2
+          );
+        }
+        
+        return "Error: Unknown action.";
+      } catch (e) {
+        return `manage_memory failed: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    },
+  }),
 };

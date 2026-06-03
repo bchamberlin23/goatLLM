@@ -20,6 +20,7 @@ import { providerSupportsNativePdf } from "../lib/native-pdf";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
+import type { ResearchProgress } from "../lib/deep-research";
 
 /**
  * Play a short click/ding sound using the Web Audio API.
@@ -244,7 +245,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const researchMode = useChatStore((s) => s.researchMode);
   const toggleResearchMode = useChatStore((s) => s.toggleResearchMode);
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
-  const freeWebSearch = useChatStore((s) => s.freeWebSearch);
+  const searchBackend = useChatStore((s) => s.searchBackend);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
 
   const [error, setError] = useState<string | null>(null);
@@ -728,9 +729,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (isResearchMode) {
       useChatStore.getState().setResearchMode(false);
     }
-    const hasTavilyKey = !!useChatStore.getState().tavilyApiKey;
-    const hasFreeWebSearch = useChatStore.getState().freeWebSearch;
-    const hasWebSearch = hasTavilyKey || hasFreeWebSearch;
+    const currentBackend = useChatStore.getState().searchBackend;
+    const hasWebSearch = currentBackend === "tavily" ? !!useChatStore.getState().tavilyApiKey : true;
     // Cached attachments unlock the read_attachment / search_attachment tools
     // even in plain chat with no web backend, so the model can navigate a
     // 600-page book the user uploaded.
@@ -863,6 +863,126 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
     logMessage(convId!, "assistant", "", assistantMsg.id);
     const streamStartTime = performance.now();
+
+    if (isResearchMode) {
+      try {
+        const { runDeepResearch } = await import("../lib/deep-research");
+        const logLines: string[] = [];
+        const updateLog = (progress: ResearchProgress) => {
+          let logMarkdown = "";
+          const phaseText = progress.phase ? progress.phase.toUpperCase() : "RESEARCHING";
+          logMarkdown += `### 🔍 Deep Researching\n\n`;
+          logMarkdown += `| Metric | Status |\n`;
+          logMarkdown += `| :--- | :--- |\n`;
+          logMarkdown += `| **Phase** | ${phaseText} |\n`;
+          if (progress.round !== undefined) {
+            logMarkdown += `| **Round** | Round ${progress.round} |\n`;
+          }
+          if (progress.total_sources !== undefined) {
+            logMarkdown += `| **Sources Found** | ${progress.total_sources} |\n`;
+          }
+          if (progress.total_findings !== undefined) {
+            logMarkdown += `| **Findings Extracted** | ${progress.total_findings} |\n`;
+          }
+          logMarkdown += `\n`;
+
+          if (progress.phase === "planning") {
+            logLines.push("📋 Analyzing research question and formulating plan...");
+          } else if (progress.phase === "searching") {
+            if (progress.query_preview) {
+              logLines.push(`🔍 Round ${progress.round}: Generating queries. E.g. "${progress.query_preview}"`);
+            } else {
+              logLines.push(`🔍 Round ${progress.round}: Finding sources via search engines...`);
+            }
+          } else if (progress.phase === "reading") {
+            if (progress.url) {
+              const displayTitle = progress.title || progress.url;
+              const shortTitle = displayTitle.length > 55 ? displayTitle.slice(0, 52) + "..." : displayTitle;
+              logLines.push(`📖 Reading page: [${shortTitle}](${progress.url})`);
+            } else if (progress.new_sources) {
+              logLines.push(`🧠 Round ${progress.round}: Extracted findings from ${progress.new_sources} new sources.`);
+            }
+          } else if (progress.phase === "analyzing") {
+            logLines.push(`🧠 Round ${progress.round}: Synthesizing findings and updating draft report...`);
+          } else if (progress.phase === "writing") {
+            if (progress.message) {
+              logLines.push(`✍️ Writing: ${progress.message}`);
+            } else {
+              logLines.push(`✍️ Formulating final magazine-quality report...`);
+            }
+          } else if (progress.phase === "warning") {
+            logLines.push(`⚠️ Warning: ${progress.message}`);
+          }
+
+          const dedupedLogs: string[] = [];
+          for (const line of logLines) {
+            if (dedupedLogs.length === 0 || dedupedLogs[dedupedLogs.length - 1] !== line) {
+              dedupedLogs.push(line);
+            }
+          }
+
+          logMarkdown += `#### Execution Logs\n\n`;
+          logMarkdown += dedupedLogs.slice(-10).map((l) => `- ${l}`).join("\n");
+
+          updateMessage(convId!, assistantMsg.id, { content: logMarkdown });
+        };
+
+        const finalReport = await runDeepResearch(
+          trimmed,
+          llmConfig,
+          updateLog,
+          ac.signal
+        );
+
+        const wordCount = finalReport.split(/\s+/).length;
+        updateMessage(convId!, assistantMsg.id, {
+          content: finalReport,
+          isStreaming: false,
+          streamingDurationMs: performance.now() - streamStartTime,
+          turnDurationMs: performance.now() - streamStartTime,
+          outputTokens: Math.round(wordCount * 1.33),
+        });
+
+        stopStreaming(convId!);
+        if (finalReport.trim()) {
+          detectArtifacts(convId!, assistantMsg.id, finalReport);
+        }
+        finalizeStreamingArtifacts(convId!, assistantMsg.id);
+
+        const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
+        if (latestConv && latestConv.isGeneratingTitle && latestConv.title !== "New Conversation") {
+          setTitleGenerating(convId!, false);
+        }
+
+        if (useChatStore.getState().completionSound) {
+          playCompletionSound();
+        }
+        const next = dequeueMessage(convId!);
+        if (next) {
+          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
+        }
+      } catch (err) {
+        if (ac.signal.aborted) {
+          updateMessage(convId!, assistantMsg.id, {
+            content: "Research aborted.",
+            isStreaming: false,
+            interrupted: true,
+          });
+          stopStreaming(convId!);
+          return;
+        }
+        const errMsg = err instanceof Error ? err.message : String(err);
+        updateMessage(convId!, assistantMsg.id, {
+          content: `Research Error: ${errMsg}`,
+          isStreaming: false,
+        });
+        logError(convId!, errMsg, "deep-research");
+        setError(errMsg);
+        stopStreaming(convId!);
+      }
+      return;
+    }
+
     const editedFilesThisTurn = new Set<string>();
     let capturedOutputTokens: number | undefined;
     let capturedGenerationMs: number | undefined;
@@ -1115,7 +1235,30 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       }
     };
 
-    await streamChat(llmMessages, systemPrompt, llmConfig, {
+    // Hybrid memory search & prompt injection
+    let finalSystemPrompt = systemPrompt;
+    const isMemoryEnabled = useChatStore.getState().memoryEnabled;
+    if (isMemoryEnabled && trimmed) {
+      try {
+        const { searchMemories, incrementMemoryUses } = await import("../lib/memory");
+        const memories = await searchMemories(trimmed);
+        if (memories && memories.length > 0) {
+          const formattedMemories = memories
+            .map((m) => `- [Category: ${m.category}] ${m.text}`)
+            .join("\n");
+          finalSystemPrompt += `\n<memories>\n${formattedMemories}\nThese are your long-term memories relevant to this prompt. Use them if helpful.\n</memories>\n`;
+          
+          // Increment uses for injected memories
+          for (const m of memories) {
+            await incrementMemoryUses(m.id).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to search/inject memories:", e);
+      }
+    }
+
+    await streamChat(llmMessages, finalSystemPrompt, llmConfig, {
       onToken: (chunk) => {
         appendToMessage(convId!, assistantMsg.id, chunk);
         // Pipe any partial artifact bodies into the canvas for live code
@@ -1590,7 +1733,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                       // agent mode. Hidden when there's no search backend
                       // available in chat mode so we don't show a dead
                       // option.
-                      ...((agentMode || tavilyApiKey || freeWebSearch)
+                      ...((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true))
                         ? [{
                             icon: Telescope,
                             label: researchMode ? "Research — on" : "Research",

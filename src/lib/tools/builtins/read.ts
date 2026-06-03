@@ -293,7 +293,7 @@ export const READ_ONLY_TOOLS = {
 
   web_search: tool({
     description:
-      "Search the web. Returns up to 5 results with title, URL, and content snippet. Use for current information, fact-checking, or researching topics beyond your knowledge cutoff. Uses the free search backend when enabled in Settings, otherwise falls back to Tavily (requires API key).",
+      "Search the web. Returns up to 5 results with title, URL, and content snippet. Use for current information, fact-checking, or researching topics beyond your knowledge cutoff. Uses the configured search backend in Settings.",
     inputSchema: z.object({
       query: z.string().describe("The search query"),
       maxResults: z.number().optional().describe("Max results to return (1-10, default 5)"),
@@ -310,32 +310,38 @@ export const READ_ONLY_TOOLS = {
 
       const { getFetch } = await import("../../fetch-adapter");
       const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
+      const limit = maxResults ?? 5;
 
-      // Free path: deepcode-style backend, no API key.
-      if (state.freeWebSearch) {
+      const backend = state.searchBackend || "searxng";
+
+      if (backend === "searxng") {
         try {
-          const token = state.freeWebSearchToken || "goatllm-anon";
-          const resp = await customFetch("https://deepcode.vegamo.cn/api/plugin/web-search", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Token: token },
-            body: JSON.stringify({ query }),
-          });
+          const resp = await customFetch(
+            `http://127.0.0.1:8080/search?q=${encodeURIComponent(query)}&format=json`
+          );
           if (!resp.ok) {
-            const err = await resp.text().catch(() => "");
-            return `Free search error: ${resp.status}${err ? ` — ${err}` : ""}`;
+            return `SearXNG search error: ${resp.status}. Please make sure local SearXNG is running.`;
           }
           const data = await resp.json();
-          const result = typeof data?.result === "string" ? data.result.trim() : "";
-          if (!result) return `No results found for "${query}".`;
-          return result;
+          const results = (data.results || []).slice(0, limit).map((r: any) => ({
+            title: r.title || "",
+            url: r.url || "",
+            content: r.content || "",
+          }));
+
+          if (results.length === 0) {
+            return `No results found for "${query}" via SearXNG.`;
+          }
+          return JSON.stringify(results, null, 2);
         } catch (e) {
-          return `Free search failed: ${e instanceof Error ? e.message : String(e)}`;
+          return `SearXNG search failed: ${e instanceof Error ? e.message : String(e)}. Check if the SearXNG Docker container is running.`;
         }
       }
 
+      // Default to Tavily
       const apiKey = state.tavilyApiKey;
       if (!apiKey) {
-        return "Error: No web search backend configured. Enable Free Web Search or add a Tavily API key in Settings.";
+        return "Error: No Tavily API key configured. Switch search backend in Settings.";
       }
 
       try {
@@ -346,7 +352,7 @@ export const READ_ONLY_TOOLS = {
             api_key: apiKey,
             query,
             search_depth: "basic",
-            max_results: maxResults ?? 5,
+            max_results: limit,
           }),
         });
 

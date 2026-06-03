@@ -111,9 +111,11 @@ function buildRootNode(entries: DirEntry[], relPath: string): TreeNode[] {
 interface WorkspaceFileTreeProps {
   /** Called when the user clicks a file to open it in the side panel. */
   onOpenFile: (a: Attachment) => void;
+  /** Called with raw file content for canvas display. */
+  onOpenInCanvas?: (file: { path: string; name: string; content: string }) => void;
 }
 
-export function WorkspaceFileTree({ onOpenFile }: WorkspaceFileTreeProps) {
+export function WorkspaceFileTree({ onOpenFile, onOpenInCanvas }: WorkspaceFileTreeProps) {
   const workspacePath = useChatStore((s) =>
     s.designMode ? s.designWorkspacePath : s.workspacePath
   );
@@ -240,15 +242,21 @@ export function WorkspaceFileTree({ onOpenFile }: WorkspaceFileTreeProps) {
           sizeBytes: node.size,
         });
       } else {
-        // Text-like file — read as string, convert to data URL.
+        // Text-like file — read as string.
         const content: string = await invoke("read_file", { workspace: workspacePath, path: node.path, offset: null, limit: null });
-        const dataUrl = `data:${mime};charset=utf-8,${encodeURIComponent(content)}`;
-        onOpenFile({
-          filename: node.name,
-          mimeType: mime,
-          dataUrl,
-          sizeBytes: new Blob([content]).size,
-        });
+        if (onOpenInCanvas) {
+          // Open in the artifact panel canvas.
+          onOpenInCanvas({ path: node.path, name: node.name, content });
+        } else {
+          // Fallback: open in attachment panel.
+          const dataUrl = `data:${mime};charset=utf-8,${encodeURIComponent(content)}`;
+          onOpenFile({
+            filename: node.name,
+            mimeType: mime,
+            dataUrl,
+            sizeBytes: new Blob([content]).size,
+          });
+        }
       }
     } catch (e) {
       console.warn(`[WorkspaceFileTree] Failed to open ${node.path}:`, e);

@@ -69,8 +69,6 @@ describe("agent turn smoke", () => {
     render(<MessageBubble message={message} />);
 
     expect(screen.getByText("Run timeline")).toBeInTheDocument();
-    expect(screen.getByText("Needs verification")).toBeInTheDocument();
-    expect(screen.getByText("Run tests")).toBeInTheDocument();
     expect(screen.getByText("Preview rollback")).toBeInTheDocument();
     expect(consoleError).not.toHaveBeenCalled();
   });

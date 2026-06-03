@@ -255,6 +255,7 @@ function ChatAssetsMenu() {
   const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const setActiveAttachment = useChatStore((s) => s.setActiveAttachment);
+  const setWorkspaceFile = useChatStore((s) => s.setWorkspaceFile);
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
   const workspacePath = useChatStore((s) => s.workspacePath);
@@ -313,7 +314,10 @@ function ChatAssetsMenu() {
           {/* Workspace file tree (agent mode) — shows files the agent created/modified */}
           {agentMode && (
             <>
-              <WorkspaceFileTree onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }} />
+              <WorkspaceFileTree
+                onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }}
+                onOpenInCanvas={(f) => { setWorkspaceFile(f); setOpen(false); }}
+              />
               {(artifacts && artifacts.length > 0 || attachments.length > 0) && (
                 <div className="h-px bg-white/5 mx-2" />
               )}
@@ -323,7 +327,10 @@ function ChatAssetsMenu() {
           {/* Design workspace file tree */}
           {designMode && designWorkspacePath && (
             <>
-              <WorkspaceFileTree onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }} />
+              <WorkspaceFileTree
+                onOpenFile={(a) => { setActiveAttachment(a); setOpen(false); }}
+                onOpenInCanvas={(f) => { setWorkspaceFile(f); setOpen(false); }}
+              />
               {(artifacts && artifacts.length > 0 || attachments.length > 0) && (
                 <div className="h-px bg-white/5 mx-2" />
               )}

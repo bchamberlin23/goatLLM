@@ -902,8 +902,9 @@ export function ArtifactPanel() {
   const [copied, setCopied] = useState(false);
   const [flashed, setFlashed] = useState<string | null>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
-  // Workspace file browser state
-  const [wsFile, setWsFile] = useState<{ path: string; name: string; content: string } | null>(null);
+  // Workspace file browser state — lives in the store so the sidebar can open files too.
+  const wsFile = useChatStore((s) => s.workspaceFile);
+  const setWsFile = useChatStore((s) => s.setWorkspaceFile);
   const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const flashTimer = useRef<number | null>(null);
   /** True when the user has manually flipped the toggle for this artifact.
@@ -992,6 +993,7 @@ export function ArtifactPanel() {
   // Reset wsFile when conversation changes
   useEffect(() => {
     setWsFile(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   // Auto-switch: while the agent is streaming, pin the editor open so the
@@ -1015,20 +1017,21 @@ export function ArtifactPanel() {
     setView(streamingForActive ? "code" : "preview");
   }, [streamingForActive, activeArtifactId]);
 
-  if (!activeId || !artifacts || artifacts.length === 0 || !artifactPanelOpen) return null;
+  if (!activeId || !artifactPanelOpen) return null;
+  // Allow the panel to show for workspace files even without artifacts.
+  if ((!artifacts || artifacts.length === 0) && !wsFile) return null;
 
-  const activeIdx = artifacts.findIndex((a) => a.id === activeArtifactId);
-  const activeArtifact = activeIdx >= 0 ? artifacts[activeIdx] : artifacts[0];
-  if (!activeArtifact) return null;
-  const Icon = KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html;
+  const activeIdx = artifacts?.findIndex((a) => a.id === activeArtifactId) ?? -1;
+  const activeArtifact = activeIdx >= 0 ? artifacts![activeIdx] : artifacts?.[0];
+  const Icon = activeArtifact ? (KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html) : FileCode;
 
   const previewKey =
     previewReloadKey * 1_000_000 +
-    activeArtifact.code.length +
-    (activeArtifact.activeVersionIndex ?? 0);
+    (activeArtifact?.code.length ?? 0) +
+    (activeArtifact?.activeVersionIndex ?? 0);
 
-  const versions = activeArtifact.versions ?? [];
-  const verIdx = activeArtifact.activeVersionIndex ?? versions.length - 1;
+  const versions = activeArtifact?.versions ?? [];
+  const verIdx = activeArtifact?.activeVersionIndex ?? versions.length - 1;
   const canUndo = verIdx > 0;
   const canRedo = verIdx < versions.length - 1;
 
@@ -1036,15 +1039,16 @@ export function ArtifactPanel() {
   const flashTint = (key: string) =>
     flashed === key ? "bg-[#f59e42]/20 text-[#f59e42]" : "";
 
-  const handleClose = () => { flash("close"); setActiveArtifact(null); };
-  const handleUndo = () => { flash("undo"); undoArtifact(activeId, activeArtifact.id); };
-  const handleRedo = () => { flash("redo"); redoArtifact(activeId, activeArtifact.id); };
+  const handleClose = () => { flash("close"); setActiveArtifact(null); setWsFile(null); };
+  const handleUndo = () => { if (activeArtifact) { flash("undo"); undoArtifact(activeId, activeArtifact.id); } };
+  const handleRedo = () => { if (activeArtifact) { flash("redo"); redoArtifact(activeId, activeArtifact.id); } };
   const handleReload = () => {
     flash("reload");
     setPreviewReloadKey((k) => k + 1);
   };
 
   const handleCopy = () => {
+    if (!activeArtifact) return;
     flash("copy");
     navigator.clipboard.writeText(activeArtifact.code).then(() => {
       setCopied(true);
@@ -1054,6 +1058,7 @@ export function ArtifactPanel() {
 
   // Slugify title for filename.
   const filename = (() => {
+    if (!activeArtifact) return "file";
     const k = activeArtifact.kind;
     if (k === "docx" || k === "pptx" || k === "xlsx") {
       return officeFilename(k, activeArtifact.title);
@@ -1069,6 +1074,7 @@ export function ArtifactPanel() {
   })();
 
   const handlePrint = () => {
+    if (!activeArtifact) return;
     flash("print");
     if (activeArtifact.kind !== "html") return;
     // Open the artifact in a new window and trigger the browser's print
@@ -1092,6 +1098,7 @@ export function ArtifactPanel() {
   };
 
   const handleDownload = async () => {
+    if (!activeArtifact) return;
     flash("download");
     const k = activeArtifact.kind;
 
@@ -1149,14 +1156,16 @@ export function ArtifactPanel() {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0">
         <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
         <span className="text-[13px] font-medium text-[#ececec] truncate min-w-0">
-          {activeArtifact.title}
+          {activeArtifact ? activeArtifact.title : wsFile?.name ?? "File"}
         </span>
-        <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
-          {KIND_LABEL[activeArtifact.kind]}
-        </span>
+        {activeArtifact && (
+          <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+            {KIND_LABEL[activeArtifact.kind]}
+          </span>
+        )}
 
         {/* Inter-artifact navigation when there's more than one */}
-        {artifacts.length > 1 && (
+        {activeArtifact && artifacts && artifacts.length > 1 && (
           <div className="flex items-center gap-0.5 ml-1 shrink-0">
             <button
               onClick={() => activeIdx > 0 && setActiveArtifact(artifacts[activeIdx - 1].id)}
@@ -1182,7 +1191,8 @@ export function ArtifactPanel() {
 
         <div className="flex-1" />
 
-        {/* History undo/redo */}
+        {/* Artifact-specific controls (hidden when viewing a workspace file) */}
+        {activeArtifact && (<>
         <div className="flex items-center gap-0.5">
           <button
             onClick={handleUndo}
@@ -1297,6 +1307,7 @@ export function ArtifactPanel() {
         >
           <Download size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
+        </>)}
 
         {/* Close */}
         <button
@@ -1322,7 +1333,7 @@ export function ArtifactPanel() {
               />
             </div>
           )}
-          {artifacts.length > 0 && (
+          {artifacts && artifacts.length > 0 && (
             <div className="border-t border-white/[0.04]">
               <div className="px-3 py-1.5">
                 <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">Artifacts</span>
@@ -1402,19 +1413,19 @@ export function ArtifactPanel() {
                 </div>
               )}
             </div>
-          ) : manualEditOpen && activeId ? (
+          ) : manualEditOpen && activeId && activeArtifact ? (
             <ManualEditPanel
               conversationId={activeId}
               artifactId={activeArtifact.id}
               onClose={() => setManualEditOpen(false)}
             />
-          ) : (
+          ) : activeArtifact ? (
             <ArtifactContent
               artifact={activeArtifact}
               view={view}
               previewKey={previewKey}
             />
-          )}
+          ) : null}
         </div>
       </div>
     </div>

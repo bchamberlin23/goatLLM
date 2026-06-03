@@ -65,6 +65,7 @@ export const RESEARCH_TOOLS = {
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
   load_skill: READ_ONLY_TOOLS.load_skill,
+  manage_memory: WRITE_TOOLS.manage_memory,
 };
 
 /**
@@ -91,6 +92,7 @@ export const CHAT_TOOLS = {
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
   load_skill: READ_ONLY_TOOLS.load_skill,
+  manage_memory: WRITE_TOOLS.manage_memory,
 };
 
 /**

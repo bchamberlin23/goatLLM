@@ -43,6 +43,24 @@ export default function App() {
     const id = setInterval(() => checkAllProvidersHealth(), 30_000);
     return () => clearInterval(id);
   }, [_hydrated]);
+
+  // Auto-start SearXNG on app launch if configured as the active search backend
+  useEffect(() => {
+    if (_hydrated) {
+      const state = useChatStore.getState();
+      if (state.searchBackend === "searxng") {
+        import("@tauri-apps/api/core")
+          .then(({ invoke }) => {
+            invoke("searxng_start").catch((err) => {
+              console.warn("Failed to auto-start SearXNG on app launch:", err);
+            });
+          })
+          .catch((err) => {
+            console.warn("Failed to load Tauri core invoke for SearXNG auto-start:", err);
+          });
+      }
+    }
+  }, [_hydrated]);
   useEffect(() => {
     if (!selectedModelId && _hydrated) {
       const models = getModels();

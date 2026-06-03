@@ -195,6 +195,58 @@ describe("artifact detection", () => {
     expect(state.artifactPanelOpen).toBe(false);
     expect(state.activeArtifactId).toBeNull();
   });
+
+  it("applies an edit-mode artifact block successfully during streaming and finalization", () => {
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg1 = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "### Page\n```html\n<h1>Old Title</h1>\n```",
+    });
+    store.detectArtifacts(convId, msg1.id, msg1.content);
+    expect(useChatStore.getState().artifacts[convId][0].code).toBe("<h1>Old Title</h1>");
+
+    const msg2Id = "msg-2";
+    const editCode = "<<<EDIT>>>\n<<<OLD>>>\n<h1>Old Title</h1>\n<<<NEW>>>\n<h1>New Title</h1>\n<<<END>>>";
+    
+    // Simulate streaming the edit block
+    store.streamArtifactDelta(convId, msg2Id, "html", "Page", 0, editCode);
+    expect(useChatStore.getState().artifacts[convId][0].code).toBe(editCode); // while streaming, code is the raw markers
+    
+    // Detect artifacts at the end of stream
+    store.detectArtifacts(convId, msg2Id, "### Page\n```html\n" + editCode + "\n```");
+    
+    const artifacts = useChatStore.getState().artifacts[convId];
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].code).toBe("<h1>New Title</h1>");
+  });
+
+  it("reverts an edit-mode artifact block to baseCode if edit application fails", () => {
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg1 = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "### Page\n```html\n<h1>Old Title</h1>\n```",
+    });
+    store.detectArtifacts(convId, msg1.id, msg1.content);
+    expect(useChatStore.getState().artifacts[convId][0].code).toBe("<h1>Old Title</h1>");
+
+    const msg2Id = "msg-2";
+    const editCode = "<<<EDIT>>>\n<<<OLD>>>\nnon-existent pattern\n<<<NEW>>>\n<h1>New Title</h1>\n<<<END>>>";
+    
+    // Simulate streaming the edit block
+    store.streamArtifactDelta(convId, msg2Id, "html", "Page", 0, editCode);
+    expect(useChatStore.getState().artifacts[convId][0].code).toBe(editCode); // while streaming, code is the raw markers
+    
+    // Detect artifacts at the end of stream (where it fails to apply)
+    store.detectArtifacts(convId, msg2Id, "### Page\n```html\n" + editCode + "\n```");
+    
+    const artifacts = useChatStore.getState().artifacts[convId];
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].code).toBe("<h1>Old Title</h1>"); // should be reverted to baseCode
+  });
 });
 
 describe("sidebar toggle", () => {
