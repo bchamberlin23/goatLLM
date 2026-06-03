@@ -1007,7 +1007,13 @@ export function ArtifactPanel() {
       const a = artifacts.find((x) => x.id === activeArtifactId) ?? artifacts[0];
       if (!a) return false;
       const v = a.versions?.[a.activeVersionIndex ?? a.versions.length - 1];
-      return !!v?.streaming;
+      if (!v?.streaming) return false;
+      // Only auto-switch to code for brand-new artifacts (first version).
+      // For edits to existing artifacts, stay on preview so the user
+      // doesn't see the raw code flash.
+      const versions = a.versions ?? [];
+      const nonStreaming = versions.filter((ver) => !ver.streaming);
+      return nonStreaming.length === 0;
     } catch {
       return false;
     }
