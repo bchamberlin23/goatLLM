@@ -12,10 +12,9 @@
 // never lingers on screen.
 
 // First-key names that identify a leaked tool-argument object.
+// NOTE: "name" and "id" excluded — too common in natural prose (e.g. "has a { name } field")
 const TOOL_ARG_KEYS = new Set([
   "summary",
-  "name",
-  "id",
   "filename",
   "file_path",
   "path",
@@ -47,18 +46,29 @@ const TOOL_ARG_KEYS = new Set([
 const TOOL_KEY_RE = /^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*:/;
 
 /**
- * True when `{` at `i` is followed only by whitespace / quote / a partial
- * known-key prefix and the region ends before `:` — a streaming tail fragment
- * like `{ name` or `{summary` that should not flash on screen.
+ * True when `{` at `i` is a streaming tail fragment that should be hidden.
+ * Only triggers within 30 chars of the actual end of the region, AND only
+ * when the fragment looks like an incomplete tool-arg (no closing brace).
  */
 function isStreamingTailFragment(region: string, i: number): boolean {
-  let j = i + 1;
   const n = region.length;
+  // Only consider fragments near the actual end — anything in the middle
+  // of the text is likely prose, not a streaming artifact.
+  if (n - i > 30) return false;
+
+  // If there's a closing `}` in the remaining text, this is a complete object,
+  // not a streaming fragment. Let the main logic handle it.
+  if (region.indexOf("}", i) !== -1) return false;
+
+  let j = i + 1;
   while (j < n && /\s/.test(region[j])) j++;
-  if (j >= n) return true;
+  if (j >= n) return true; // Just `{ ` at end — strip it
+
+  // Check for quoted key: { "query" or { "query":
   if (region[j] === '"') {
     const close = region.indexOf('"', j + 1);
     if (close === -1) {
+      // Unclosed quote — check if partial key matches a tool-arg key
       const partial = region.slice(j + 1);
       return [...TOOL_ARG_KEYS].some(
         (k) => k.startsWith(partial) || partial.startsWith(k),
@@ -66,10 +76,13 @@ function isStreamingTailFragment(region: string, i: number): boolean {
     }
     const key = region.slice(j + 1, close);
     if (!TOOL_ARG_KEYS.has(key)) return false;
+    // After the key, expect either end-of-text or `:` (incomplete object)
     j = close + 1;
     while (j < n && /\s/.test(region[j])) j++;
     return j >= n || region[j] !== ":";
   }
+
+  // Check for unquoted key: { query or {query
   const rest = region.slice(j);
   const colon = rest.search(/[:{}\[\]"\\]/);
   const token = (colon === -1 ? rest : rest.slice(0, colon)).trim();
