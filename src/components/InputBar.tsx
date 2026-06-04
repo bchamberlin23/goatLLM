@@ -255,6 +255,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
   const featureFlags = useChatStore((s) => s.featureFlags);
   const pursueGoalMode = useChatStore((s) => s.pursueGoalMode);
+  const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
   const setPursueGoalMode = useChatStore((s) => s.setPursueGoalMode);
   const voiceSettings = useChatStore((s) => s.voiceSettings);
 
@@ -1569,6 +1570,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     }
   }, [speech]);
 
+  const activeModeKey = agentMode ? "agent" : designMode ? "design" : "chat";
+
   return (
     <div className="w-full max-w-[720px] min-w-0">
       <div
@@ -1740,8 +1743,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                   <div className="fixed inset-0 z-[80]" onClick={() => setShowPlusMenu(false)} />
                   <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                     {[
-                      { icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } },
-                      ...(featureFlags.pursueGoal
+                      ...(plusMenuVisibility[activeModeKey]?.upload !== false
+                        ? [{ icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } }]
+                        : []),
+                      ...(featureFlags.pursueGoal && plusMenuVisibility[activeModeKey]?.pursueGoal !== false
                         ? [{
                             icon: Target,
                             label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
@@ -1752,22 +1757,22 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
                           }]
                         : []),
-                      ...(featureFlags.costDashboard
+                      ...(featureFlags.costDashboard && plusMenuVisibility[activeModeKey]?.usage !== false
                         ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("usage"); } }]
                         : []),
-                      ...(featureFlags.modelComparison
+                      ...(featureFlags.modelComparison && plusMenuVisibility[activeModeKey]?.compare !== false
                         ? [{ icon: Columns2, label: "Compare models", description: "Parallel prompts with latency, cost, diff.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("compare"); } }]
                         : []),
-                      ...(featureFlags.notebookMode
+                      ...(featureFlags.notebookMode && plusMenuVisibility[activeModeKey]?.notebook !== false
                         ? [{ icon: BookOpen, label: "Notebook mode", description: "Run text, Python, and AI prompt cells.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("notebook"); } }]
                         : []),
-                      ...(featureFlags.browserMirror
+                      ...(featureFlags.browserMirror && plusMenuVisibility[activeModeKey]?.browser !== false
                         ? [{ icon: Globe2, label: "Browser panel", description: "Mirror agent-visible browser state.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("browser"); } }]
                         : []),
-                      ...(featureFlags.imageGeneration
+                      ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
                         ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("images"); } }]
                         : []),
-                      ...(agentMode
+                      ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
                         ? [{
                             icon: ListChecks,
                             label: planMode ? "Plan mode — on" : "Plan mode",
@@ -1778,13 +1783,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
                           }]
                         : []),
-                      // Deep Research mode — sits right above Skills so the
-                      // “modes” cluster together. One-shot in chat mode (the
-                      // toggle resets on send); persistent until off in
-                      // agent mode. Hidden when there's no search backend
-                      // available in chat mode so we don't show a dead
-                      // option.
-                      ...((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true))
+                      ...(((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true)) && plusMenuVisibility[activeModeKey]?.research !== false)
                         ? [{
                             icon: Telescope,
                             label: researchMode ? "Deep Research — on" : "Deep Research",
@@ -1797,7 +1796,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
                           }]
                         : []),
-                      ...(skillsForCurrentMode.length > 0
+                      ...(skillsForCurrentMode.length > 0 && plusMenuVisibility[activeModeKey]?.skills !== false
                         ? [{ icon: Wand2, label: "Choose skills", onClick: () => { setShowPlusMenu(false); setPendingSkills(activeId ? activeSkillNames : pendingSkills); setShowSkillPicker((s) => !s); } }]
                         : []),
                     ].map((opt) => (

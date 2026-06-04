@@ -31,6 +31,7 @@ const USAGE_SETTINGS_KEY = "goatllm-usage-settings";
 const VOICE_SETTINGS_KEY = "goatllm-voice-settings";
 const SYNC_SETTINGS_KEY = "goatllm-sync-settings";
 const FEATURE_FLAGS_KEY = "goatllm-feature-flags";
+const PLUS_MENU_VISIBILITY_KEY = "goatllm-plus-menu-visibility";
 const NOTEBOOK_CELLS_KEY = "goatllm-notebook-cells";
 const MODEL_COMPARISON_RUNS_KEY = "goatllm-model-comparison-runs";
 const IMAGE_JOBS_KEY = "goatllm-image-jobs";
@@ -98,6 +99,45 @@ const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   ragMemory: true,
   filesystemWatcher: true,
   pursueGoal: true,
+};
+
+const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
+  chat: {
+    upload: true,
+    pursueGoal: true,
+    usage: true,
+    compare: true,
+    notebook: true,
+    browser: true,
+    image: true,
+    plan: false,
+    research: true,
+    skills: true,
+  },
+  design: {
+    upload: true,
+    pursueGoal: true,
+    usage: true,
+    compare: true,
+    notebook: true,
+    browser: true,
+    image: true,
+    plan: false,
+    research: true,
+    skills: true,
+  },
+  agent: {
+    upload: true,
+    pursueGoal: true,
+    usage: true,
+    compare: true,
+    notebook: true,
+    browser: true,
+    image: true,
+    plan: true,
+    research: true,
+    skills: true,
+  },
 };
 
 const DEFAULT_BROWSER_MIRROR: BrowserMirrorState = {
@@ -455,6 +495,12 @@ export interface ProductFeatureFlags {
   ragMemory: boolean;
   filesystemWatcher: boolean;
   pursueGoal: boolean;
+}
+
+export interface PlusMenuVisibility {
+  chat: Record<string, boolean>;
+  design: Record<string, boolean>;
+  agent: Record<string, boolean>;
 }
 
 export interface BrowserMirrorState {
@@ -1051,6 +1097,8 @@ interface ChatStore {
   setSyncSettings: (settings: SyncConfig) => void;
   featureFlags: ProductFeatureFlags;
   setFeatureFlag: (key: keyof ProductFeatureFlags, enabled: boolean) => void;
+  plusMenuVisibility: PlusMenuVisibility;
+  setPlusMenuItemVisible: (mode: "chat" | "design" | "agent", key: string, visible: boolean) => void;
   browserMirror: BrowserMirrorState;
   setBrowserMirror: (state: Partial<BrowserMirrorState>) => void;
   modelComparisonRuns: ModelComparisonRun[];
@@ -1164,6 +1212,11 @@ interface ChatStore {
    *  When false (default), they are stripped from the UI. */
   showDesignCritique: boolean;
   setShowDesignCritique: (enabled: boolean) => void;
+
+  glowBackgroundEnabled: boolean;
+  setGlowBackgroundEnabled: (enabled: boolean) => void;
+  glowBackgroundMode: "blocky" | "smooth" | "fluid" | "aurora" | "cyberpunk" | "nebula";
+  setGlowBackgroundMode: (mode: "blocky" | "smooth" | "fluid" | "aurora" | "cyberpunk" | "nebula") => void;
 
   /** When true (default), a subtle click sound plays when an agent/design
    *  turn completes. When false, completion is silent. */
@@ -1454,6 +1507,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       autoArtifacts: true,
       officeArtifacts: true,
       showDesignCritique: false,
+      glowBackgroundEnabled: false,
+      glowBackgroundMode: "blocky",
       completionSound: true,
       subagentsEnabled: true,
       // ── Skills ──
@@ -1471,6 +1526,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
       syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
       featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+      plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
       browserMirror: DEFAULT_BROWSER_MIRROR,
       modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
       notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
@@ -3075,6 +3131,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(FEATURE_FLAGS_KEY, next);
       },
 
+      setPlusMenuItemVisible: (mode, key, visible) => {
+        const current = get().plusMenuVisibility;
+        const next = {
+          ...current,
+          [mode]: {
+            ...current[mode],
+            [key]: visible,
+          },
+        };
+        set({ plusMenuVisibility: next });
+        saveJsonSetting(PLUS_MENU_VISIBILITY_KEY, next);
+      },
+
       setBrowserMirror: (updates) => {
         set((state) => ({ browserMirror: { ...state.browserMirror, ...updates } }));
       },
@@ -3326,6 +3395,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       setShowDesignCritique: (enabled) => {
         set({ showDesignCritique: enabled });
         try { localStorage.setItem("goatllm-show-design-critique", enabled ? "true" : "false"); } catch {}
+      },
+
+      setGlowBackgroundEnabled: (enabled) => {
+        set({ glowBackgroundEnabled: enabled });
+        try { localStorage.setItem("goatllm-glow-bg-enabled", enabled ? "true" : "false"); } catch {}
+      },
+
+      setGlowBackgroundMode: (mode) => {
+        set({ glowBackgroundMode: mode });
+        try { localStorage.setItem("goatllm-glow-bg-mode", mode); } catch {}
       },
 
       setCompletionSound: (enabled) => {
@@ -3817,6 +3896,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
+        const glowBackgroundEnabled = localStorage.getItem("goatllm-glow-bg-enabled") === "true";
+        const glowBackgroundMode = (localStorage.getItem("goatllm-glow-bg-mode") as any) || "blocky";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
         const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
         try {
@@ -4003,6 +4084,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            glowBackgroundEnabled,
+            glowBackgroundMode,
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
@@ -4034,6 +4117,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+            plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
             notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
@@ -4112,6 +4196,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
+            glowBackgroundEnabled,
+            glowBackgroundMode,
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
@@ -4137,6 +4223,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+            plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
             notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),

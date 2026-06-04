@@ -28,6 +28,8 @@ export default function App() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
+  const glowBackgroundEnabled = useChatStore((s) => s.glowBackgroundEnabled);
+  const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [glow, setGlow] = useState({ x: 52, y: 8 });
 
@@ -151,7 +153,18 @@ export default function App() {
           "--glow-y": `${glow.y}%`,
         } as CSSProperties}
       >
-        <div className="liquid-glow-field" aria-hidden="true" />
+        {glowBackgroundEnabled && (
+          <div className={`liquid-glow-field mode-${glowBackgroundMode}`} aria-hidden="true">
+            {glowBackgroundMode === "fluid" && (
+              <>
+                <div className="fluid-blob blob-1" />
+                <div className="fluid-blob blob-2" />
+                <div className="fluid-blob blob-3" />
+                <div className="fluid-blob blob-mouse" />
+              </>
+            )}
+          </div>
+        )}
         <ChatView onOpenSettings={handleOpenSettings} />
       </main>
       <button

@@ -96,7 +96,9 @@ Return ONLY a JSON array of query strings, nothing else.
 Example: ["query one", "query two", "query three"]
 `;
 
-const EXTRACTOR_PROMPT = `Please process the following webpage content and user goal to extract relevant information:
+const EXTRACTOR_PROMPT = `Please process the following webpage content and user goal to extract relevant information.
+
+**IMPORTANT: Always respond in English regardless of the source language. If the webpage is in another language, translate all extracted content into English.**
 
 ## **Webpage Content**
 {webpage_content}
@@ -120,6 +122,8 @@ Example output:
 `;
 
 const SYNTHESIZE_PROMPT = `You are updating an evolving research report.
+
+**IMPORTANT: Always write in English regardless of the language of the source material. Translate any non-English content.**
 
 **Original question:** {question}
 
@@ -161,6 +165,7 @@ const FINAL_REPORT_PROMPT = `Write a **long, detailed, comprehensive** research 
 {report}
 
 Requirements:
+- **Always write the entire report in English**, regardless of the language of source material. Translate any non-English content.
 - Write at MINIMUM 1500 words — this should be a thorough, magazine-quality article
 - Use clear ## headings and ### subheadings to organize into logical sections
 - Each section should have multiple detailed paragraphs, not just bullet points
@@ -171,6 +176,7 @@ Requirements:
 - Add a brief executive summary at the top
 - End with a clear conclusion that directly answers the question
 - Write in an engaging, informative style — not dry or robotic
+- Do NOT use HTML tags like <details>, <summary>, etc. — use only standard markdown
 `;
 
 const CATEGORY_PROMPTS: Record<string, string> = {
@@ -702,36 +708,19 @@ Respond with ONLY the category name, nothing else.`;
     finalReport = report || "Failed to generate Deep Research report.";
   }
 
-  // Format visual findings layout
-  const elapsed = (Date.now() - startTime) / 1000;
-  const stats = `**Duration:** ${elapsed.toFixed(1)}s | **Queries:** ${queriesUsed.size} | **URLs Analyzed:** ${urlsFetched.size}`;
-  
-  const sourceLines = Array.from(new Set(findings.map((f) => `- [${f.title}](${f.url})`))).join("\n");
-  const sourcesSection = sourceLines ? `\n### Sources\n\n${sourceLines}\n` : "";
-
-  const rawFindings = findings
-    .map((f, i) => `**${i+1}. [${f.title}](${f.url})**\n\n${f.summary || f.evidence || "(no summary)"}`)
-    .join("\n\n");
-
-  const collectedSection = rawFindings
-    ? `\n<details>\n<summary><strong>Raw collected findings (${findings.length} sources)</strong></summary>\n\n${rawFindings}\n</details>\n`
+  // Build clean source list for the report footer
+  const uniqueSources = Array.from(
+    new Map(findings.map((f) => [f.url, f])).values()
+  );
+  const sourceLines = uniqueSources
+    .map((f, i) => `${i + 1}. [${f.title || f.url}](${f.url})`)
+    .join("\n");
+  const sourcesSection = sourceLines
+    ? `\n---\n\n## Sources\n\n${sourceLines}\n`
     : "";
 
-const finalOutput = `---
-
-## Deep Research Summary
-
-${stats}
-
----
-
-${finalReport}
-
+const finalOutput = `${finalReport}
 ${sourcesSection}
-${collectedSection}
----
-
-**The AI has analyzed all Deep Research findings above. Ask me anything about: "${question}"**
 `;
 
   onProgress({ phase: "done", total_sources: urlsFetched.size, total_findings: findings.length });
