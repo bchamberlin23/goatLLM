@@ -99,6 +99,7 @@ describe("loadAllFromDb", () => {
       pinned: true,
       thinkingContent: "Reasoning",
       turnDurationMs: 1234,
+      modelId: "openai:gpt-4o-mini",
       editedFiles: ["src/App.tsx"],
       toolCalls: [
         {
@@ -134,6 +135,7 @@ describe("loadAllFromDb", () => {
           thinkingContent: "Reasoning",
           turnDurationMs: 1234,
           editedFiles: JSON.stringify(["src/App.tsx"]),
+          modelId: "openai:gpt-4o-mini",
         },
       });
     });

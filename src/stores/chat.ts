@@ -6,6 +6,7 @@ import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
 import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
+import type { NotebookCell, SyncConfig, WatcherEventSummaryInput } from "../lib/product-workspace";
 import {
   loadAllFromDb,
   loadMessagesForConversation,
@@ -25,6 +26,18 @@ const PERMISSION_PROFILE_KEY = "goatllm-permission-profile";
 const CHECKPOINT_NAMES_KEY = "goatllm-checkpoint-names";
 const PATH_PERMISSION_RULES_KEY = "goatllm-path-permission-rules";
 const AGENT_BUDGET_CONTROLS_KEY = "goatllm-agent-budget-controls";
+const PRODUCT_WORKSPACE_STATE_KEY = "goatllm-product-workspace-state";
+const USAGE_SETTINGS_KEY = "goatllm-usage-settings";
+const VOICE_SETTINGS_KEY = "goatllm-voice-settings";
+const SYNC_SETTINGS_KEY = "goatllm-sync-settings";
+const FEATURE_FLAGS_KEY = "goatllm-feature-flags";
+const NOTEBOOK_CELLS_KEY = "goatllm-notebook-cells";
+const MODEL_COMPARISON_RUNS_KEY = "goatllm-model-comparison-runs";
+const IMAGE_JOBS_KEY = "goatllm-image-jobs";
+const SCHEDULED_AGENTS_KEY = "goatllm-scheduled-agents";
+const WATCHER_EVENTS_KEY = "goatllm-watcher-events";
+const RAG_SETTINGS_KEY = "goatllm-rag-settings";
+const BRANCH_TIPS_KEY = "goatllm-active-branch-tips";
 
 const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
   requireBuildForWeb: true,
@@ -42,6 +55,67 @@ const DEFAULT_AGENT_BUDGET_CONTROLS: AgentBudgetControls = {
   maxToolCalls: 24,
   maxSubagents: 3,
   maxMinutes: 20,
+};
+
+const DEFAULT_PRODUCT_WORKSPACE_STATE: ProductWorkspaceState = {
+  workspacePanelOpen: false,
+  workspacePanelTab: "usage",
+};
+
+const DEFAULT_USAGE_SETTINGS: UsageSettings = {
+  monthlyBudgetUsd: 25,
+  expensiveSessionUsd: 1,
+  showInlineAlerts: true,
+  priceOverrides: {},
+};
+
+const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  enabled: true,
+  handsFree: false,
+  autoPlayAssistant: false,
+  voiceURI: "",
+  rate: 1,
+  pitch: 1,
+};
+
+const DEFAULT_SYNC_SETTINGS: SyncConfig = {
+  enabled: false,
+  provider: "icloud",
+  prefix: "goatllm",
+  encryptionKeyHint: "",
+  remoteLabel: "iCloud Drive",
+};
+
+const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
+  costDashboard: true,
+  modelComparison: true,
+  browserMirror: true,
+  notebookMode: true,
+  imageGeneration: true,
+  cloudSync: true,
+  promptLibrary: true,
+  scheduledAgents: true,
+  ragMemory: true,
+  filesystemWatcher: true,
+  pursueGoal: true,
+};
+
+const DEFAULT_BROWSER_MIRROR: BrowserMirrorState = {
+  visible: false,
+  sessionId: null,
+  url: "",
+  title: "Browser",
+  screenshotDataUrl: null,
+  updatedAt: null,
+  status: "idle",
+};
+
+const DEFAULT_RAG_SETTINGS: RagSettings = {
+  projectMemory: true,
+  conversationMemory: true,
+  retrievalPreview: true,
+  maxRetrievedMemories: 8,
+  provenance: true,
 };
 
 function loadProviderConfigs(): Record<string, ProviderConfig> {
@@ -116,6 +190,15 @@ function loadJsonSetting<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
     return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadJsonValue<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
   } catch {
     return fallback;
   }
@@ -229,6 +312,8 @@ export interface Message {
   /** Token usage stats from the LLM provider. */
   outputTokens?: number;
   inputTokens?: number;
+  /** Model used for this turn. Stored on assistant messages for usage/cost breakdowns. */
+  modelId?: string;
   /** Streaming duration in milliseconds (from first token to onDone). */
   streamingDurationMs?: number;
   /** Wall-clock turn duration including tool execution (ms). */
@@ -327,6 +412,115 @@ export interface ProviderConfig {
   enabledModels?: string[];
 }
 
+export type ProductWorkspaceTab =
+  | "usage"
+  | "compare"
+  | "branches"
+  | "browser"
+  | "notebook"
+  | "images"
+  | "prompts"
+  | "schedules"
+  | "memory"
+  | "sync"
+  | "watcher";
+
+export interface UsageSettings {
+  monthlyBudgetUsd: number;
+  expensiveSessionUsd: number;
+  showInlineAlerts: boolean;
+  priceOverrides: Record<string, { inputPerMillion: number; outputPerMillion: number }>;
+}
+
+export interface VoiceSettings {
+  enabled: boolean;
+  handsFree: boolean;
+  autoPlayAssistant: boolean;
+  voiceURI: string;
+  rate: number;
+  pitch: number;
+}
+
+export interface ProductFeatureFlags {
+  costDashboard: boolean;
+  modelComparison: boolean;
+  browserMirror: boolean;
+  notebookMode: boolean;
+  imageGeneration: boolean;
+  cloudSync: boolean;
+  promptLibrary: boolean;
+  scheduledAgents: boolean;
+  ragMemory: boolean;
+  filesystemWatcher: boolean;
+  pursueGoal: boolean;
+}
+
+export interface BrowserMirrorState {
+  visible: boolean;
+  sessionId: string | null;
+  url: string;
+  title: string;
+  screenshotDataUrl: string | null;
+  updatedAt: number | null;
+  status: "idle" | "loading" | "ready" | "error";
+  error?: string;
+}
+
+export interface ModelComparisonResult {
+  modelId: string;
+  status: "queued" | "running" | "done" | "error";
+  content: string;
+  latencyMs?: number;
+  costUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  error?: string;
+}
+
+export interface ModelComparisonRun {
+  id: string;
+  prompt: string;
+  modelIds: string[];
+  createdAt: number;
+  results: ModelComparisonResult[];
+}
+
+export interface ImageGenerationJob {
+  id: string;
+  prompt: string;
+  provider: "openai" | "flux" | "stable-diffusion" | "custom";
+  status: "queued" | "running" | "done" | "error";
+  createdAt: number;
+  imageDataUrl?: string;
+  artifactId?: string;
+  error?: string;
+}
+
+export interface ScheduledAgent {
+  id: string;
+  name: string;
+  prompt: string;
+  schedule: string;
+  enabled: boolean;
+  nextRunAt: number;
+  lastRunAt?: number;
+  lastResult?: string;
+  lastStatus?: "idle" | "running" | "done" | "error";
+}
+
+export interface RagSettings {
+  projectMemory: boolean;
+  conversationMemory: boolean;
+  retrievalPreview: boolean;
+  maxRetrievedMemories: number;
+  provenance: boolean;
+}
+
+export interface ProductWorkspaceState {
+  workspacePanelOpen: boolean;
+  workspacePanelTab: ProductWorkspaceTab;
+}
+
 interface ScrollPositions {
   [conversationId: string]: number;
 }
@@ -354,6 +548,7 @@ export type ArtifactKind =
   | "diagram"           // Mermaid/diagram syntax
   | "code-snippet"      // Generic code display
   | "mini-app"          // Interactive HTML app
+  | "image"             // Generated image as a data URL
   | "design-system";    // Design system documentation
 
 export interface ArtifactVersion {
@@ -424,6 +619,11 @@ const ARTIFACT_LANG_MAP: Record<string, ArtifactKind> = {
   "mini-app": "mini-app",
   app: "mini-app",
   interactive: "mini-app",
+  image: "image",
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  webp: "image",
   "design-system": "design-system",
   design: "design-system",
 };
@@ -442,6 +642,7 @@ const ARTIFACT_KIND_LABEL: Record<ArtifactKind, string> = {
   diagram: "Diagram",
   "code-snippet": "Code",
   "mini-app": "App",
+  image: "Image",
   "design-system": "Design System",
 };
 
@@ -738,6 +939,7 @@ interface ChatStore {
   /** Design mode: upsert artifact from a file write so the preview panel
    *  stays in sync with files on disk. */
   upsertDesignArtifact: (conversationId: string, title: string, code: string) => void;
+  addImageArtifact: (conversationId: string, title: string, dataUrl: string, messageId?: string) => string;
 
   // Workspace file viewer (non-persisted) — opens a workspace file in the
   // artifact panel canvas. Set from the sidebar WorkspaceFileTree or the
@@ -832,6 +1034,43 @@ interface ChatStore {
   researchMode: boolean;
   setResearchMode: (enabled: boolean) => void;
   toggleResearchMode: () => void;
+
+  // Product workspace panel and expansion features
+  workspacePanelOpen: boolean;
+  workspacePanelTab: ProductWorkspaceTab;
+  openWorkspacePanel: (tab?: ProductWorkspaceTab) => void;
+  closeWorkspacePanel: () => void;
+  setWorkspacePanelTab: (tab: ProductWorkspaceTab) => void;
+  usageSettings: UsageSettings;
+  setUsageSettings: (settings: UsageSettings) => void;
+  voiceSettings: VoiceSettings;
+  setVoiceSettings: (settings: VoiceSettings) => void;
+  syncSettings: SyncConfig;
+  setSyncSettings: (settings: SyncConfig) => void;
+  featureFlags: ProductFeatureFlags;
+  setFeatureFlag: (key: keyof ProductFeatureFlags, enabled: boolean) => void;
+  browserMirror: BrowserMirrorState;
+  setBrowserMirror: (state: Partial<BrowserMirrorState>) => void;
+  modelComparisonRuns: ModelComparisonRun[];
+  addModelComparisonRun: (run: ModelComparisonRun) => void;
+  updateModelComparisonRun: (runId: string, updates: Partial<ModelComparisonRun>) => void;
+  notebookCells: NotebookCell[];
+  setNotebookCells: (cells: NotebookCell[]) => void;
+  updateNotebookCell: (cellId: string, updates: Partial<NotebookCell>) => void;
+  imageJobs: ImageGenerationJob[];
+  addImageJob: (job: ImageGenerationJob) => void;
+  updateImageJob: (jobId: string, updates: Partial<ImageGenerationJob>) => void;
+  scheduledAgents: ScheduledAgent[];
+  setScheduledAgents: (agents: ScheduledAgent[]) => void;
+  watcherEvents: WatcherEventSummaryInput[];
+  addWatcherEvent: (event: WatcherEventSummaryInput) => void;
+  clearWatcherEvents: () => void;
+  ragSettings: RagSettings;
+  setRagSettings: (settings: RagSettings) => void;
+  activeBranchTips: Record<string, string>;
+  setActiveBranchTip: (conversationId: string, tipMessageId: string) => void;
+  pursueGoalMode: boolean;
+  setPursueGoalMode: (enabled: boolean) => void;
 
   // Plan mode — agent-only. When on, the model gets the read-only tool
   // subset and a planning preamble. The bubble surfaces a "Build" button
@@ -970,6 +1209,7 @@ interface ChatStore {
   getFilteredConversations: () => Conversation[];
   getActiveConversation: () => Conversation | null;
   getActiveMessages: () => Message[];
+  getLlmConfigForModel: (modelId: string | null) => LlmConfig | null;
   getActiveLlmConfig: () => LlmConfig | null;
 }
 
@@ -1223,6 +1463,21 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       embeddingModel: "nomic-embed-text",
       researchMode: false,
       planMode: false,
+      workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
+      workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
+      usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+      voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+      syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+      featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+      browserMirror: DEFAULT_BROWSER_MIRROR,
+      modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+      notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+      imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
+      scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+      watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
+      ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+      activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
+      pursueGoalMode: false,
 
       createConversation: () => {
         const id = generateId();
@@ -1478,6 +1733,18 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const msgs = get().messages[conversationId] ?? [];
         if (msgs.length === 0) return [];
 
+        const activeTipId = get().activeBranchTips[conversationId];
+        if (activeTipId) {
+          const byId = new Map(msgs.map((m) => [m.id, m]));
+          const branch: Message[] = [];
+          let current = byId.get(activeTipId);
+          while (current) {
+            branch.unshift(current);
+            current = current.parentId ? byId.get(current.parentId) : undefined;
+          }
+          if (branch.length > 0) return branch;
+        }
+
         // Build a map of parentId → children
         const childrenOf = new Map<string | null | undefined, Message[]>();
         for (const m of msgs) {
@@ -1522,13 +1789,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         return msgs.filter((m) => !childIds.has(m.id));
       },
 
-      navigateToBranch: (_conversationId: string, _tipMessageId: string) => {
-        // The active branch is determined by which tip the user is viewing.
-        // We store the active tip on the conversation so getActiveBranch can
-        // use it. For now, this is a no-op — the branch is determined by
-        // recency. A full implementation would store activeTipId on the
-        // conversation and have getActiveBranch use it.
-        // TODO: store activeTipId on Conversation for explicit branch switching
+      navigateToBranch: (conversationId: string, tipMessageId: string) => {
+        get().setActiveBranchTip(conversationId, tipMessageId);
       },
 
       addMessage: (messageData: Omit<Message, "id" | "createdAt">) => {
@@ -1935,6 +2197,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({
           activeArtifactId: id,
           artifactPanelOpen: !!id,
+          workspacePanelOpen: id ? false : get().workspacePanelOpen,
           // Opening an artifact closes the attachment/workspace viewer.
           activeAttachment: id ? null : get().activeAttachment,
           attachmentPanelOpen: id ? false : get().attachmentPanelOpen,
@@ -1948,6 +2211,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           workspaceFile: f,
           // Opening a workspace file shows the artifact panel.
           artifactPanelOpen: !!f,
+          workspacePanelOpen: f ? false : get().workspacePanelOpen,
           // Mutual exclusion: clear other panel state.
           activeArtifactId: f ? null : get().activeArtifactId,
           activeAttachment: f ? null : get().activeAttachment,
@@ -1960,6 +2224,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({
           activeAttachment: a,
           attachmentPanelOpen: !!a,
+          workspacePanelOpen: a ? false : get().workspacePanelOpen,
           // Mutual exclusion with the artifact panel.
           activeArtifactId: a ? null : get().activeArtifactId,
           artifactPanelOpen: a ? false : get().artifactPanelOpen,
@@ -1974,6 +2239,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           activeSubagentToolCallId: toolCallId,
           artifactPanelOpen: false,
           attachmentPanelOpen: false,
+          workspacePanelOpen: false,
           sidebarOpen: false,
         });
       },
@@ -2587,6 +2853,39 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         });
       },
 
+      addImageArtifact: (conversationId, title, dataUrl, messageId = "") => {
+        const id = `image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const now = Date.now();
+        const version: ArtifactVersion = {
+          code: dataUrl,
+          title,
+          createdAt: now,
+          source: "agent",
+          messageId,
+        };
+        const artifact: Artifact = {
+          id,
+          kind: "image",
+          title,
+          code: dataUrl,
+          messageId,
+          createdAt: now,
+          versions: [version],
+          activeVersionIndex: 0,
+        };
+        set((state) => ({
+          artifacts: {
+            ...state.artifacts,
+            [conversationId]: [...(state.artifacts[conversationId] ?? []), artifact],
+          },
+          activeArtifactId: id,
+          artifactPanelOpen: true,
+          workspacePanelOpen: false,
+          sidebarOpen: false,
+        }));
+        return id;
+      },
+
       setSidebarOpen: (open) => {
         set({ sidebarOpen: open });
       },
@@ -2719,6 +3018,136 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           try { localStorage.setItem("goatllm-research-mode", String(next)); } catch {}
           return { researchMode: next };
         });
+      },
+
+      openWorkspacePanel: (tab) => {
+        const nextTab = tab ?? get().workspacePanelTab;
+        set({
+          workspacePanelOpen: true,
+          workspacePanelTab: nextTab,
+          artifactPanelOpen: false,
+          attachmentPanelOpen: false,
+          subagentPanelOpen: false,
+          sidebarOpen: false,
+        });
+        saveJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, {
+          workspacePanelOpen: true,
+          workspacePanelTab: nextTab,
+        });
+      },
+
+      closeWorkspacePanel: () => {
+        set({ workspacePanelOpen: false });
+        saveJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, {
+          workspacePanelOpen: false,
+          workspacePanelTab: get().workspacePanelTab,
+        });
+      },
+
+      setWorkspacePanelTab: (tab) => {
+        set({ workspacePanelTab: tab, workspacePanelOpen: true });
+        saveJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, {
+          workspacePanelOpen: true,
+          workspacePanelTab: tab,
+        });
+      },
+
+      setUsageSettings: (settings) => {
+        set({ usageSettings: settings });
+        saveJsonSetting(USAGE_SETTINGS_KEY, settings);
+      },
+
+      setVoiceSettings: (settings) => {
+        set({ voiceSettings: settings });
+        saveJsonSetting(VOICE_SETTINGS_KEY, settings);
+      },
+
+      setSyncSettings: (settings) => {
+        set({ syncSettings: settings });
+        saveJsonSetting(SYNC_SETTINGS_KEY, settings);
+      },
+
+      setFeatureFlag: (key, enabled) => {
+        const next = { ...get().featureFlags, [key]: enabled };
+        set({ featureFlags: next });
+        saveJsonSetting(FEATURE_FLAGS_KEY, next);
+      },
+
+      setBrowserMirror: (updates) => {
+        set((state) => ({ browserMirror: { ...state.browserMirror, ...updates } }));
+      },
+
+      addModelComparisonRun: (run) => {
+        const next = [run, ...get().modelComparisonRuns].slice(0, 20);
+        set({ modelComparisonRuns: next });
+        saveJsonSetting(MODEL_COMPARISON_RUNS_KEY, next);
+      },
+
+      updateModelComparisonRun: (runId, updates) => {
+        const next = get().modelComparisonRuns.map((run) =>
+          run.id === runId ? { ...run, ...updates } : run,
+        );
+        set({ modelComparisonRuns: next });
+        saveJsonSetting(MODEL_COMPARISON_RUNS_KEY, next);
+      },
+
+      setNotebookCells: (cells) => {
+        set({ notebookCells: cells });
+        saveJsonSetting(NOTEBOOK_CELLS_KEY, cells);
+      },
+
+      updateNotebookCell: (cellId, updates) => {
+        const next = get().notebookCells.map((cell) =>
+          cell.id === cellId ? { ...cell, ...updates, updatedAt: Date.now() } : cell,
+        );
+        set({ notebookCells: next });
+        saveJsonSetting(NOTEBOOK_CELLS_KEY, next);
+      },
+
+      addImageJob: (job) => {
+        const next = [job, ...get().imageJobs].slice(0, 50);
+        set({ imageJobs: next });
+        saveJsonSetting(IMAGE_JOBS_KEY, next);
+      },
+
+      updateImageJob: (jobId, updates) => {
+        const next = get().imageJobs.map((job) =>
+          job.id === jobId ? { ...job, ...updates } : job,
+        );
+        set({ imageJobs: next });
+        saveJsonSetting(IMAGE_JOBS_KEY, next);
+      },
+
+      setScheduledAgents: (agents) => {
+        set({ scheduledAgents: agents });
+        saveJsonSetting(SCHEDULED_AGENTS_KEY, agents);
+      },
+
+      addWatcherEvent: (event) => {
+        const next = [event, ...get().watcherEvents].slice(0, 100);
+        set({ watcherEvents: next });
+        saveJsonSetting(WATCHER_EVENTS_KEY, next);
+      },
+
+      clearWatcherEvents: () => {
+        set({ watcherEvents: [] });
+        saveJsonSetting(WATCHER_EVENTS_KEY, []);
+      },
+
+      setRagSettings: (settings) => {
+        set({ ragSettings: settings });
+        saveJsonSetting(RAG_SETTINGS_KEY, settings);
+      },
+
+      setActiveBranchTip: (conversationId, tipMessageId) => {
+        const next = { ...get().activeBranchTips, [conversationId]: tipMessageId };
+        set({ activeBranchTips: next });
+        saveJsonSetting(BRANCH_TIPS_KEY, next);
+      },
+
+      setPursueGoalMode: (enabled) => {
+        set({ pursueGoalMode: enabled });
+        if (enabled && !get().agentMode) get().setAgentMode(true);
       },
 
       setPlanMode: (enabled) => {
@@ -3597,6 +4026,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             disabledSkills,
             autoTriggerSkills,
             activeId: validActiveId,
+            workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
+            workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
+            usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+            voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+            syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+            featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+            modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+            notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+            imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
+            scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+            watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
+            ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+            activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
             _hydrated: true,
           });
 
@@ -3687,6 +4129,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             researchMode: false,
             planMode: false,
             autoApprove: savedMode === "yolo",
+            workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
+            workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
+            usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+            voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+            syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+            featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
+            modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+            notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+            imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
+            scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+            watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
+            ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+            activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
             _hydrated: true,
           });
         }
@@ -3694,15 +4149,15 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       // ── Derived ──
 
-      getActiveLlmConfig: (): LlmConfig | null => {
-        const { selectedModelId, providerConfigs, modelOverrides } = get();
-        if (!selectedModelId) return null;
+      getLlmConfigForModel: (targetModelId): LlmConfig | null => {
+        const { providerConfigs, modelOverrides } = get();
+        if (!targetModelId) return null;
 
-        const [providerId, ...modelIdParts] = selectedModelId.split(":");
+        const [providerId, ...modelIdParts] = targetModelId.split(":");
         const modelId = modelIdParts.join(":"); // handles model IDs with colons
 
         // Grab per-model overrides the user may have set via the gear icon.
-        const overrides = modelOverrides[selectedModelId];
+        const overrides = modelOverrides[targetModelId];
 
         // Built-in provider (e.g. OpenCode Go Free).
         // We resolve the bundled credential lazily so the decoded value
@@ -3741,5 +4196,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         }
 
         return null;
+      },
+
+      getActiveLlmConfig: (): LlmConfig | null => {
+        return get().getLlmConfigForModel(get().selectedModelId);
       },
     }));

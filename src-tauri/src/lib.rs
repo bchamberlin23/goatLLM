@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::Manager;
+use std::time::{SystemTime, UNIX_EPOCH};
+use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use tauri::{Emitter, Manager};
 
 mod jj;
 mod mcp;
@@ -53,6 +56,7 @@ struct DbMessage {
     thinking_content: Option<String>,
     turn_duration_ms: Option<i64>,
     edited_files: Option<String>,
+    model_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,6 +95,7 @@ struct SaveMessageRequest {
     thinking_content: Option<String>,
     turn_duration_ms: Option<i64>,
     edited_files: Option<String>,
+    model_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,6 +103,18 @@ struct DirEntry {
     name: String,
     is_dir: bool,
     size: u64,
+}
+
+struct WatcherRegistry {
+    watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WorkspaceWatchEvent {
+    path: String,
+    kind: String,
+    at: i64,
+    diagnostic: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,6 +252,13 @@ fn init_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, String> {
             .map_err(|e| format!("Failed to update schema version: {}", e))?;
     }
 
+    if version < 10 {
+        conn.execute_batch(include_str!("../migrations/010_message_model.sql"))
+            .map_err(|e| format!("Database migration 010 failed: {}. You may need to remove the database file and restart.", e))?;
+        conn.pragma_update(None, "user_version", 10)
+            .map_err(|e| format!("Failed to update schema version: {}", e))?;
+    }
+
     Ok(conn)
 }
 
@@ -269,7 +293,7 @@ fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData, String> {
         .collect();
 
     let mut msg_stmt = db
-        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files FROM messages ORDER BY created_at ASC")
+        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id FROM messages ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
 
     let messages: Vec<DbMessage> = msg_stmt
@@ -286,6 +310,7 @@ fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData, String> {
                 thinking_content: row.get(8)?,
                 turn_duration_ms: row.get(9)?,
                 edited_files: row.get(10)?,
+                model_id: row.get(11)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -340,7 +365,7 @@ fn save_message(
         0
     };
     db.execute(
-        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             payload.id,
             payload.conversation_id,
@@ -352,7 +377,8 @@ fn save_message(
             pin_int,
             payload.thinking_content,
             payload.turn_duration_ms,
-            payload.edited_files
+            payload.edited_files,
+            payload.model_id
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -370,7 +396,7 @@ fn load_messages_for_conversation(
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut stmt = db
         .prepare(
-            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files \
+            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id \
              FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -388,6 +414,7 @@ fn load_messages_for_conversation(
                 thinking_content: row.get(8)?,
                 turn_duration_ms: row.get(9)?,
                 edited_files: row.get(10)?,
+                model_id: row.get(11)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -3227,6 +3254,191 @@ fn run_python(code: String) -> Result<String, String> {
     }
 }
 
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn watch_kind(kind: &EventKind) -> &'static str {
+    match kind {
+        EventKind::Create(_) => "create",
+        EventKind::Remove(_) => "remove",
+        EventKind::Modify(_) => "modify",
+        _ => "modify",
+    }
+}
+
+#[tauri::command]
+fn watch_workspace(
+    workspace: String,
+    app: tauri::AppHandle,
+    registry: tauri::State<'_, WatcherRegistry>,
+) -> Result<String, String> {
+    let path = PathBuf::from(&workspace);
+    if !path.is_dir() {
+        return Err(format!("Workspace '{}' is not a directory", workspace));
+    }
+
+    let mut watchers = registry.watchers.lock().map_err(|e| e.to_string())?;
+    if watchers.contains_key(&workspace) {
+        return Ok(format!("Already watching {}", workspace));
+    }
+
+    let workspace_for_payload = workspace.clone();
+    let mut watcher = RecommendedWatcher::new(
+        move |result: notify::Result<notify::Event>| {
+            let event = match result {
+                Ok(event) => event,
+                Err(error) => {
+                    let _ = app.emit(
+                        "workspace-watch-event",
+                        WorkspaceWatchEvent {
+                            path: workspace_for_payload.clone(),
+                            kind: "modify".to_string(),
+                            at: now_millis(),
+                            diagnostic: Some(error.to_string()),
+                        },
+                    );
+                    return;
+                }
+            };
+
+            let kind = watch_kind(&event.kind).to_string();
+            for path in event.paths {
+                let path_string = path.to_string_lossy().to_string();
+                if path_string.contains("/.git/") || path_string.contains("/node_modules/") {
+                    continue;
+                }
+                let _ = app.emit(
+                    "workspace-watch-event",
+                    WorkspaceWatchEvent {
+                        path: path_string,
+                        kind: kind.clone(),
+                        at: now_millis(),
+                        diagnostic: None,
+                    },
+                );
+            }
+        },
+        NotifyConfig::default(),
+    )
+    .map_err(|e| format!("Cannot create watcher: {}", e))?;
+
+    watcher
+        .watch(&path, RecursiveMode::Recursive)
+        .map_err(|e| format!("Cannot watch '{}': {}", workspace, e))?;
+    watchers.insert(workspace.clone(), watcher);
+    Ok(format!("Watching {}", workspace))
+}
+
+#[tauri::command]
+fn unwatch_workspace(
+    workspace: String,
+    registry: tauri::State<'_, WatcherRegistry>,
+) -> Result<String, String> {
+    let mut watchers = registry.watchers.lock().map_err(|e| e.to_string())?;
+    if watchers.remove(&workspace).is_some() {
+        Ok(format!("Stopped watching {}", workspace))
+    } else {
+        Ok(format!("No watcher registered for {}", workspace))
+    }
+}
+
+fn sync_config_string(config: &serde_json::Value, key: &str) -> Option<String> {
+    config.get(key).and_then(|value| value.as_str()).map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+}
+
+fn sync_blob_path(config: &serde_json::Value) -> Result<PathBuf, String> {
+    let prefix = sync_config_string(config, "prefix").unwrap_or_else(|| "goatllm".to_string());
+    let provider = sync_config_string(config, "provider").unwrap_or_else(|| "icloud".to_string());
+    let file_name = "goatllm-sync.json";
+    if provider == "icloud" {
+        let home = dirs::home_dir().ok_or_else(|| "Cannot resolve home directory".to_string())?;
+        let root = home
+            .join("Library")
+            .join("Mobile Documents")
+            .join("com~apple~CloudDocs")
+            .join(prefix);
+        return Ok(root.join(file_name));
+    }
+    if let Some(endpoint) = sync_config_string(config, "endpoint") {
+        if let Some(local_path) = endpoint.strip_prefix("file://") {
+            let bucket = sync_config_string(config, "bucket").unwrap_or_else(|| "goatllm".to_string());
+            return Ok(PathBuf::from(local_path).join(bucket).join(prefix).join(file_name));
+        }
+    }
+    Err("S3 sync uses HTTP export/import when endpoint is not file://".to_string())
+}
+
+fn sync_http_url(config: &serde_json::Value) -> Result<String, String> {
+    let endpoint = sync_config_string(config, "endpoint").ok_or_else(|| "S3 endpoint is required".to_string())?;
+    let bucket = sync_config_string(config, "bucket").ok_or_else(|| "S3 bucket is required".to_string())?;
+    let prefix = sync_config_string(config, "prefix").unwrap_or_else(|| "goatllm".to_string());
+    Ok(format!(
+        "{}/{}/{}/goatllm-sync.json",
+        endpoint.trim_end_matches('/'),
+        bucket.trim_matches('/'),
+        prefix.trim_matches('/'),
+    ))
+}
+
+#[tauri::command]
+fn sync_export_state(config: serde_json::Value, payload: String) -> Result<String, String> {
+    let provider = sync_config_string(&config, "provider").unwrap_or_else(|| "icloud".to_string());
+    if provider == "s3" {
+        if sync_config_string(&config, "endpoint").map(|endpoint| endpoint.starts_with("file://")).unwrap_or(false) {
+            let path = sync_blob_path(&config)?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).map_err(|e| format!("Cannot create sync dir: {}", e))?;
+            }
+            fs::write(&path, payload).map_err(|e| format!("Cannot write sync state: {}", e))?;
+            return Ok(format!("Exported sync state to {}", path.display()));
+        }
+        let url = sync_http_url(&config)?;
+        let response = reqwest::blocking::Client::new()
+            .put(&url)
+            .header("content-type", "application/json")
+            .body(payload)
+            .send()
+            .map_err(|e| format!("S3 export failed: {}", e))?;
+        if !response.status().is_success() {
+            return Err(format!("S3 export failed with {}", response.status()));
+        }
+        return Ok(format!("Exported sync state to {}", url));
+    }
+
+    let path = sync_blob_path(&config)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Cannot create sync dir: {}", e))?;
+    }
+    fs::write(&path, payload).map_err(|e| format!("Cannot write sync state: {}", e))?;
+    Ok(format!("Exported sync state to {}", path.display()))
+}
+
+#[tauri::command]
+fn sync_import_state(config: serde_json::Value) -> Result<String, String> {
+    let provider = sync_config_string(&config, "provider").unwrap_or_else(|| "icloud".to_string());
+    if provider == "s3" {
+        if sync_config_string(&config, "endpoint").map(|endpoint| endpoint.starts_with("file://")).unwrap_or(false) {
+            let path = sync_blob_path(&config)?;
+            return fs::read_to_string(&path).map_err(|e| format!("Cannot read sync state: {}", e));
+        }
+        let url = sync_http_url(&config)?;
+        let response = reqwest::blocking::Client::new()
+            .get(&url)
+            .send()
+            .map_err(|e| format!("S3 import failed: {}", e))?;
+        if !response.status().is_success() {
+            return Err(format!("S3 import failed with {}", response.status()));
+        }
+        return response.text().map_err(|e| format!("Cannot read S3 response: {}", e));
+    }
+    let path = sync_blob_path(&config)?;
+    fs::read_to_string(&path).map_err(|e| format!("Cannot read sync state: {}", e))
+}
+
 // ── App entry ──
 
 pub fn run() {
@@ -3263,6 +3475,9 @@ pub fn run() {
 
             // Track MCP stdio child processes.
             app.manage(mcp::McpProcesses::new());
+
+            // Keep native notify watchers alive between command calls.
+            app.manage(WatcherRegistry { watchers: Mutex::new(HashMap::new()) });
 
             let _window = app.get_webview_window("main").unwrap();
             Ok(())
@@ -3344,6 +3559,10 @@ pub fn run() {
             memory_search,
             memory_search_text,
             memory_increment_uses,
+            watch_workspace,
+            unwatch_workspace,
+            sync_export_state,
+            sync_import_state,
             searxng::searxng_status,
             searxng::searxng_start,
             searxng::searxng_stop,

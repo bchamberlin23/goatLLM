@@ -163,6 +163,7 @@ interface DbMessage {
   thinking_content?: string | null;
   turn_duration_ms?: number | null;
   edited_files?: string | null;
+  model_id?: string | null;
 }
 
 interface AllData {
@@ -224,6 +225,7 @@ function fromDbMessage(d: DbMessage): Message {
     thinkingContent: d.thinking_content || undefined,
     turnDurationMs: d.turn_duration_ms ?? undefined,
     editedFiles,
+    modelId: d.model_id || undefined,
   };
 }
 
@@ -394,6 +396,7 @@ async function invokeSaveMessage(m: Message): Promise<void> {
         m.editedFiles && m.editedFiles.length > 0
           ? JSON.stringify(m.editedFiles)
           : null,
+      modelId: m.modelId ?? null,
     },
   });
 }
