@@ -273,6 +273,8 @@ export interface DeepResearchState {
   queries?: number;
   sourceCount?: number;
   findingCount?: number;
+  sources?: string[];
+  findings?: string[];
   currentSource?: {
     title?: string;
     url: string;

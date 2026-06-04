@@ -13,6 +13,8 @@ export interface ResearchProgress {
   new_sources?: number;
   total_sources?: number;
   total_findings?: number;
+  sources?: string[];
+  findings?: string[];
   message?: string;
 }
 
@@ -352,13 +354,21 @@ function fallbackReport(question: string, findings: ResearchFinding[]): string {
 export async function runDeepResearch(
   question: string,
   config: LlmConfig,
-  onProgress: (p: ResearchProgress) => void,
+  rawOnProgress: (p: ResearchProgress) => void,
   abortSignal?: AbortSignal,
   maxRounds = 4,
   maxTimeSeconds = 300,
   options: DeepResearchOptions = {}
 ): Promise<string> {
   const startTime = Date.now();
+  
+  const onProgress = (p: ResearchProgress) => {
+    rawOnProgress({
+      ...p,
+      sources: Array.from(urlsFetched),
+      findings: findings.map((f) => f.summary || f.evidence || ""),
+    });
+  };
   const maxUrlsPerRound = clampInt(options.maxUrlsPerRound ?? 3, 1, 20);
   const maxContentChars = clampInt(options.maxContentChars ?? 15000, 2000, 100000);
   const extractionConcurrency = clampInt(options.extractionConcurrency ?? 3, 1, 12);

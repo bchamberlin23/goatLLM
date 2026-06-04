@@ -934,6 +934,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             queries: progress.queries,
             sourceCount: progress.total_sources,
             findingCount: progress.total_findings,
+            sources: progress.sources,
+            findings: progress.findings,
             currentSource: progress.current_source ?? (progress.url ? { url: progress.url, title: progress.title } : undefined),
             events: events.slice(-8),
             error: progress.phase === "error" ? progress.message : undefined,

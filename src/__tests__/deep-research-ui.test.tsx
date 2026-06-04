@@ -97,4 +97,53 @@ describe("Deep Research UI", () => {
     expect(screen.getByText("2 findings")).toBeInTheDocument();
     expect(screen.getByText("Search provider benchmarks")).toBeInTheDocument();
   });
+
+  it("opens the detail pane when clicking sources and findings metrics", async () => {
+    resetStore();
+    render(
+      <MessageBubble
+        message={assistantMessage({
+          isStreaming: true,
+          deepResearch: {
+            query: "compare search providers",
+            phase: "reading",
+            startedAt: Date.now() - 5000,
+            round: 2,
+            queries: 4,
+            sourceCount: 2,
+            findingCount: 2,
+            sources: ["https://example.com/one", "https://example.com/two"],
+            findings: ["First finding summary", "Second finding summary"],
+            currentSource: {
+              title: "Search provider benchmarks",
+              url: "https://example.com/benchmarks",
+            },
+            events: [],
+          },
+        } as Partial<Message>)}
+      />,
+    );
+
+    // Initial state: details pane is not open
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Click on sources badge
+    fireEvent.click(screen.getByText("2 sources"));
+
+    // Verify dialog is open and displays sources tab contents
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Research Details")).toBeInTheDocument();
+    expect(screen.getAllByText("example.com").length).toBe(2);
+    expect(screen.getByText("https://example.com/one")).toBeInTheDocument();
+    expect(screen.getByText("https://example.com/two")).toBeInTheDocument();
+
+    // Switch to findings tab
+    fireEvent.click(screen.getByRole("button", { name: /findings \(2\)/i }));
+    expect(screen.getByText("First finding summary")).toBeInTheDocument();
+    expect(screen.getByText("Second finding summary")).toBeInTheDocument();
+
+    // Close detail pane using close button
+    fireEvent.click(screen.getByRole("button", { name: /close details pane/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });
