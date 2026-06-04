@@ -25,9 +25,9 @@ export function ApprovalQueue() {
   if (pending.length === 0) return null;
 
   return (
-    <div className="w-full max-w-[720px] rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+    <div className="w-full max-w-[720px] rounded-lg border border-accent/25 bg-accent/[0.07] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-[#f59e0b]">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-accent">
           Approvals
         </span>
         <span className="font-mono text-[10.5px] text-text-4 tabular-nums">
@@ -42,7 +42,7 @@ export function ApprovalQueue() {
             </code>
             <button
               type="button"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-white/[0.07] hover:text-text-1"
+              className="control-icon inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors"
               aria-label={`Deny ${tc.toolName}`}
               onClick={() => denyExecution(tc.toolCallId)}
             >
@@ -50,7 +50,7 @@ export function ApprovalQueue() {
             </button>
             <button
               type="button"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-white text-black transition-colors hover:bg-white/90"
+              className="primary-action inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors"
               aria-label={`Approve ${tc.toolName}`}
               onClick={() => approveExecution(tc.toolCallId)}
             >

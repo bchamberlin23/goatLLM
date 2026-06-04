@@ -26,10 +26,21 @@ export default function App() {
   const checkAllProvidersHealth = useChatStore((s) => s.checkAllProvidersHealth);
   const discoverAllLocalModels = useChatStore((s) => s.discoverAllLocalModels);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => { hydrate(); }, []);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 720px)");
+    const collapseOnNarrow = (matches: boolean) => {
+      if (matches) setSidebarOpen(false);
+    };
+    collapseOnNarrow(query.matches);
+    const onChange = (event: MediaQueryListEvent) => collapseOnNarrow(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, [setSidebarOpen]);
   useEffect(() => { if (_hydrated) checkAllProvidersHealth(); }, [_hydrated]);
   useEffect(() => { if (_hydrated) void discoverAllLocalModels(); }, [_hydrated]);
   // Seed built-in skills then refresh the list once hydrated.
@@ -49,6 +60,8 @@ export default function App() {
     if (_hydrated) {
       const state = useChatStore.getState();
       if (state.searchBackend === "searxng") {
+        const hasTauriBridge = Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+        if (!hasTauriBridge) return;
         import("@tauri-apps/api/core")
           .then(({ invoke }) => {
             invoke("searxng_start").catch((err) => {
@@ -92,7 +105,7 @@ export default function App() {
   });
 
   return (
-    <div className="w-full h-screen flex overflow-hidden relative" style={{ background: "#1a1a1c" }}>
+    <div className="w-full h-screen flex overflow-hidden relative bg-bg">
       <div
         className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
         style={{ width: sidebarOpen ? 244 : 0 }}
@@ -103,14 +116,14 @@ export default function App() {
         className="flex-1 h-full flex flex-col relative overflow-hidden"
         style={{
           background:
-            "radial-gradient(1100px 620px at 50% -10%, rgba(245,158,66,0.045), transparent 55%), radial-gradient(900px 500px at 100% 110%, rgba(99,102,241,0.035), transparent 55%), #1a1a1c",
+            "radial-gradient(1100px 620px at 50% -10%, rgba(245,158,66,0.052), transparent 55%), radial-gradient(900px 560px at 100% 110%, rgba(255,255,255,0.026), transparent 58%), var(--bg)",
         }}
       >
         <ChatView onOpenSettings={handleOpenSettings} />
       </main>
       <button
         onClick={toggleSidebar}
-        className="absolute top-[5px] left-[78px] z-50 p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+        className="control-icon absolute top-[5px] left-[78px] max-[720px]:left-3 z-50 p-1.5 rounded-md transition-colors"
         aria-label={sidebarOpen ? "Hide sidebar" : "Expand sidebar"}
         title={sidebarOpen ? "Hide sidebar" : "Expand sidebar"}
       >

@@ -427,7 +427,7 @@ function DaemonControlCard({
           <button
             onClick={onRecheck}
             disabled={busy?.kind === "recheck"}
-            className="w-7 h-7 flex items-center justify-center rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-50 transition-colors"
+            className="control-icon w-7 h-7 flex items-center justify-center rounded disabled:opacity-50 transition-colors"
             aria-label="Recheck Ollama status"
             title="Recheck"
           >
@@ -442,7 +442,7 @@ function DaemonControlCard({
             <button
               onClick={onStart}
               disabled={!!busy}
-              className="h-7 px-3 rounded-md text-[12px] font-medium bg-[#f59e42] text-black hover:bg-[#fbb968] disabled:opacity-60 transition-colors flex items-center gap-1.5"
+              className="primary-action h-7 px-3 rounded-md text-[12px] font-medium disabled:opacity-60 transition-colors flex items-center gap-1.5"
             >
               {busy?.kind === "start" ? (
                 <Loader2 size={12} strokeWidth={2} className="animate-spin" />
@@ -531,7 +531,7 @@ function SetupGuideCard({
   }, [guide.platform]);
 
   return (
-    <div className="bg-[#212122] border border-white/5 rounded-lg overflow-hidden">
+    <div className="soft-card rounded-lg overflow-hidden">
       <div className="px-3 py-2.5 flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
           <Terminal size={13} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" />
@@ -550,7 +550,7 @@ function SetupGuideCard({
         {/* The command box. Selectable, copyable, monospaced — same shape as
             a terminal line so it's instantly recognizable. */}
         <div className="group relative flex items-stretch gap-1.5">
-          <code className="flex-1 px-2.5 py-2 bg-[#1a1a1c] border border-white/5 rounded-md text-[12px] text-[#ececec] font-mono leading-snug select-all break-all">
+          <code className="flex-1 px-2.5 py-2 bg-sunken border border-white/5 rounded-md text-[12px] text-[#ececec] font-mono leading-snug select-all break-all">
             {guide.command}
           </code>
           <button
@@ -593,7 +593,7 @@ function SetupGuideCard({
           <button
             onClick={onRecheck}
             disabled={busy}
-            className="h-7 px-3 rounded-md text-[12px] font-medium bg-[#f59e42] text-black hover:bg-[#fbb968] disabled:opacity-60 transition-colors flex items-center gap-1.5"
+            className="primary-action h-7 px-3 rounded-md text-[12px] font-medium disabled:opacity-60 transition-colors flex items-center gap-1.5"
           >
             {busy ? (
               <Loader2 size={12} strokeWidth={2} className="animate-spin" />

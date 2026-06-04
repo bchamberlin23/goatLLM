@@ -46,13 +46,13 @@ export function CritiqueButton({ code }: { code: string }) {
         disabled={running}
         title={running ? "Scoring…" : "Run 5-dim critique"}
         aria-label="Run critique"
-        className="flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] font-medium text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] disabled:opacity-60 transition-colors"
+        className="control-pill flex items-center gap-1 px-2 h-7 rounded-md text-[11.5px] font-medium disabled:opacity-60 transition-colors"
       >
         <Sparkles size={12} strokeWidth={2} aria-hidden />
         <span>{running ? "Scoring…" : result ? `${result.overall.toFixed(1)}/5` : "Critique"}</span>
       </button>
       {error && (
-        <div className="absolute top-full right-0 mt-1.5 w-[260px] rounded-lg bg-[#2a2a2c] border border-[#f87171]/30 px-3 py-2 z-50 text-[11.5px] text-[#f87171] shadow-lg shadow-black/40">
+        <div className="popover-surface absolute top-full right-0 mt-1.5 w-[260px] rounded-lg border-[#f87171]/30 px-3 py-2 z-50 text-[11.5px] text-[#f87171]">
           {error}
         </div>
       )}
@@ -79,7 +79,7 @@ function CritiquePopover({
     <div
       role="dialog"
       aria-label="Critique scores"
-      className="absolute top-full right-0 mt-1.5 w-[300px] rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_120ms_ease] overflow-hidden"
+      className="popover-surface absolute top-full right-0 mt-1.5 w-[300px] rounded-xl z-50 animate-[fadeIn_120ms_ease] overflow-hidden"
     >
       <div className="px-3.5 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
         <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">

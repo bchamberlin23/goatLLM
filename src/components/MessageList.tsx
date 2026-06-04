@@ -311,7 +311,7 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
       </div>
       {showScrollBtn && (
         <button
-          className={`absolute bottom-4 h-8 px-3 rounded-full bg-[#2a2a2c] border border-white/10 text-[#b4b4b4] flex items-center gap-1.5 shadow-md hover:bg-white/10 hover:text-[#ececec] hover:-translate-y-0.5 transition-all z-10 animate-[fadeInUp_150ms_ease] ${
+          className={`liquid-surface absolute bottom-4 h-8 px-3 rounded-full text-[#d5d5d5] flex items-center gap-1.5 hover:text-[#ececec] hover:-translate-y-0.5 transition-[color,transform,box-shadow] z-10 animate-[fadeInUp_150ms_ease] ${
             edgeScroll ? "left-[430px] -translate-x-1/2" : "left-1/2 -translate-x-1/2"
           }`}
           onClick={scrollToBottom}
@@ -338,7 +338,7 @@ function DateSeparator({ ts }: { ts: number }) {
       <div className="flex items-center gap-3 w-full max-w-[720px] mx-auto">
         <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
         <span
-          className="shrink-0 px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.05] text-[10.5px] font-medium uppercase tracking-wider text-[#a0a0a0] tabular-nums"
+          className="shrink-0 px-2.5 py-0.5 rounded-full bg-white/[0.045] border border-white/[0.06] text-[10.5px] font-medium uppercase tracking-wider text-[#a0a0a0] tabular-nums shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
           title={formatLongDateTime(ts)}
         >
           {formatDateSeparator(ts)}
@@ -352,7 +352,7 @@ function DateSeparator({ ts }: { ts: number }) {
 function QueuedMessageBubble({ content, onSteer }: { content: string; onSteer: () => void }) {
   return (
     <div className="flex flex-col items-end px-6 py-1.5">
-      <div className="max-w-[70%] bg-[#f59e42]/5 border border-[#f59e42]/15 rounded-2xl rounded-br-md px-4 py-2.5">
+      <div className="max-w-[70%] bg-[#f59e42]/[0.055] border border-[#f59e42]/20 rounded-2xl rounded-br-md px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-[#f59e42]/60">
             Queued
@@ -361,7 +361,7 @@ function QueuedMessageBubble({ content, onSteer }: { content: string; onSteer: (
         <p className="text-[14px] text-[#d5d5d5] whitespace-pre-wrap">{content}</p>
         <button
           onClick={onSteer}
-          className="flex items-center gap-1 mt-2 px-2 py-1 rounded-md bg-[#f59e42] text-[#1a1a1c] text-[11px] font-medium hover:bg-[#f0903a] transition-colors"
+          className="primary-action flex items-center gap-1 mt-2 px-2 py-1 rounded-md text-[11px] font-medium"
         >
           <Send size={11} />
           Steer

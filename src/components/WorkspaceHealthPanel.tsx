@@ -54,7 +54,7 @@ export function WorkspaceHealthPanel() {
   };
 
   return (
-    <div className="w-full max-w-[720px] rounded-lg border border-white/[0.06] bg-white/[0.035] px-3 py-2">
+    <div className="w-full max-w-[720px] rounded-lg border border-white/[0.07] bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Activity size={13} strokeWidth={1.8} className="shrink-0 text-text-4" aria-hidden />
@@ -88,7 +88,7 @@ export function WorkspaceHealthPanel() {
               key={check.command}
               type="button"
               onClick={() => runSuggestedCheck(check.command)}
-              className="inline-flex items-center gap-1 rounded-md border border-accent/20 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/15"
+              className="inline-flex items-center gap-1 rounded-md border border-accent/24 bg-accent/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/15 hover:border-accent/35"
             >
               <ListChecks size={11} strokeWidth={1.8} aria-hidden />
               {check.label}

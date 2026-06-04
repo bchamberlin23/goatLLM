@@ -99,7 +99,7 @@ export function WorkspacePicker() {
       {open_ && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen_(false)} />
-          <div className="absolute bottom-full left-0 mb-1.5 w-60 bg-[#2a2a2a] border border-white/10 rounded-xl p-1.5 shadow-xl z-20 animate-[dropdownIn_110ms_ease]">
+          <div className="absolute bottom-full left-0 mb-1.5 w-60 popover-surface rounded-xl p-1.5 z-20 animate-[dropdownIn_110ms_ease]">
             <button
               className="flex flex-col gap-0.5 w-full px-2.5 py-2 rounded-md text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors text-left"
               onClick={handleNone}

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useChatStore } from "../../stores/chat";
 import { ProviderCard } from "./ProviderCard";
 import { SettingsGroup } from "./SettingsGroup";
@@ -95,20 +95,21 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
       {!showAdd ? (
         <button
           onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-white/10 text-[12.5px] text-[#a0a0a0] hover:text-[#ececec] hover:border-white/20 hover:bg-white/[0.02] transition-colors"
+          className="control-pill flex items-center gap-2 px-3 py-2 rounded-lg border-dashed text-[12.5px] transition-colors"
         >
           <Plus size={14} strokeWidth={1.75} />
           Add custom provider
         </button>
       ) : (
-        <div className="p-4 rounded-xl bg-[#212122] border border-white/[0.06] flex flex-col gap-3">
+        <div className="soft-card p-4 rounded-xl flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] font-medium text-[#ececec]">New custom provider</span>
             <button
               onClick={() => { setShowAdd(false); setNewName(""); setNewBaseUrl(""); setNewApiKey(""); }}
-              className="text-[#888] hover:text-[#ececec] transition-colors"
+              className="control-icon flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+              aria-label="Cancel custom provider"
             >
-              ×
+              <X size={13} strokeWidth={2} />
             </button>
           </div>
 
@@ -119,7 +120,7 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g., Together AI"
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-[#f59e42]/50"
+              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
             />
           </label>
 
@@ -130,7 +131,7 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
               value={newBaseUrl}
               onChange={(e) => setNewBaseUrl(e.target.value)}
               placeholder="https://api.together.xyz/v1"
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-[#f59e42]/50 font-mono text-[12px]"
+              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 font-mono text-[12px]"
             />
             <span className="text-[10px] text-[#888]">Must be OpenAI-compatible (/v1/chat/completions)</span>
           </label>
@@ -142,21 +143,21 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
               value={newApiKey}
               onChange={(e) => setNewApiKey(e.target.value)}
               placeholder="sk-..."
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-[#f59e42]/50 font-mono text-[12px]"
+              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 font-mono text-[12px]"
             />
           </label>
 
           <div className="flex gap-2 mt-1">
             <button
               onClick={() => { setShowAdd(false); setNewName(""); setNewBaseUrl(""); setNewApiKey(""); }}
-              className="flex-1 py-1.5 rounded-md text-[12.5px] text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+              className="control-pill flex-1 py-1.5 rounded-md text-[12.5px] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleAdd}
               disabled={!newName.trim() || !newBaseUrl.trim()}
-              className="flex-1 py-1.5 rounded-md text-[12.5px] font-medium bg-[#f59e42] text-black hover:bg-[#f0903a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="primary-action flex-1 py-1.5 rounded-md text-[12.5px] font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Add provider
             </button>

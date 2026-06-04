@@ -71,7 +71,7 @@ export function AgentPill() {
         aria-haspopup="menu"
         aria-expanded={open}
         title={`Agent permission — ${active.label}. ${active.help}`}
-        className="flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-[12px] font-medium transition-colors"
+        className="control-pill flex items-center gap-1.5 px-2.5 h-7 rounded-full text-[12px] font-medium transition-colors"
       >
         <ActiveIcon size={12} strokeWidth={2} aria-hidden="true" className={active.accent} />
         <span className={active.accent}>{active.label}</span>
@@ -86,7 +86,7 @@ export function AgentPill() {
         <div
           role="menu"
           aria-label="Agent permission mode"
-          className="absolute bottom-full left-0 mb-1.5 w-[260px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] py-1 z-50 animate-[dropdownIn_110ms_ease]"
+          className="popover-surface absolute bottom-full left-0 mb-1.5 w-[260px] rounded-xl py-1 z-50 animate-[dropdownIn_110ms_ease]"
         >
           <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
             Permission mode

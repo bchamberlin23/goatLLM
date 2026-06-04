@@ -49,7 +49,7 @@ export function SurfacePill() {
         className={`flex items-center gap-1.5 px-2 h-7 rounded-full border text-[12px] font-medium transition-colors shrink-0 ${
           active
             ? "bg-[#f59e42]/[0.08] border-[#f59e42]/30 text-[#ececec] hover:bg-[#f59e42]/[0.12]"
-            : "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.12] text-[#d5d5d5]"
+            : "control-pill"
         }`}
       >
         <Layout size={12} strokeWidth={2} aria-hidden />
@@ -63,12 +63,12 @@ export function SurfacePill() {
           <div
             role="dialog"
             aria-label="Pick a surface"
-            className="relative w-full max-w-[960px] max-h-[85vh] overflow-y-auto rounded-2xl bg-[#1c1c1e] border border-white/[0.08] shadow-2xl shadow-black/60 m-4 animate-[fadeIn_150ms_ease]"
+            className="modal-surface relative w-full max-w-[960px] max-h-[85vh] overflow-y-auto rounded-2xl m-4 animate-[fadeIn_150ms_ease]"
           >
             {/* Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[#1c1c1e] border-b border-white/[0.06] rounded-t-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[#1c1c1e]/90 backdrop-blur-xl border-b border-white/[0.06] rounded-t-2xl">
               <div>
-                <h1 className="text-[18px] font-medium text-[#ececec] tracking-[-0.01em]">
+                <h1 className="text-[18px] font-medium text-[#ececec]">
                   Pick a surface to design.
                 </h1>
                 <p className="mt-1 text-[12px] text-[#a0a0a0]">
@@ -78,7 +78,7 @@ export function SurfacePill() {
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Close"
-                className="p-2 rounded-lg text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+                className="control-icon p-2 rounded-lg transition-colors"
               >
                 <X size={16} strokeWidth={1.75} />
               </button>
@@ -184,14 +184,14 @@ function SkillCard({
       type="button"
       onClick={onSelect}
       aria-pressed={active}
-      className={`group relative flex flex-col text-left rounded-xl overflow-hidden border transition-colors ${
+      className={`soft-card group relative flex flex-col text-left rounded-xl overflow-hidden transition-all ${
         active
-          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06]"
-          : "border-white/[0.06] bg-[#2a2a2c] hover:border-white/[0.12] hover:bg-[#2d2d2d]"
+          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
+          : "hover:border-white/[0.12] hover:bg-white/[0.06]"
       }`}
     >
       <div
-        className="relative w-full bg-[#1a1a1c] border-b border-white/[0.04]"
+        className="relative w-full bg-sunken border-b border-white/[0.04]"
         style={{ aspectRatio: "16/10" }}
       >
         <SkillPreviewSketch skill={skill} />

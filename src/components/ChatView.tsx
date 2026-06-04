@@ -183,6 +183,8 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
+  const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;
+  const heroWorkspaceName = heroWorkspacePath?.split("/").pop() || heroWorkspacePath;
 
   // ── Window-level drag and drop ──
 
@@ -266,9 +268,9 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     >
       {/* Full-window drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#1a1a1c]/80 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed border-[#f59e42]/40 bg-[#2d2d2d]/80">
-            <div className="w-12 h-12 rounded-full bg-[#f59e42]/10 flex items-center justify-center">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#151516]/82 backdrop-blur-md animate-[fadeIn_150ms_ease]">
+          <div className="liquid-surface flex flex-col items-center gap-3 p-8 rounded-2xl border border-[#f59e42]/35">
+            <div className="w-12 h-12 rounded-full bg-[#f59e42]/10 border border-[#f59e42]/20 flex items-center justify-center shadow-[0_12px_34px_-20px_rgba(245,158,66,0.9)]">
               <Upload size={22} strokeWidth={1.75} className="text-[#f59e42]" />
             </div>
             <span className="text-[15px] font-medium text-[#f59e42]">Drop files here</span>
@@ -317,13 +319,14 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <div
                   className={
                     sidePanelOpen
-                      ? "shrink-0 mt-auto flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3"
-                      : "col-start-2 row-start-2 flex flex-col items-center w-full pt-2 px-6 pb-6 gap-3"
+                      ? "shrink-0 mt-auto flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
+                      : "col-start-2 row-start-2 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
                   }
                 >
                   <ActiveSkillsBar />
                   {agentMode && <ApprovalQueue />}
                   {agentMode && workspaceHealthEnabled && <WorkspaceHealthPanel />}
+                  <ToolActivityIndicator />
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>
@@ -338,22 +341,19 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       )}
 
       {showHero && (
-        <div className="shrink-0 flex flex-col items-center w-full max-w-[860px] mx-auto flex-1 justify-center px-6 pb-6 gap-3 relative">
-          {/* Workspace context badge — pinned near the top of the hero area,
-              above the welcome message, so the user always knows which
-              project folder they're working inside. */}
-          {((agentMode && workspacePath) || (designMode && designWorkspacePath)) && (
-            <span className="absolute top-14 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.06] text-[14px] text-[#c9c9c9] animate-[fadeIn_200ms_ease]">
-              <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" />
-              <span className="text-[#a0a0a0]">
-                {agentMode ? "Working on " : "Designing "}
-              </span>
-              <span className="font-medium text-[#ececec] truncate max-w-[220px]">
-                {((agentMode ? workspacePath : designWorkspacePath) ?? "").split("/").pop()}
-              </span>
-            </span>
-          )}
-          <div className="flex flex-col items-center text-center -mt-16 animate-[fadeIn_320ms_ease]">
+        <div className="shrink-0 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full max-w-[860px] mx-auto flex-1 justify-center px-0 sm:px-6 pb-6 gap-3 relative">
+          <div className="flex flex-col items-center text-center -mt-10 animate-[fadeIn_320ms_ease]">
+            {heroWorkspacePath && (
+              <div className="liquid-surface mb-8 inline-flex max-w-[min(520px,calc(100vw-48px))] items-center gap-2 rounded-full px-4 py-1.5 text-[13px] text-[#c9c9c9]">
+                <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" aria-hidden="true" />
+                <span className="text-[#a0a0a0]">
+                  {agentMode ? "Working on" : "Designing"}
+                </span>
+                <span className="min-w-0 truncate font-medium text-[#ececec]">
+                  {heroWorkspaceName}
+                </span>
+              </div>
+            )}
             {needsSetup ? (
               <div className="mt-3 flex flex-col items-center gap-2 max-w-[480px]">
                 <p className="text-[13px] text-[#a0a0a0] leading-relaxed">
@@ -371,17 +371,17 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               </div>
             ) : (
               <>
-                <p className={`mb-2 leading-snug tracking-[-0.01em] ${
+                <p className={`mb-2 w-full max-w-[620px] min-w-0 whitespace-normal break-words px-2 leading-snug [text-wrap:balance] ${
                   welcome.message.display
-                    ? "text-[26px] font-medium bg-gradient-to-b from-[#ffffff] to-[#c8c8c8] bg-clip-text text-transparent"
-                    : "text-[20px] text-[#c8c8c8]"
+                    ? "text-[26px] max-[520px]:text-[20px] font-medium text-[#e8e4de]"
+                    : "text-[20px] max-[520px]:text-[18px] text-[#c8c8c8]"
                 }`}>
                   {welcome.message.emoji && (
                     <span className="mr-2" aria-hidden="true">{welcome.message.emoji}</span>
                   )}
                   {welcome.message.text}
                 </p>
-                <p className="mt-6 text-[13px] text-[#a0a0a0]">
+                <p className="mt-6 text-[13px] text-[#b4b4b4]">
                   Type below or use <kbd className="font-mono text-[11px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#b4b4b4] tabular-nums">⌘N</kbd> for a fresh chat.
                 </p>
               </>
@@ -390,10 +390,12 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
           <ActiveSkillsBar />
           <ToolActivityIndicator />
           <InputBar onOpenSettings={onOpenSettings} />
-          <div className="flex items-center flex-wrap gap-1.5 w-full max-w-[720px] px-1">
+          <div className="flex min-h-[36px] w-full max-w-[720px] items-center gap-2 px-1 max-[520px]:flex-col max-[520px]:items-stretch">
             <ModeToggle />
-            {agentMode && <WorkspacePicker />}
-            {designMode && <DesignWorkspacePicker />}
+            <div className="flex min-h-[26px] min-w-0 flex-1 items-center justify-start">
+              {agentMode && <WorkspacePicker />}
+              {designMode && <DesignWorkspacePicker />}
+            </div>
           </div>
         </div>
       )}

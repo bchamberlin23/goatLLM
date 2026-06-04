@@ -97,9 +97,9 @@ export function LocalProviderCard({
   const isError = status === "error";
 
   return (
-    <div className={`bg-[#212122] border rounded-lg overflow-hidden transition-colors ${isOnline ? "border-green-500/15" : isError ? "border-amber-500/20" : "border-white/5"}`}>
+    <div className={`soft-card rounded-xl overflow-hidden transition-all ${isOnline ? "border-green-500/20" : isError ? "border-amber-500/25" : ""}`}>
       <div
-        className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-white/[0.02] transition-colors"
+        className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/[0.045] transition-colors"
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.closest("input, button")) return;
@@ -109,7 +109,7 @@ export function LocalProviderCard({
         <ChevronDown
           size={12}
           strokeWidth={2}
-          className={`shrink-0 text-[#666] transition-transform ${expanded ? "" : "-rotate-90"}`}
+          className={`shrink-0 text-text-4 transition-transform ${expanded ? "" : "-rotate-90"}`}
           aria-hidden="true"
         />
         <span className="text-[13px] font-medium text-[#ececec]">{name}</span>
@@ -122,7 +122,7 @@ export function LocalProviderCard({
           }`}
         />
         {isOnline && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#888] font-mono">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-text-4 font-mono">
             {enabledCount}/{discoveredModels.length}
           </span>
         )}
@@ -130,18 +130,18 @@ export function LocalProviderCard({
           <span className="text-[10.5px] text-[#f59e42] font-medium">Not reachable</span>
         )}
         <div className="flex-1" />
-        <span className="shrink-0 text-[10.5px] text-[#666]" onClick={(e) => e.stopPropagation()}>{docs}</span>
+        <span className="shrink-0 text-[10.5px] text-text-4" onClick={(e) => e.stopPropagation()}>{docs}</span>
       </div>
 
       {expanded && (
-        <div className="border-t border-white/5 px-3 py-2.5 flex flex-col gap-2.5 bg-black/10">
+        <div className="border-t border-white/[0.06] px-3 py-2.5 flex flex-col gap-2.5 bg-black/10">
           <div className="flex flex-col gap-1">
             <label className="text-[10.5px] font-semibold text-[#888] uppercase tracking-wider">Base URL</label>
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
-                className={`flex-1 h-[28px] px-2.5 bg-[#2c2c2e] border rounded text-[12px] text-[#ececec] font-mono outline-none transition-colors ${
-                  editingUrl ? "border-white/15" : "border-white/5 hover:border-white/10"
+                className={`flex-1 h-[28px] px-2.5 bg-white/[0.06] border rounded text-[12px] text-[#ececec] placeholder:text-text-4 font-mono outline-none transition-colors ${
+                  editingUrl ? "border-[#f59e42]/45 ring-1 ring-[#f59e42]/20" : "border-white/10 hover:border-white/15"
                 }`}
                 value={urlDraft}
                 onChange={(e) => { setUrlDraft(e.target.value); setEditingUrl(true); }}
@@ -157,7 +157,7 @@ export function LocalProviderCard({
               <button
                 onClick={handleRefresh}
                 disabled={isLoading}
-                className="shrink-0 w-7 h-7 flex items-center justify-center rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-50 transition-colors"
+                className="control-icon shrink-0 w-7 h-7 flex items-center justify-center rounded disabled:opacity-50 transition-colors"
                 aria-label={`Refresh ${name} models`}
                 title="Refresh models"
               >
@@ -166,7 +166,7 @@ export function LocalProviderCard({
               {urlDraft.trim() !== defaultBaseUrl && (
                 <button
                   onClick={handleResetUrl}
-                  className="shrink-0 px-2 h-7 rounded text-[10.5px] font-medium text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                  className="control-pill shrink-0 px-2 h-7 rounded text-[10.5px] font-medium transition-colors"
                   title="Reset to default"
                 >
                   Reset
@@ -175,7 +175,7 @@ export function LocalProviderCard({
               {isConfigured && (
                 <button
                   onClick={handleRemove}
-                  className="shrink-0 w-7 h-7 flex items-center justify-center rounded text-[#666] hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
+                  className="control-icon shrink-0 w-7 h-7 flex items-center justify-center rounded hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
                   aria-label={`Forget ${name}`}
                   title="Forget this provider"
                 >
@@ -205,18 +205,18 @@ export function LocalProviderCard({
           {!isLoading && discoveredModels.length > 0 && (
             <div className="flex flex-col gap-1.5">
               {discoveredModels.length > 6 && (
-                <div className="flex items-center gap-1.5 px-2 h-[26px] bg-[#2c2c2e] border border-white/5 rounded">
-                  <Search size={10} strokeWidth={2} className="text-[#666] shrink-0" />
+                <div className="flex items-center gap-1.5 px-2 h-[26px] bg-white/[0.055] border border-white/10 rounded">
+                  <Search size={10} strokeWidth={2} className="text-text-4 shrink-0" />
                   <input
                     type="text"
-                    className="flex-1 bg-transparent text-[11px] text-[#ececec] placeholder:text-[#666] outline-none border-0"
+                    className="flex-1 bg-transparent text-[11px] text-[#ececec] placeholder:text-text-4 outline-none border-0"
                     placeholder="Filter…"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
                 </div>
               )}
-              <div className="flex flex-col max-h-[200px] overflow-y-auto rounded border border-white/5 bg-[#1a1a1c]">
+              <div className="soft-card flex flex-col max-h-[200px] overflow-y-auto rounded-lg">
                 {filteredModels.map((m) => {
                   const checked = isEnabled(m.id);
                   return (
@@ -231,7 +231,7 @@ export function LocalProviderCard({
                             : "border border-white/15 bg-white/[0.02]"
                         }`}
                       >
-                        {checked && <Check size={9} strokeWidth={3} className="text-black" />}
+                        {checked && <Check size={9} strokeWidth={3} className="text-bg" />}
                       </span>
                       <input
                         type="checkbox"

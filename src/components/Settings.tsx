@@ -17,11 +17,17 @@ export function Settings({ onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm animate-[fadeIn_150ms_ease]" onClick={onClose}>
-      <div className="w-[600px] max-w-[92vw] h-[640px] max-h-[88vh] bg-surface-1 border border-white/10 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden animate-[contextMenuIn_180ms_ease]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
-          <h2 className="text-[15px] font-semibold text-text-1 tracking-[-0.015em]">Settings</h2>
-          <button className="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:text-text-1 hover:bg-white/5 transition-colors" onClick={onClose} aria-label="Close settings" title="Close (Esc)">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#111112]/70 backdrop-blur-md animate-[fadeIn_150ms_ease]" onClick={onClose}>
+      <div
+        className="modal-surface w-[600px] max-w-[92vw] h-[640px] max-h-[88vh] rounded-2xl flex flex-col overflow-hidden animate-[contextMenuIn_180ms_ease]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] shrink-0">
+          <h2 id="settings-title" className="text-[15px] font-semibold text-text-1">Settings</h2>
+          <button className="control-icon w-7 h-7 flex items-center justify-center rounded-md transition-colors" onClick={onClose} aria-label="Close settings" title="Close (Esc)">
             <X size={16} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>

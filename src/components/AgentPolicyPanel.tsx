@@ -29,20 +29,20 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
   };
 
   return (
-    <div className={embedded ? "w-full rounded-xl border border-white/5 bg-surface-3 p-3.5" : "w-full max-w-[720px] rounded-lg border border-white/[0.06] bg-white/[0.035] px-3 py-2"}>
+    <div className={embedded ? "soft-card w-full rounded-xl p-3.5" : "liquid-surface w-full max-w-[720px] rounded-xl px-3 py-2"}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Shield size={13} strokeWidth={1.8} className="shrink-0 text-text-4" aria-hidden />
           {!embedded && <span className="text-[11px] font-semibold uppercase tracking-wider text-text-3">Agent policy</span>}
         </div>
-        <div className="flex shrink-0 overflow-hidden rounded-md border border-white/[0.08]">
+        <div className="segmented-shell flex shrink-0 overflow-hidden rounded-md p-0.5">
           {profiles.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setProfile(item.id)}
-              className={`px-2 py-1 text-[10.5px] font-medium transition-colors ${
-                profile === item.id ? "bg-white text-black" : "bg-transparent text-text-3 hover:bg-white/[0.06]"
+              className={`rounded px-2 py-1 text-[10.5px] font-medium transition-colors ${
+                profile === item.id ? "bg-[#f59e42]/15 text-[#f5c18c]" : "text-text-3 hover:bg-white/[0.06]"
               }`}
             >
               {item.label}
@@ -79,12 +79,12 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             }
           }}
           placeholder="Add required check"
-          className="min-w-0 flex-1 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4"
+          className="min-w-0 flex-1 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
         />
         <button
           type="button"
           onClick={addCustomCommand}
-          className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-text-3 transition-colors hover:bg-white/[0.07]"
+          className="control-pill rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
         >
           Add
         </button>
@@ -107,7 +107,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
         </div>
       )}
       {projectCheckMemory.successfulCommands.length > 0 && (
-        <div className="mt-2 grid gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.025] p-2">
+        <div className="soft-card mt-2 grid gap-1.5 rounded-md p-2">
           <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Learned checks</div>
           <div className="flex flex-wrap gap-1">
             {projectCheckMemory.successfulCommands.map((command) => (
@@ -129,7 +129,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
           </div>
         </div>
       )}
-      <div className="mt-2 grid gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.025] p-2">
+      <div className="soft-card mt-2 grid gap-1.5 rounded-md p-2">
         <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Path rules</div>
         <div className="flex flex-wrap gap-1">
           {pathRules.map((rule) => (
@@ -142,7 +142,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
           `src/App.tsx` currently: {evaluatePathPermission("src/App.tsx", pathRules)}
         </div>
       </div>
-      <div className="mt-2 grid gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.025] p-2">
+      <div className="soft-card mt-2 grid gap-1.5 rounded-md p-2">
         <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Run budget</div>
         <div className="grid grid-cols-3 gap-1.5">
           <input
@@ -151,7 +151,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={1}
             value={budget.maxToolCalls}
             onChange={(event) => setBudget({ ...budget, maxToolCalls: Number(event.currentTarget.value) || 1 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none"
+            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
           />
           <input
             aria-label="Max subagents"
@@ -159,7 +159,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={0}
             value={budget.maxSubagents}
             onChange={(event) => setBudget({ ...budget, maxSubagents: Number(event.currentTarget.value) || 0 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none"
+            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
           />
           <input
             aria-label="Max minutes"
@@ -167,7 +167,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={1}
             value={budget.maxMinutes}
             onChange={(event) => setBudget({ ...budget, maxMinutes: Number(event.currentTarget.value) || 1 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none"
+            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
           />
         </div>
         <div className="text-[10.5px] text-text-4">{applyBudgetControls(budget)}</div>

@@ -392,7 +392,7 @@ function ArtifactContent({
             <button
               onClick={handleRunPython}
               disabled={pyRunning}
-              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${pyRunning ? "bg-white/5 text-[#a0a0a0]" : "bg-white text-black hover:bg-[#e5e5e5]"}`}
+              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${pyRunning ? "control-pill opacity-70" : "primary-action"}`}
             >
               {pyRunning ? "Running…" : "Run"}
             </button>
@@ -569,12 +569,12 @@ function ViewToggle({
   onChange: (v: "preview" | "code") => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-white/[0.05] border border-white/[0.06]">
+    <div className="segmented-shell flex items-center gap-0.5 p-0.5 rounded-full">
       <button
         onClick={() => onChange("code")}
         aria-pressed={view === "code"}
         className={`px-2.5 py-0.5 text-[11.5px] font-medium rounded-full transition-colors ${
-          view === "code" ? "bg-white/[0.10] text-[#ececec]" : "text-[#a0a0a0] hover:text-[#ececec]"
+          view === "code" ? "bg-accent/10 text-[#ececec] border border-accent/20" : "text-[#a0a0a0] border border-transparent hover:text-[#ececec] hover:bg-white/[0.055]"
         }`}
       >
         Code
@@ -583,7 +583,7 @@ function ViewToggle({
         onClick={() => onChange("preview")}
         aria-pressed={view === "preview"}
         className={`px-2.5 py-0.5 text-[11.5px] font-medium rounded-full transition-colors ${
-          view === "preview" ? "bg-white/[0.10] text-[#ececec]" : "text-[#a0a0a0] hover:text-[#ececec]"
+          view === "preview" ? "bg-accent/10 text-[#ececec] border border-accent/20" : "text-[#a0a0a0] border border-transparent hover:text-[#ececec] hover:bg-white/[0.055]"
         }`}
       >
         Preview
@@ -647,9 +647,9 @@ function HistoryMenu({
   return (
     <div
       ref={ref}
-      className="absolute top-full right-0 mt-1.5 w-[280px] max-h-[400px] overflow-y-auto rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease]"
+      className="popover-surface absolute top-full right-0 mt-1.5 w-[280px] max-h-[400px] overflow-y-auto rounded-xl z-50 animate-[fadeIn_100ms_ease]"
     >
-      <div className="px-3 py-2 border-b border-white/5 sticky top-0 bg-[#2a2a2c]">
+      <div className="px-3 py-2 border-b border-white/5 sticky top-0 bg-[#2a2a2c]/90 backdrop-blur-md">
         <span className="text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
           Version history
         </span>
@@ -1157,9 +1157,9 @@ export function ArtifactPanel() {
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-[#1c1c1e] rounded-2xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden animate-[fadeIn_120ms_ease]">
+    <div className="liquid-surface flex-1 min-h-0 flex flex-col rounded-2xl overflow-hidden animate-[fadeIn_120ms_ease]">
       {/* Top bar */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] shrink-0">
         <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
         <span className="text-[13px] font-medium text-[#ececec] truncate min-w-0">
           {activeArtifact ? activeArtifact.title : wsFile?.name ?? "File"}
@@ -1177,7 +1177,7 @@ export function ArtifactPanel() {
               onClick={() => activeIdx > 0 && setActiveArtifact(artifacts[activeIdx - 1].id)}
               disabled={activeIdx <= 0}
               aria-label="Previous artifact"
-              className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              className="control-icon p-1 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <ChevronLeft size={13} strokeWidth={2} aria-hidden="true" />
             </button>
@@ -1188,7 +1188,7 @@ export function ArtifactPanel() {
               onClick={() => activeIdx < artifacts.length - 1 && setActiveArtifact(artifacts[activeIdx + 1].id)}
               disabled={activeIdx >= artifacts.length - 1}
               aria-label="Next artifact"
-              className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+              className="control-icon p-1 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <ChevronRight size={13} strokeWidth={2} aria-hidden="true" />
             </button>
@@ -1205,7 +1205,7 @@ export function ArtifactPanel() {
             disabled={!canUndo}
             aria-label="Undo"
             title="Previous version"
-            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("undo")}`}
+            className={`control-icon p-1.5 rounded-md disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("undo")}`}
           >
             <Undo2 size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -1214,7 +1214,7 @@ export function ArtifactPanel() {
             disabled={!canRedo}
             aria-label="Redo"
             title="Next version"
-            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("redo")}`}
+            className={`control-icon p-1.5 rounded-md disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#a0a0a0] transition-colors duration-300 ${flashTint("redo")}`}
           >
             <Redo2 size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -1227,7 +1227,7 @@ export function ArtifactPanel() {
             aria-label="Version history"
             title="Version history"
             className={`p-1.5 rounded-md transition-colors ${
-              historyOpen ? "text-[#ececec] bg-white/[0.08]" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06]"
+              historyOpen ? "control-icon text-[#ececec] bg-white/[0.08]" : "control-icon"
             }`}
           >
             <History size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -1256,7 +1256,7 @@ export function ArtifactPanel() {
             onClick={handleReload}
             aria-label="Reload preview"
             title="Reload preview"
-            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("reload")}`}
+            className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("reload")}`}
           >
             <RotateCw size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -1267,7 +1267,7 @@ export function ArtifactPanel() {
           onClick={handleCopy}
           aria-label="Copy code"
           title={copied ? "Copied" : "Copy code"}
-          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("copy")}`}
+          className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("copy")}`}
         >
           <Copy size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
@@ -1283,7 +1283,7 @@ export function ArtifactPanel() {
             onClick={() => setManualEditOpen(true)}
             aria-label="Manual edit"
             title="Edit code manually"
-            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("edit")}`}
+            className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("edit")}`}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -1298,7 +1298,7 @@ export function ArtifactPanel() {
             onClick={handlePrint}
             aria-label="Print or save as PDF"
             title="Print / Save as PDF"
-            className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("print")}`}
+            className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("print")}`}
           >
             <Printer size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -1309,7 +1309,7 @@ export function ArtifactPanel() {
           onClick={handleDownload}
           aria-label="Download"
           title="Download source"
-          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("download")}`}
+          className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("download")}`}
         >
           <Download size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
@@ -1319,7 +1319,7 @@ export function ArtifactPanel() {
         <button
           onClick={handleClose}
           aria-label="Close artifact panel"
-          className={`p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors duration-300 ${flashTint("close")}`}
+          className={`control-icon p-1.5 rounded-md transition-colors duration-300 ${flashTint("close")}`}
         >
           <X size={13} strokeWidth={1.75} aria-hidden="true" />
         </button>
@@ -1328,7 +1328,7 @@ export function ArtifactPanel() {
       {/* Body: sidebar + content */}
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar: file browser + artifact list */}
-        <div className="w-[200px] shrink-0 border-r border-white/[0.04] flex flex-col overflow-hidden">
+        <div className="w-[200px] shrink-0 border-r border-white/[0.05] bg-[#181819]/42 flex flex-col overflow-hidden">
           {(agentMode || designMode) && (
             <div className="flex-1 min-h-0 overflow-hidden">
               <WorkspaceFileBrowser
@@ -1389,7 +1389,7 @@ export function ArtifactPanel() {
                 )}
                 <button
                   onClick={() => setWsFile(null)}
-                  className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+                  className="control-icon p-1 rounded transition-colors"
                   aria-label="Close file"
                 >
                   <X size={13} strokeWidth={1.75} />
@@ -1447,7 +1447,7 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
   return (
     <button
       onClick={() => setActiveArtifact(artifact.id)}
-      className="flex items-center gap-3 w-full px-3 py-2.5 bg-[#212122] border border-white/5 rounded-xl hover:bg-[#252528] hover:border-white/10 transition-colors text-left group"
+      className="soft-card flex items-center gap-3 w-full px-3 py-2.5 rounded-xl hover:bg-white/[0.055] hover:border-white/[0.11] transition-[background,border-color,box-shadow] text-left group"
     >
       <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0 group-hover:bg-white/10 transition-colors">
         <Icon size={15} strokeWidth={1.75} className="text-[#a0a0a0]" />
@@ -1456,7 +1456,7 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
         <span className="text-[12px] font-medium text-[#d5d5d5] truncate">{artifact.title}</span>
         <span className="text-[11px] text-[#a0a0a0]">{KIND_LABEL[artifact.kind]}</span>
       </div>
-      <span className="text-[11px] text-[#a0a0a0] group-hover:text-[#a0a0a0] transition-colors shrink-0">Open →</span>
+      <span className="text-[11px] text-[#a0a0a0] group-hover:text-[#ececec] transition-colors shrink-0">Open</span>
     </button>
   );
 }
@@ -1479,7 +1479,7 @@ export function ArtifactPlaceholderCard({
   const verb = KIND_VERB[kind];
   const label = KIND_LABEL[kind];
   return (
-    <div className="flex items-center gap-3 w-full px-3 py-2.5 bg-[#212122] border border-white/5 rounded-xl text-left">
+    <div className="soft-card flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left">
       <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
         <Icon size={15} strokeWidth={1.75} className="text-[#a0a0a0]" />
       </div>
@@ -1489,7 +1489,7 @@ export function ArtifactPlaceholderCard({
         </span>
         <span className="text-[11px] text-[#a0a0a0] thinking-line">{verb}…</span>
       </div>
-      <span className="w-1.5 h-1.5 rounded-full bg-[#f59e42] animate-[pulseSoft_1.6s_ease-in-out_infinite] shrink-0" />
+      <span className="w-1.5 h-1.5 rounded-full bg-[#f59e42] animate-[pulse-soft_1.6s_ease-in-out_infinite] shrink-0" />
     </div>
   );
 }

@@ -103,7 +103,7 @@ export function TopBar() {
         <>
           <button
             onClick={handleNewChat}
-            className="p-1.5 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+            className="control-icon p-1.5 rounded-md transition-colors"
             aria-label="New chat"
             title="New chat"
           >
@@ -120,7 +120,7 @@ export function TopBar() {
                     aria-label="Generating title"
                     className="inline-flex items-center align-middle"
                   >
-                    <span className="relative inline-block h-[12px] w-[140px] overflow-hidden rounded-[3px] bg-white/[0.06]">
+                    <span className="skeleton-sheen relative inline-block h-[12px] w-[140px] rounded-[3px]">
                       <span
                         aria-hidden
                         className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent animate-[title-shimmer_1.4s_ease-in-out_infinite]"
@@ -150,7 +150,7 @@ export function TopBar() {
                 <div className="relative" ref={menuRef}>
                   <button
                     onClick={() => setMenuOpen(!menuOpen)}
-                    className="p-1 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+                    className="control-icon p-1 rounded-md transition-colors"
                     aria-label="Chat options"
                     title="Chat options"
                   >
@@ -158,7 +158,7 @@ export function TopBar() {
                   </button>
 
                   {menuOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-[180px] rounded-lg bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 overflow-hidden animate-[fadeIn_100ms_ease] z-50">
+                    <div className="popover-surface absolute top-full left-0 mt-1 w-[180px] rounded-lg overflow-hidden animate-[fadeIn_100ms_ease] z-50">
                       <button
                         onClick={handleRename}
                         className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#d5d5d5] hover:bg-white/[0.06] transition-colors text-left"
@@ -197,18 +197,22 @@ export function TopBar() {
       {/* System prompt editor modal */}
       {editingSystemPrompt && activeId && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 backdrop-blur-sm animate-[fadeIn_150ms_ease]"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-[#111112]/70 backdrop-blur-md animate-[fadeIn_150ms_ease]"
           onClick={() => setEditingSystemPrompt(false)}
         >
           <div
-            className="w-[500px] max-w-[90vw] bg-[#2a2a2c] border border-white/10 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.6)] overflow-hidden animate-[contextMenuIn_180ms_ease]"
+            className="modal-surface w-[500px] max-w-[90vw] rounded-2xl overflow-hidden animate-[contextMenuIn_180ms_ease]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="system-prompt-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-              <h3 className="text-[15px] font-semibold text-[#ececec]">System prompt</h3>
+              <h3 id="system-prompt-title" className="text-[15px] font-semibold text-[#ececec]">System prompt</h3>
               <button
                 onClick={() => setEditingSystemPrompt(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                className="control-icon w-7 h-7 flex items-center justify-center rounded-md transition-colors"
+                aria-label="Close system prompt"
               >
                 ×
               </button>
@@ -223,18 +227,18 @@ export function TopBar() {
                 onChange={(e) => setSystemPromptValue(e.target.value)}
                 placeholder="e.g., Be concise. Focus on security implications."
                 rows={4}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] resize-none outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/25"
+                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 resize-none outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/25"
               />
               <div className="flex justify-end gap-2 mt-4">
                 <button
                   onClick={() => setEditingSystemPrompt(false)}
-                  className="px-4 py-2 rounded-lg text-[12.5px] text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                  className="control-pill px-4 py-2 rounded-lg text-[12.5px] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSystemPromptSubmit}
-                  className="px-4 py-2 rounded-lg text-[12.5px] font-medium bg-[#f59e42] text-black hover:bg-[#f0903a] transition-colors"
+                  className="primary-action px-4 py-2 rounded-lg text-[12.5px] font-medium transition-colors"
                 >
                   Save
                 </button>
@@ -295,10 +299,10 @@ function ChatAssetsMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className={`relative p-1.5 mt-[3px] rounded-md transition-colors ${
+        className={`control-icon relative p-1.5 mt-[3px] rounded-md transition-colors ${
           hasContent
-            ? "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06]"
-            : "text-[#666] hover:text-[#a0a0a0] hover:bg-white/[0.04]"
+            ? ""
+            : "opacity-60"
         }`}
         aria-label="Chat assets"
         title="Artifacts & files"
@@ -310,7 +314,7 @@ function ChatAssetsMenu() {
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease]">
+        <div className="popover-surface absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl z-50 animate-[fadeIn_100ms_ease]">
           {/* Workspace file tree (agent mode) — shows files the agent created/modified */}
           {agentMode && (
             <>

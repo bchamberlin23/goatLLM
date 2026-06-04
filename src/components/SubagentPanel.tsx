@@ -37,9 +37,9 @@ export function SubagentPanel() {
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* Top bar with back arrow */}
-      <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] bg-[#1a1a1c]">
+      <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.025]">
         <button
-          className="flex items-center gap-1.5 px-2 py-1.5 -ml-2 rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+          className="control-pill flex items-center gap-1.5 px-2 py-1.5 -ml-2 rounded-md transition-colors"
           onClick={closeSubagentPanel}
           aria-label="Back to conversation"
         >
@@ -64,7 +64,7 @@ export function SubagentPanel() {
       <div className="flex-1 min-h-0 overflow-auto px-6 py-4 flex flex-col gap-4">
         {transcript.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <span className="text-[13px] text-[#777]">Waiting for subagent to start...</span>
+            <span className="text-[13px] text-text-4">Waiting for subagent to start...</span>
           </div>
         ) : (
           transcript.map((entry, i) => (
@@ -107,7 +107,7 @@ export function SubagentPanel() {
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-[#f59e42] mb-2">
                     Summary (sent to parent)
                   </div>
-                  <div className="text-[12.5px] text-[#a0a0a0] leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-auto bg-[#1a1a1c] border border-white/[0.06] rounded-lg p-3">
+                  <div className="soft-card text-[12.5px] text-[#a0a0a0] leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-auto rounded-lg p-3">
                     {summary}
                   </div>
                 </div>

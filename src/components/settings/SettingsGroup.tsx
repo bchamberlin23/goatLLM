@@ -19,11 +19,11 @@ export function SettingsGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-start justify-between gap-2 text-left group"
+        className="flex items-start justify-between gap-2 rounded-lg text-left group transition-colors hover:bg-white/[0.025]"
         aria-expanded={open}
       >
         <div className="min-w-0 flex-1">
-          <h3 className="text-[13px] font-semibold text-text-1 tracking-[-0.01em]">{title}</h3>
+          <h3 className="text-[13px] font-semibold text-text-1">{title}</h3>
           {description && (
             <p className="text-[12px] text-text-3 leading-relaxed mt-0.5">{description}</p>
           )}

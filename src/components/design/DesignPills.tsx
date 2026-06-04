@@ -76,7 +76,7 @@ function VisualStylePill() {
         className={`flex items-center gap-1.5 px-2 h-7 rounded-full border text-[12px] font-medium transition-colors shrink-0 ${
           hasActive
             ? "bg-[#f59e42]/[0.08] border-[#f59e42]/30 text-[#ececec] hover:bg-[#f59e42]/[0.12]"
-            : "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.06] hover:border-white/[0.12] text-[#d5d5d5]"
+            : "control-pill"
         }`}
       >
         {hasActive ? (
@@ -187,7 +187,7 @@ function VisualStylePopover({
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[#1c1c1e] border-b border-white/[0.06] rounded-t-2xl">
           <div>
-            <h1 className="text-[18px] font-medium text-[#ececec] tracking-[-0.01em]">
+            <h1 className="text-[18px] font-medium text-[#ececec]">
               Visual style
             </h1>
             <p className="mt-1 text-[12px] text-[#a0a0a0]">

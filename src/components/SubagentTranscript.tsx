@@ -11,8 +11,8 @@ export const SubagentTranscriptView = memo(function SubagentTranscriptView({
   transcript,
 }: SubagentTranscriptViewProps) {
   return (
-    <div className="ml-5 mt-2 border border-white/10 rounded-xl bg-[#1a1a1c] overflow-hidden">
-      <div className="px-3 py-2 bg-white/[0.03] border-b border-white/5">
+    <div className="soft-card ml-5 mt-2 rounded-xl overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.035] border-b border-white/5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
           Subagent conversation
         </span>

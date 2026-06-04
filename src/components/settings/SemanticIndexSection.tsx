@@ -79,7 +79,7 @@ export function SemanticIndexSection() {
   }
 
   return (
-    <div className="p-3.5 bg-[#212122] border border-white/5 rounded-xl flex flex-col gap-3">
+    <div className="soft-card p-3.5 rounded-xl flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-[13px] text-[#ececec]">
@@ -91,7 +91,7 @@ export function SemanticIndexSection() {
           {count !== null && count > 0 && status !== "indexing" && (
             <button
               onClick={handleClear}
-              className="px-2.5 py-1.5 text-[12px] font-medium text-[#a0a0a0] hover:text-[#f87171] hover:bg-red-500/10 rounded-md transition-colors"
+              className="control-pill px-2.5 py-1.5 text-[12px] font-medium hover:text-[#f87171] hover:bg-red-500/10 rounded-md transition-colors"
             >
               Clear
             </button>
@@ -101,8 +101,8 @@ export function SemanticIndexSection() {
             disabled={status === "indexing"}
             className={`px-3 py-1.5 text-[12px] font-medium rounded-md transition-colors ${
               status === "indexing"
-                ? "bg-white/5 text-[#a0a0a0]"
-                : "bg-[#f59e42] text-black hover:bg-[#fbb968]"
+                ? "control-pill opacity-70"
+                : "primary-action"
             }`}
           >
             {status === "indexing" ? "Indexing…" : count && count > 0 ? "Reindex" : "Build index"}

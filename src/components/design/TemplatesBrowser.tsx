@@ -17,7 +17,7 @@ import {
 } from '../../lib/design/templates';
 import { getSkill } from '../../lib/design/skills';
 import { getDesignSystem } from '../../lib/design/systems';
-import { Search, Tag, Sparkles } from 'lucide-react';
+import { Search, Tag, Sparkles, X } from 'lucide-react';
 
 interface TemplatesBrowserProps {
   onSelect: (template: DesignTemplate) => void;
@@ -89,7 +89,7 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
   }, [filteredTemplates]);
   
   return (
-    <div className="flex flex-col h-full bg-[#1a1a1c]">
+    <div className="flex flex-col h-full bg-bg">
       {/* Header */}
       <div className="px-6 py-4 border-b border-white/5">
         <div className="flex items-center justify-between mb-4">
@@ -105,9 +105,10 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
           {onClose && (
             <button
               onClick={onClose}
-              className="text-[#a0a0a0] hover:text-[#ececec]"
+              className="control-icon flex h-7 w-7 items-center justify-center rounded-md"
+              aria-label="Close templates"
             >
-              ✕
+              <X size={14} strokeWidth={1.8} />
             </button>
           )}
         </div>
@@ -123,7 +124,7 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
               setSelectedTag(null);
             }}
             placeholder="Search templates..."
-            className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-[13px] text-[#ececec] placeholder-[#a0a0a0] focus:outline-none focus:border-[#f59e42]/50"
+            className="w-full pl-10 pr-4 py-2 bg-white/[0.055] border border-white/10 rounded-lg text-[13px] text-[#ececec] placeholder:text-text-3 focus:outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
           />
         </div>
         
@@ -136,8 +137,8 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
             }}
             className={`px-3 py-1.5 text-[11px] font-medium rounded-md whitespace-nowrap ${
               selectedCategory === 'all' && !selectedTag
-                ? 'bg-[#f59e42] text-black'
-                : 'bg-white/5 text-[#a0a0a0] hover:bg-white/10'
+                ? 'primary-action'
+                : 'control-pill'
             }`}
           >
             All
@@ -151,8 +152,8 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
               }}
               className={`px-3 py-1.5 text-[11px] font-medium rounded-md whitespace-nowrap ${
                 selectedCategory === cat && !selectedTag
-                  ? 'bg-[#f59e42] text-black'
-                  : 'bg-white/5 text-[#a0a0a0] hover:bg-white/10'
+                  ? 'primary-action'
+                  : 'control-pill'
               }`}
             >
               {CATEGORY_ICONS[cat as TemplateCategory]} {label}
@@ -170,8 +171,8 @@ export function TemplatesBrowser({ onSelect, onClose }: TemplatesBrowserProps) {
                 onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
                 className={`px-2 py-0.5 text-[10px] rounded ${
                   selectedTag === tag
-                    ? 'bg-[#f59e42]/20 text-[#f59e42]'
-                    : 'bg-white/5 text-[#a0a0a0] hover:bg-white/10'
+                    ? 'border border-[#f59e42]/25 bg-[#f59e42]/15 text-[#f5c18c]'
+                    : 'control-pill'
                 }`}
               >
                 {tag}
@@ -230,7 +231,7 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col p-4 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 hover:border-[#f59e42]/30 transition-colors text-left group"
+      className="soft-card flex flex-col p-4 rounded-lg hover:bg-white/[0.07] hover:border-[#f59e42]/30 transition-colors text-left group"
     >
       <h4 className="text-[13px] font-semibold text-[#ececec] mb-1 group-hover:text-[#f59e42]">
         {template.name}
@@ -240,12 +241,12 @@ function TemplateCard({ template, onClick }: TemplateCardProps) {
       </p>
       <div className="flex items-center gap-2 mt-auto">
         {skill && (
-          <span className="px-2 py-0.5 text-[10px] bg-blue-500/20 text-blue-300 rounded">
+          <span className="px-2 py-0.5 text-[10px] bg-white/[0.06] text-text-3 border border-white/[0.06] rounded">
             {skill.name}
           </span>
         )}
         {system && (
-          <span className="px-2 py-0.5 text-[10px] bg-purple-500/20 text-purple-300 rounded">
+          <span className="px-2 py-0.5 text-[10px] bg-[#f59e42]/10 text-[#f5c18c] border border-[#f59e42]/20 rounded">
             {system.name}
           </span>
         )}

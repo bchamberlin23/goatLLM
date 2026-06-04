@@ -238,10 +238,10 @@ export function AttachmentPanel() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1c1c1e] animate-[fadeIn_120ms_ease]">
+    <div className="liquid-surface flex-1 flex flex-col h-full rounded-2xl overflow-hidden animate-[fadeIn_120ms_ease]">
       <div className="h-[32px] shrink-0" data-tauri-drag-region />
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-white/5 shrink-0">
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-white/[0.06] shrink-0">
         <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
         <span className="text-[13px] font-medium text-[#ececec] truncate">{attachment.filename}</span>
         <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded">{formatFileSize(attachment.sizeBytes)}</span>
@@ -249,7 +249,7 @@ export function AttachmentPanel() {
         {canPreview && !previewOnly && (
           <button
             onClick={() => setShowPreview((v) => !v)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+            className="control-pill flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] transition-colors"
             title={effectiveShowPreview ? "View source code" : "Render preview"}
           >
             <Columns size={12} /> {effectiveShowPreview ? "View code" : "View preview"}
@@ -258,21 +258,21 @@ export function AttachmentPanel() {
         {isText && text !== null && (
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+            className="control-pill flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] transition-colors"
           >
             <Copy size={12} /> {copied ? "Copied" : "Copy"}
           </button>
         )}
         <button
           onClick={handleDownload}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+          className="control-pill flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] transition-colors"
         >
           <Download size={12} /> Save
         </button>
         <button
           onClick={() => close(null)}
           aria-label="Close attachment panel"
-          className="p-1 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors ml-1"
+          className="control-icon p-1 rounded transition-colors ml-1"
         >
           <X size={15} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -287,7 +287,7 @@ export function AttachmentPanel() {
 
         {/* Image (raster) attachments — always show the picture. */}
         {!effectiveShowPreview && isImage && (
-          <div className="flex-1 min-h-0 flex items-center justify-center bg-[#0f0f10] p-4 overflow-auto">
+          <div className="flex-1 min-h-0 flex items-center justify-center bg-[#151516] p-4 overflow-auto">
             <img src={attachment.dataUrl} alt={attachment.filename} className="max-w-full max-h-full object-contain" />
           </div>
         )}
@@ -342,7 +342,7 @@ export function AttachmentPanel() {
             </span>
             <button
               onClick={handleDownload}
-              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.08] text-[12px] text-[#ececec] hover:bg-white/[0.1] transition-colors"
+              className="control-pill mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] transition-colors"
             >
               <Download size={12} /> Download
             </button>

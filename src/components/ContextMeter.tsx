@@ -165,7 +165,7 @@ export function ContextMeter() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center justify-center p-1 mt-[3px] rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+        className="control-icon flex items-center justify-center p-1 mt-[3px] rounded-md transition-colors"
         aria-label={`Context window — ${pct}% full`}
         title={`Context: ${pct}% used`}
       >
@@ -203,7 +203,7 @@ export function ContextMeter() {
         <div
           role="dialog"
           aria-label="Context window details"
-          className="absolute top-full left-0 mt-1.5 w-[260px] rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 z-50 animate-[fadeIn_100ms_ease] overflow-hidden"
+          className="popover-surface absolute top-full left-0 mt-1.5 w-[260px] rounded-xl z-50 animate-[fadeIn_100ms_ease] overflow-hidden"
         >
           <div className="px-3.5 pt-3 pb-2.5 flex items-start gap-3">
             {/* Larger ring inside the popover for legibility */}
@@ -224,7 +224,6 @@ export function ContextMeter() {
               </svg>
               <div
                 className="absolute inset-0 flex items-center justify-center text-[11px] font-mono tabular-nums text-[#ececec]"
-                style={{ letterSpacing: "-0.02em" }}
               >
                 {pct}%
               </div>
@@ -356,7 +355,7 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
       {!expanded ? (
         <button
           onClick={() => setExpanded(true)}
-          className="w-full py-1.5 rounded-md text-[11.5px] font-medium text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] transition-colors"
+          className="control-pill w-full py-1.5 rounded-md text-[11.5px] font-medium transition-colors"
         >
           Compact context…
         </button>
@@ -367,21 +366,21 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             placeholder="Optional: focus instructions (e.g., 'auth flow')"
-            className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[11.5px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-[#f59e42]/50"
+            className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[11.5px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
             onKeyDown={(e) => { if (e.key === "Enter") handleCompact(); }}
             autoFocus
           />
           <div className="flex gap-2">
             <button
               onClick={() => { setExpanded(false); setInstructions(""); }}
-              className="flex-1 py-1.5 rounded-md text-[11.5px] text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+              className="control-pill flex-1 py-1.5 rounded-md text-[11.5px] transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleCompact}
               disabled={compacting}
-              className="flex-1 py-1.5 rounded-md text-[11.5px] font-medium bg-[#f59e42] text-black hover:bg-[#f0903a] disabled:opacity-50 transition-colors"
+              className="primary-action flex-1 py-1.5 rounded-md text-[11.5px] font-medium disabled:opacity-50 transition-colors"
             >
               {compacting ? "Compacting…" : "Compact"}
             </button>

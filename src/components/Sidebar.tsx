@@ -387,10 +387,10 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
       return (
         <div
           key={conv.id}
-          className={`group/chat flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] cursor-pointer transition-colors ${
+          className={`sidebar-action group/chat flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] cursor-pointer transition-all ${
             isActive
-              ? "bg-white/[0.09] text-[#ececec]"
-              : "text-[#b4b4b4] hover:bg-white/[0.04] hover:text-[#ececec]"
+              ? "sidebar-action-active"
+              : "text-[#b4b4b4] hover:text-[#ececec]"
           }`}
           onClick={() => { setWorkspace(ws); setActiveConversation(conv.id); }}
           onContextMenu={(e) => handleChatContextMenu(e, conv.id)}
@@ -414,7 +414,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
             {formatTimestamp(conv.lastMessageAt)}
           </span>
           <button
-            className="hidden group-hover/chat:flex w-5 h-5 items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+            className="control-icon hidden group-hover/chat:flex w-5 h-5 items-center justify-center rounded"
             onClick={(e) => handleChatMenuClick(e, conv.id)}
             aria-label="Chat actions"
             title="More"
@@ -435,11 +435,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
   return (
     <>
       <aside
-        className="w-[244px] h-full flex flex-col relative shrink-0 border-r border-black/40"
-        style={{
-          background: "linear-gradient(180deg, #2f2f31 0%, #2b2b2d 38%, #28282a 100%)",
-          boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03)",
-        }}
+        className="sidebar-surface w-[244px] h-full flex flex-col relative shrink-0"
       >
         <div className="h-[46px] shrink-0" data-tauri-drag-region />
 
@@ -458,7 +454,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                 setActiveConversation(null);
               }
             }}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] hover:bg-white/[0.06] active:bg-white/[0.09] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] transition-all"
             aria-label={workspacePath ? `New chat in ${workspacePath.split("/").pop()}` : "New chat"}
             title={workspacePath ? `New chat in ${workspacePath.split("/").pop()}` : "New chat"}
           >
@@ -472,11 +468,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
             button) for consistency. */}
         <div className="px-2 mt-2">
           <div
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-150 ${
-              searchFocused
-                ? "bg-white/[0.07] border-white/10 shadow-[0_0_0_3px_rgba(245,158,66,0.08)]"
-                : "bg-white/[0.04] border-white/5 hover:bg-white/[0.06]"
-            }`}
+            className="sidebar-search flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-150"
           >
             <Search
               size={13}
@@ -504,7 +496,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
             />
             {hasQuery ? (
               <button
-                className="text-[#9a9a9a] hover:text-[#ececec] p-0.5 transition-colors"
+                className="control-icon p-0.5 rounded transition-colors"
                 onClick={() => setSearchInput("")}
                 aria-label="Clear search"
               >
@@ -522,7 +514,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
           <button
             onClick={handleAddWorkspace}
             disabled={adding}
-            className="w-5 h-5 flex items-center justify-center rounded-md text-[#888] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-50 transition-colors"
+            className="control-icon w-5 h-5 flex items-center justify-center rounded-md disabled:opacity-50 transition-colors"
             aria-label="Add project"
             title="Add project"
           >
@@ -540,7 +532,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
               <p className="text-[12px] text-[#a0a0a0]">No projects yet</p>
               <button
                 onClick={handleAddWorkspace}
-                className="px-3 py-1.5 rounded-md bg-white/[0.06] text-[#ececec] text-[12px] font-medium hover:bg-white/[0.1] transition-colors border border-white/[0.04]"
+                className="control-pill px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
               >
                 Add a project
               </button>
@@ -569,18 +561,27 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                 {/* Project header */}
                 <div
                   className={`group/proj flex items-center gap-2 pl-2 pr-1 py-1.5 rounded-md cursor-pointer transition-colors ${
-                    isActiveProject ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                    isActiveProject ? "sidebar-action-active" : "sidebar-action hover:text-[#ececec]"
                   }`}
-                  onClick={() => { toggleExpand(ws); setWorkspace(ws); }}
+                  onClick={() => setWorkspace(ws)}
                   onContextMenu={(e) => handleProjectContextMenu(e, ws)}
                   title={ws}
                 >
-                  <ChevronDown
-                    size={11}
-                    strokeWidth={2}
-                    className={`shrink-0 text-[#666] transition-transform ${isExpanded ? "" : "-rotate-90"}`}
-                    aria-hidden="true"
-                  />
+                  <button
+                    type="button"
+                    className="control-icon -ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
+                    onClick={(e) => { e.stopPropagation(); toggleExpand(ws); }}
+                    aria-label={`${isExpanded ? "Collapse" : "Expand"} ${name}`}
+                    aria-expanded={isExpanded}
+                    title={isExpanded ? "Collapse" : "Expand"}
+                  >
+                    <ChevronDown
+                      size={11}
+                      strokeWidth={2}
+                      className={`text-[#888] transition-transform ${isExpanded ? "" : "-rotate-90"}`}
+                      aria-hidden="true"
+                    />
+                  </button>
                   {isExpanded ? (
                     <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
                   ) : (
@@ -599,7 +600,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                   )}
                   <div className="hidden group-hover/proj:flex items-center gap-0.5 shrink-0">
                     <button
-                      className="w-5 h-5 flex items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+                      className="control-icon w-5 h-5 flex items-center justify-center rounded transition-colors"
                       onClick={(e) => { e.stopPropagation(); handleNewChat(ws); }}
                       aria-label={`New chat in ${name}`}
                       title="New chat"
@@ -607,7 +608,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                       <SquarePen size={12} strokeWidth={1.75} />
                     </button>
                     <button
-                      className="w-5 h-5 flex items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+                      className="control-icon w-5 h-5 flex items-center justify-center rounded transition-colors"
                       onClick={(e) => handleProjectMenuClick(e, ws)}
                       aria-label={`Project actions for ${name}`}
                       title="More"
@@ -622,7 +623,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                   <div className="flex flex-col ml-3 mt-0.5 border-l border-white/[0.04] pl-2">
                     {chats.length === 0 ? (
                       <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-[12px] text-[#888] hover:text-[#ececec] hover:bg-white/[0.04] rounded-md transition-colors"
+                        className="sidebar-action flex items-center gap-2 px-2 py-1.5 text-[12px] text-[#a0a0a0] hover:text-[#ececec] rounded-md transition-colors"
                         onClick={() => handleNewChat(ws)}
                       >
                         <SquarePen size={11} strokeWidth={1.75} />
@@ -642,7 +643,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
           <button
             onClick={onOpenSettings}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full hover:bg-white/[0.06] active:bg-white/[0.09] text-[#ececec] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full text-[#ececec] transition-all"
             aria-label="Open settings"
           >
             <Settings size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] group-hover:rotate-45 transition-all duration-300" />
@@ -666,7 +667,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
         const moveOpen = moveMenuFor === chatMenu.conversationId;
         return (
           <div
-            className="fixed z-[101] min-w-[200px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] p-1.5 animate-[contextMenuIn_110ms_ease]"
+            className="popover-surface fixed z-[101] min-w-[200px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
             style={{ left: chatMenu.x, top: chatMenu.y }}
           >
             <button
@@ -783,7 +784,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
         const total = totalChatsByWs[ws] ?? 0;
         return (
           <div
-            className="fixed z-[101] min-w-[210px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] p-1.5 animate-[contextMenuIn_110ms_ease]"
+            className="popover-surface fixed z-[101] min-w-[210px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
             style={{ left: projectMenu.x, top: projectMenu.y }}
           >
             <button
@@ -1088,10 +1089,10 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
       return (
         <div
           key={conv.id}
-          className={`group/chat flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] cursor-pointer transition-colors ${
+          className={`sidebar-action group/chat flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] cursor-pointer transition-all ${
             isActive
-              ? "bg-white/[0.09] text-[#ececec]"
-              : "text-[#b4b4b4] hover:bg-white/[0.04] hover:text-[#ececec]"
+              ? "sidebar-action-active"
+              : "text-[#b4b4b4] hover:text-[#ececec]"
           }`}
           onClick={() => { setDesignWorkspace(ws); setActiveConversation(conv.id); }}
           onContextMenu={(e) => handleChatContextMenu(e, conv.id)}
@@ -1115,7 +1116,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
             {formatTimestamp(conv.lastMessageAt)}
           </span>
           <button
-            className="hidden group-hover/chat:flex w-5 h-5 items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+            className="control-icon hidden group-hover/chat:flex w-5 h-5 items-center justify-center rounded transition-colors"
             onClick={(e) => handleChatMenuClick(e, conv.id)}
             aria-label="Chat actions"
             title="More"
@@ -1136,11 +1137,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
   return (
     <>
       <aside
-        className="w-[244px] h-full flex flex-col relative shrink-0 border-r border-black/40"
-        style={{
-          background: "linear-gradient(180deg, #2f2f31 0%, #2b2b2d 38%, #28282a 100%)",
-          boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03)",
-        }}
+        className="sidebar-surface w-[244px] h-full flex flex-col relative shrink-0"
       >
         <div className="h-[46px] shrink-0" data-tauri-drag-region />
 
@@ -1159,7 +1156,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                 setActiveConversation(null);
               }
             }}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] hover:bg-white/[0.06] active:bg-white/[0.09] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] transition-all"
             aria-label={designWorkspacePath ? `New design in ${designWorkspacePath.split("/").pop()}` : "New design"}
             title={designWorkspacePath ? `New design in ${designWorkspacePath.split("/").pop()}` : "New design"}
           >
@@ -1173,11 +1170,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
             button) for consistency. */}
         <div className="px-2 mt-2">
           <div
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-150 ${
-              searchFocused
-                ? "bg-white/[0.07] border-white/10 shadow-[0_0_0_3px_rgba(245,158,66,0.08)]"
-                : "bg-white/[0.04] border-white/5 hover:bg-white/[0.06]"
-            }`}
+            className="sidebar-search flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-150"
           >
             <Search
               size={13}
@@ -1205,7 +1198,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
             />
             {hasQuery ? (
               <button
-                className="text-[#9a9a9a] hover:text-[#ececec] p-0.5 transition-colors"
+                className="control-icon p-0.5 rounded transition-colors"
                 onClick={() => setSearchInput("")}
                 aria-label="Clear search"
               >
@@ -1223,7 +1216,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
           <button
             onClick={handleAddWorkspace}
             disabled={adding}
-            className="w-5 h-5 flex items-center justify-center rounded-md text-[#888] hover:text-[#ececec] hover:bg-white/5 disabled:opacity-50 transition-colors"
+            className="control-icon w-5 h-5 flex items-center justify-center rounded-md disabled:opacity-50 transition-colors"
             aria-label="Add design workspace"
             title="Add design workspace"
           >
@@ -1241,7 +1234,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
               <p className="text-[12px] text-[#a0a0a0]">No design folders yet</p>
               <button
                 onClick={handleAddWorkspace}
-                className="px-3 py-1.5 rounded-md bg-white/[0.06] text-[#ececec] text-[12px] font-medium hover:bg-white/[0.1] transition-colors border border-white/[0.04]"
+                className="control-pill px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
               >
                 Add a design folder
               </button>
@@ -1270,18 +1263,27 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                 {/* Project header */}
                 <div
                   className={`group/proj flex items-center gap-2 pl-2 pr-1 py-1.5 rounded-md cursor-pointer transition-colors ${
-                    isActiveProject ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                    isActiveProject ? "sidebar-action-active" : "sidebar-action hover:text-[#ececec]"
                   }`}
-                  onClick={() => { toggleExpand(ws); setDesignWorkspace(ws); const cid = useChatStore.getState().activeId; if (cid) useChatStore.getState().moveConversationToWorkspace(cid, ws); }}
+                  onClick={() => { setDesignWorkspace(ws); const cid = useChatStore.getState().activeId; if (cid) useChatStore.getState().moveConversationToWorkspace(cid, ws); }}
                   onContextMenu={(e) => handleProjectContextMenu(e, ws)}
                   title={ws}
                 >
-                  <ChevronDown
-                    size={11}
-                    strokeWidth={2}
-                    className={`shrink-0 text-[#666] transition-transform ${isExpanded ? "" : "-rotate-90"}`}
-                    aria-hidden="true"
-                  />
+                  <button
+                    type="button"
+                    className="control-icon -ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors"
+                    onClick={(e) => { e.stopPropagation(); toggleExpand(ws); }}
+                    aria-label={`${isExpanded ? "Collapse" : "Expand"} ${name}`}
+                    aria-expanded={isExpanded}
+                    title={isExpanded ? "Collapse" : "Expand"}
+                  >
+                    <ChevronDown
+                      size={11}
+                      strokeWidth={2}
+                      className={`text-[#888] transition-transform ${isExpanded ? "" : "-rotate-90"}`}
+                      aria-hidden="true"
+                    />
+                  </button>
                   {isExpanded ? (
                     <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
                   ) : (
@@ -1300,7 +1302,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                   )}
                   <div className="hidden group-hover/proj:flex items-center gap-0.5 shrink-0">
                     <button
-                      className="w-5 h-5 flex items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+                      className="control-icon w-5 h-5 flex items-center justify-center rounded transition-colors"
                       onClick={(e) => { e.stopPropagation(); handleNewChat(ws); }}
                       aria-label={`New design in ${name}`}
                       title="New design"
@@ -1308,7 +1310,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                       <SquarePen size={12} strokeWidth={1.75} />
                     </button>
                     <button
-                      className="w-5 h-5 flex items-center justify-center rounded text-[#888] hover:text-[#ececec] hover:bg-white/10 transition-colors"
+                      className="control-icon w-5 h-5 flex items-center justify-center rounded transition-colors"
                       onClick={(e) => handleProjectMenuClick(e, ws)}
                       aria-label={`Project actions for ${name}`}
                       title="More"
@@ -1323,7 +1325,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                   <div className="flex flex-col ml-3 mt-0.5 border-l border-white/[0.04] pl-2">
                     {designs.length === 0 ? (
                       <button
-                        className="flex items-center gap-2 px-2 py-1.5 text-[12px] text-[#888] hover:text-[#ececec] hover:bg-white/[0.04] rounded-md transition-colors"
+                        className="sidebar-action flex items-center gap-2 px-2 py-1.5 text-[12px] text-[#a0a0a0] hover:text-[#ececec] rounded-md transition-colors"
                         onClick={() => handleNewChat(ws)}
                       >
                         <SquarePen size={11} strokeWidth={1.75} />
@@ -1343,7 +1345,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
           <button
             onClick={onOpenSettings}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full hover:bg-white/[0.06] active:bg-white/[0.09] text-[#ececec] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full text-[#ececec] transition-all"
             aria-label="Open settings"
           >
             <Settings size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] group-hover:rotate-45 transition-all duration-300" />
@@ -1367,7 +1369,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
         const moveOpen = moveMenuFor === chatMenu.conversationId;
         return (
           <div
-            className="fixed z-[101] min-w-[200px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] p-1.5 animate-[contextMenuIn_110ms_ease]"
+            className="popover-surface fixed z-[101] min-w-[200px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
             style={{ left: chatMenu.x, top: chatMenu.y }}
           >
             <button
@@ -1484,7 +1486,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
         const total = totalChatsByWs[ws] ?? 0;
         return (
           <div
-            className="fixed z-[101] min-w-[210px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] p-1.5 animate-[contextMenuIn_110ms_ease]"
+            className="popover-surface fixed z-[101] min-w-[210px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
             style={{ left: projectMenu.x, top: projectMenu.y }}
           >
             <button
@@ -1726,10 +1728,10 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
         key={conv.id}
         role="button"
         tabIndex={0}
-        className={`group relative flex items-center justify-between w-full pl-6 pr-2 py-1 rounded-md text-[13px] transition-all duration-150 text-left cursor-pointer ${
+        className={`sidebar-action group relative flex items-center justify-between w-full pl-6 pr-2 py-1 rounded-md text-[13px] transition-all duration-150 text-left cursor-pointer ${
           isActive
-            ? "bg-white/[0.09] text-white"
-            : "text-[#d5d5d5] hover:bg-white/[0.05] hover:text-[#ececec]"
+            ? "sidebar-action-active"
+            : "text-[#d5d5d5] hover:text-[#ececec]"
         }`}
         onClick={() => setActiveConversation(conv.id)}
         onKeyDown={(e) => {
@@ -1794,15 +1796,11 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
             </span>
           )}
           <button
-            className="hidden group-hover:flex p-1 rounded hover:bg-white/10 text-[#888888] hover:text-[#ececec]"
+            className="control-icon hidden group-hover:flex p-1 rounded transition-colors"
             onClick={(e) => handleMenuClick(e, conv.id)}
             aria-label="Conversation actions"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <circle cx="3" cy="8" r="1.4" />
-              <circle cx="8" cy="8" r="1.4" />
-              <circle cx="13" cy="8" r="1.4" />
-            </svg>
+            <MoreHorizontal size={14} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -1827,12 +1825,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
   return (
     <>
       <aside
-        className="w-[244px] h-full flex flex-col relative shrink-0 border-r border-black/40"
-        style={{
-          background:
-            "linear-gradient(180deg, #2f2f31 0%, #2b2b2d 38%, #28282a 100%)",
-          boxShadow: "inset -1px 0 0 rgba(255,255,255,0.03)",
-        }}
+        className="sidebar-surface w-[244px] h-full flex flex-col relative shrink-0"
       >
         {/* Native macOS traffic lights overlay this top area */}
         <div
@@ -1844,7 +1837,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
         <div className="flex flex-col gap-[1px] px-2">
           <button
             onClick={handleNewChat}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] hover:bg-white/[0.06] active:bg-white/[0.09] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] transition-all"
             aria-label="New chat"
           >
             <SquarePen size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] transition-colors" aria-hidden="true" />
@@ -1856,11 +1849,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
         {/* Live search bar */}
         <div className="px-2 mt-2">
           <div
-            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border transition-all duration-150 ${
-              searchFocused
-                ? "bg-white/[0.07] border-white/10 shadow-[0_0_0_3px_rgba(245,158,66,0.08)]"
-                : "bg-white/[0.04] border-white/5 hover:bg-white/[0.06]"
-            }`}
+            className="sidebar-search flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-150"
           >
             <Search size={13} strokeWidth={1.75} className={`shrink-0 transition-colors ${searchFocused || hasQuery ? "text-[#ececec]" : "text-[#9a9a9a]"}`} aria-hidden="true" />
             <input
@@ -1886,7 +1875,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
             />
             {hasQuery ? (
               <button
-                className="text-[#9a9a9a] hover:text-[#ececec] p-0.5 transition-colors"
+                className="control-icon p-0.5 rounded transition-colors"
                 onClick={handleClearSearch}
                 aria-label="Clear search"
                 title="Clear"
@@ -1977,7 +1966,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
               </div>
               <button
                 onClick={handleNewChat}
-                className="mt-1 px-3 py-1.5 rounded-md bg-white/[0.06] text-[#ececec] text-[12.5px] font-medium hover:bg-white/[0.1] transition-colors border border-white/[0.04]"
+                className="control-pill mt-1 px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors"
               >
                 Start chatting
               </button>
@@ -2005,7 +1994,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
           <button
             onClick={onOpenSettings}
-            className="group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full hover:bg-white/[0.06] active:bg-white/[0.09] text-[#ececec] transition-colors"
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full text-[#ececec] transition-all"
             aria-label="Open settings"
           >
             <Settings size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] group-hover:rotate-45 transition-all duration-300" aria-hidden="true" />
@@ -2022,34 +2011,28 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
             onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
           />
           <div
-            className="fixed z-[101] min-w-[180px] bg-[#2a2a2c] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.55)] p-1.5 animate-[contextMenuIn_110ms_ease]"
+            className="popover-surface fixed z-[101] min-w-[180px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
               onClick={() => handleRenameStart(contextMenu.conversationId)}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-                <path d="M11 2L14 5L5 14H2V11L11 2z" />
-              </svg>
+              <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
               Rename
             </button>
             <button
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
               onClick={() => handleExport(contextMenu.conversationId, "markdown")}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 11v3H2v-3" /><path d="M5 5l3-3 3 3" /><path d="M8 2v10" />
-              </svg>
+              <FileDown size={13} strokeWidth={1.75} aria-hidden="true" />
               Export as Markdown
             </button>
             <button
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
               onClick={() => handleExport(contextMenu.conversationId, "json")}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 11v3H2v-3" /><path d="M5 5l3-3 3 3" /><path d="M8 2v10" />
-              </svg>
+              <FileDown size={13} strokeWidth={1.75} aria-hidden="true" />
               Export as JSON
             </button>
             <div className="h-px bg-white/5 mx-1 my-1" />
@@ -2057,9 +2040,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-red-500/10 hover:text-[#f87171] transition-colors"
               onClick={() => handleDelete(contextMenu.conversationId)}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="2 4 4 4 14 4" /><path d="M5 4V2h6v2" /><path d="M5 7v6M8 7v6M11 7v6" /><path d="M3 4l1 10h8l1-10" />
-              </svg>
+              <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
               Delete
             </button>
           </div>

@@ -401,12 +401,12 @@ export function ToolsTab() {
                   placeholder="Type a detail to remember (e.g. I prefer Python for coding)..."
                   value={newMemoryText}
                   onChange={(e) => setNewMemoryText(e.target.value)}
-                  className="flex-1 h-[32px] px-2.5 bg-[#2c2c2e] border border-white/5 rounded-lg text-[12px] text-[#ececec] outline-none focus:border-white/15"
+                  className="flex-1 h-[32px] px-2.5 bg-white/[0.06] border border-white/10 rounded-lg text-[12px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
                 />
                 <select
                   value={newMemoryCategory}
                   onChange={(e) => setNewMemoryCategory(e.target.value)}
-                  className="h-[32px] px-2 bg-[#2c2c2e] border border-white/5 rounded-lg text-[12px] text-[#ececec] outline-none focus:border-white/15 cursor-pointer"
+                  className="h-[32px] px-2 bg-white/[0.06] border border-white/10 rounded-lg text-[12px] text-[#ececec] outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20 cursor-pointer"
                 >
                   <option value="fact">Fact</option>
                   <option value="preference">Preference</option>
@@ -416,7 +416,7 @@ export function ToolsTab() {
                 <button
                   type="submit"
                   disabled={memoryLoading || !newMemoryText.trim()}
-                  className="h-[32px] px-3 bg-[#f59e42] text-black hover:bg-[#fbb968] disabled:bg-white/5 disabled:text-[#4a4a4a] rounded-lg text-[12px] font-medium transition-colors flex items-center gap-1.5"
+                  className="primary-action h-[32px] px-3 disabled:opacity-45 disabled:cursor-not-allowed rounded-lg text-[12px] font-medium transition-colors flex items-center gap-1.5"
                 >
                   <Plus size={12} strokeWidth={2.5} />
                   Add
@@ -445,7 +445,7 @@ export function ToolsTab() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase font-mono ${
                             m.category === "preference"
-                              ? "bg-purple-500/10 text-purple-400"
+                              ? "bg-[#f59e42]/10 text-[#f5c18c]"
                               : m.category === "contact"
                                 ? "bg-blue-500/10 text-blue-400"
                                 : m.category === "task"

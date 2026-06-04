@@ -242,14 +242,14 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
             )}
           </div>
         ) : (
-          <div className="block bg-[#2c2c2e] border border-white/5 rounded-lg p-2.5 max-h-[220px] overflow-auto select-text">
+          <div className="soft-card block rounded-lg p-2.5 max-h-[220px] overflow-auto select-text">
             <JsonInspectorNode value={tc.input} depth={0} />
           </div>
         )}
       </div>
       <div className="flex justify-end gap-2">
         <button
-          className="px-3.5 py-1.5 rounded-md text-[12.5px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
+          className="control-pill px-3.5 py-1.5 rounded-md text-[12.5px] transition-colors"
           onClick={() => denyExecution(tc.toolCallId)}
         >
           Deny
@@ -258,7 +258,7 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
           className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${
             isDestructive && !needsDoubleConfirm
               ? "bg-red-500/20 text-[#fca5a5] hover:bg-red-500/30 hover:text-[#fecaca]"
-              : "bg-[#ececec] text-black hover:bg-white"
+              : "primary-action"
           }`}
           onClick={() => {
             if (needsDoubleConfirm) setConfirmStep(1);

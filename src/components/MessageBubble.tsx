@@ -117,7 +117,7 @@ function ThinkingBlock({ messageId, content, elapsed, running }: {
       </button>
       {expanded && hasContent && (
         <div
-          className="mt-1.5 ml-4 max-h-[420px] overflow-y-auto rounded-lg bg-[#161618] border border-white/[0.06] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] break-words animate-[fadeIn_180ms_ease] thinking-prose"
+          className="mt-1.5 ml-4 max-h-[420px] overflow-y-auto rounded-lg bg-[#161618]/90 border border-white/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] break-words animate-[fadeIn_180ms_ease] thinking-prose shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
           style={{ scrollbarGutter: "stable" }}
         >
           <MarkdownRenderer content={content!} />
@@ -325,11 +325,11 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
 
         {/* Plain assistant text (no tool calls) + user messages */}
         {(!hasToolCalls || !isAssistant) && (
-          <div className={isUser ? "bg-[#2d2d2d] border border-white/5 rounded-2xl px-4 py-2 max-w-[85%]" : "w-full overflow-hidden min-w-0"}>
+          <div className={isUser ? "liquid-surface rounded-2xl rounded-br-md px-4 py-2 max-w-[85%]" : "w-full overflow-hidden min-w-0"}>
             {editing ? (
               <textarea
                 ref={textareaRef}
-                className="w-full min-w-[320px] bg-[#2c2c2e] border border-white/10 rounded-xl text-[14px] text-[#ececec] p-2.5 resize-none outline-none leading-relaxed"
+                className="w-full min-w-[320px] bg-[#2c2c2e]/85 border border-white/10 rounded-xl text-[14px] text-[#ececec] p-2.5 resize-none outline-none leading-relaxed focus:border-accent/45 focus:ring-2 focus:ring-accent/10"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onKeyDown={handleEditKeyDown}
@@ -356,7 +356,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             <span className="text-[12px] text-[#a0a0a0]">Response stopped early.</span>
             <button
               type="button"
-              className="px-2.5 py-1 rounded-md text-[12px] font-medium text-[#1a1a1c] bg-[#f59e42] hover:bg-[#fbbf24] transition-colors"
+              className="primary-action px-2.5 py-1 rounded-md text-[12px] font-medium"
               onClick={handleContinue}
             >
               Continue
@@ -373,10 +373,10 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             : 0;
           return (
             <div className={`flex items-center w-full min-h-[24px] ${isUser ? "justify-end" : showStats ? "justify-between" : ""}`}>
-              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 {message.content.trim().length > 0 && (
                   <button
-                    className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                    className="control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors"
                     onClick={handleCopy}
                     aria-label={copied ? "Copied to clipboard" : isUser ? "Copy your message" : "Copy assistant response"}
                     title={copied ? "Copied" : "Copy"}
@@ -389,7 +389,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                   </button>
                 )}
                 {isUser && (
-                  <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
+                  <button className="control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors" onClick={editing ? handleCancelEdit : handleStartEdit} aria-label={editing ? "Cancel edit" : "Edit message"} title={editing ? "Cancel" : "Edit"}>
                     {editing ? (
                       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" /></svg>
                     ) : (
@@ -398,13 +398,13 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                   </button>
                 )}
                 {isAssistant && (
-                  <button className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
+                  <button className="control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
                   </button>
                 )}
                 {message.content.trim().length > 0 && (
                   <button
-                    className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] hover:bg-white/5" : "text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5"}`}
+                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] border-[#f59e42]/25 bg-[#f59e42]/10" : ""}`}
                     onClick={handleTogglePin}
                     aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
                     title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
@@ -418,7 +418,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
                 {!isUser && (
                   <button
-                    className="w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors"
+                    className="control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors"
                     onClick={handleFork}
                     aria-label="Fork conversation from here"
                     title="Fork — create new conversation from this point"
@@ -817,7 +817,7 @@ function DesignAwareText({
         return (
           <div
             key={`fseg-${messageId}-${i}`}
-            className="my-3 rounded-xl border border-white/[0.08] bg-[#2a2a2c] px-4 py-3 text-[12px] text-[#a0a0a0] thinking-line"
+            className="soft-card my-3 rounded-xl px-4 py-3 text-[12px] text-[#a0a0a0] thinking-line"
           >
             Composing form…
           </div>
@@ -1019,7 +1019,7 @@ function PlanBuildCTA({ message }: { message: Message }) {
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-[#f59e42]/30 bg-gradient-to-b from-[#f59e42]/[0.06] to-transparent p-4 flex items-start gap-3">
+    <div className="mt-4 rounded-2xl border border-[#f59e42]/30 bg-[#f59e42]/[0.055] p-4 flex items-start gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
       <div className="shrink-0 w-9 h-9 rounded-xl bg-[#f59e42]/15 flex items-center justify-center">
         <ListChecks size={16} strokeWidth={1.75} className="text-[#f59e42]" aria-hidden="true" />
       </div>

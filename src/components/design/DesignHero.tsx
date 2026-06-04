@@ -62,7 +62,7 @@ export function DesignHero() {
     <div className="w-full max-w-[920px] mx-auto px-6 py-10 animate-[fadeIn_320ms_ease]">
       <header className="mb-6 flex items-baseline justify-between">
         <div>
-          <h1 className="text-[22px] font-medium text-[#ececec] tracking-[-0.01em]">
+          <h1 className="text-[22px] font-medium text-[#ececec]">
             Pick a surface to design.
           </h1>
           <p className="mt-1.5 text-[13px] text-[#a0a0a0] max-w-[60ch]">
@@ -125,10 +125,10 @@ function SkillCard({
       type="button"
       onClick={onSelect}
       aria-pressed={active}
-      className={`group relative flex flex-col text-left rounded-xl overflow-hidden border transition-colors ${
+      className={`soft-card group relative flex flex-col text-left rounded-xl overflow-hidden transition-all ${
         active
-          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06]"
-          : "border-white/[0.06] bg-[#2a2a2c] hover:border-white/[0.12] hover:bg-[#2d2d2d]"
+          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
+          : "hover:border-white/[0.12] hover:bg-white/[0.06]"
       }`}
     >
       {/* Tiny visual rhythm — no real preview yet, just a uniform card-sized
@@ -137,7 +137,7 @@ function SkillCard({
           the SVG sketch, not on the card itself, so cards stay a consistent
           height across the grid. */}
       <div
-        className="relative w-full bg-[#1a1a1c] border-b border-white/[0.04]"
+        className="relative w-full bg-sunken border-b border-white/[0.04]"
         style={{ aspectRatio: "16/10" }}
       >
         <SkillPreviewSketch skill={skill} />

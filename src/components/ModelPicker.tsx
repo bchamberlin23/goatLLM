@@ -217,20 +217,20 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
       : triggerLabel;
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative min-w-0" ref={dropdownRef}>
       <button
         ref={triggerRef}
         onClick={() => setIsOpen((o) => !o)}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white/[0.06] active:bg-white/[0.09] text-[13px] transition-colors max-w-[220px] ${
-          isOpen ? "bg-white/[0.06]" : ""
+        className={`group flex min-w-0 items-center gap-1.5 px-2.5 py-1 rounded-md border text-[13px] transition-[background,border-color,color] max-w-[220px] max-[520px]:max-w-[calc(100vw-112px)] ${
+          isOpen ? "bg-white/[0.065] border-white/[0.08]" : "border-transparent hover:bg-white/[0.055] hover:border-white/[0.07] active:bg-white/[0.09]"
         } ${selectedModel ? "text-text-1" : "text-text-3"}`}
         title={triggerTitle}
       >
         {selectedProvider && <ProviderIcon provider={selectedProvider} size={11} />}
-        <span className="truncate">{triggerLabel}</span>
+        <span className="min-w-0 truncate">{triggerLabel}</span>
         {providerOffline && (
           <span
             className="w-1.5 h-1.5 rounded-full bg-error shrink-0 animate-[dot-pulse_1.5s_ease-in-out_infinite]"
@@ -248,7 +248,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
 
       {isOpen && (
         <div
-          className="absolute bottom-full right-0 mb-2 w-[360px] max-w-[calc(100vw-32px)] bg-[#2c2c2e] border border-white/10 rounded-xl shadow-[0_24px_60px_rgba(0,0,0,0.6),0_2px_8px_rgba(0,0,0,0.4)] z-[200] animate-[dropdownIn_110ms_ease] flex flex-col overflow-hidden backdrop-blur-xl"
+          className="popover-surface absolute bottom-full right-0 mb-2 w-[360px] max-w-[calc(100vw-32px)] rounded-xl z-[200] animate-[dropdownIn_110ms_ease] flex flex-col overflow-hidden"
           onKeyDown={handleKeyDown}
         >
           {pendingModelId ? (
@@ -267,7 +267,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                   Cancel
                 </button>
                 <button
-                  className="flex-1 py-1.5 rounded-md text-[13px] font-medium bg-[#ececec] text-black hover:bg-white transition-colors"
+                  className="primary-action flex-1 py-1.5 rounded-md text-[13px] font-medium transition-colors"
                   onClick={handleConfirmSwitch}
                 >
                   Switch
@@ -353,7 +353,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                 ) : (
                   grouped.map(({ provider, models: providerModels }) => (
                     <div key={provider.id} className="mb-1 last:mb-0">
-                      <div className="px-3 pt-2 pb-1 flex items-center justify-between sticky top-0 bg-[#2c2c2e] z-10">
+                      <div className="px-3 pt-2 pb-1 flex items-center justify-between sticky top-0 bg-[#2c2c2e]/92 backdrop-blur-md z-10">
                         <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[#9a9a9a]">
                           <ProviderIcon provider={provider} size={11} />
                           <span>{provider.name}</span>
@@ -536,7 +536,7 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
         <span className="text-[11.5px] font-medium text-[#b4b4b4]">Context Window (tokens)</span>
         <input
           type="number"
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
           placeholder={
             autoDetectedCtx > 0
               ? `Auto-detected: ${autoDetectedCtx.toLocaleString()}`
@@ -561,7 +561,7 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
         <span className="text-[11.5px] font-medium text-[#b4b4b4]">Max Response Tokens</span>
         <input
           type="number"
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#6a6a6a] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
           placeholder="Provider default"
           value={maxResp}
           onChange={(e) => setMaxResp(e.target.value)}
@@ -597,7 +597,7 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
           </button>
         )}
         <button
-          className="flex-1 py-1.5 rounded-md text-[13px] font-medium bg-[#ececec] text-black hover:bg-white transition-colors"
+          className="primary-action flex-1 py-1.5 rounded-md text-[13px] font-medium transition-colors"
           onClick={handleSave}
         >
           Done

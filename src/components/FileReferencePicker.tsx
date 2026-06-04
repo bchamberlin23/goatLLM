@@ -117,7 +117,7 @@ export function FileReferencePicker({
 
   return (
     <div
-      className="fixed z-[150] w-[320px] max-h-[240px] overflow-hidden rounded-xl bg-[#2a2a2c] border border-white/[0.08] shadow-lg shadow-black/40 animate-[fadeIn_100ms_ease]"
+      className="popover-surface fixed z-[150] w-[320px] max-h-[240px] overflow-hidden rounded-xl animate-[fadeIn_100ms_ease]"
       style={{ top: position.top, left: position.left }}
     >
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-white/[0.02]">

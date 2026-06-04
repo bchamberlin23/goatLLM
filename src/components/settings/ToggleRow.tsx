@@ -15,8 +15,8 @@ export function ToggleRow({
 }) {
   return (
     <div
-      className={`flex items-center justify-between gap-3 p-3.5 bg-surface-3 border rounded-xl transition-colors ${
-        enabled ? "border-accent/25" : "border-white/5"
+      className={`soft-card flex items-center justify-between gap-3 p-3.5 rounded-xl transition-all ${
+        enabled ? "border-accent/25 shadow-[0_10px_30px_-24px_rgba(245,158,66,0.75)]" : ""
       } ${dimmedWhen ? "opacity-60" : ""}`}
     >
       <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -37,10 +37,14 @@ export function ToggleRow({
           aria-checked={enabled}
           aria-label={title}
           onClick={() => onToggle(!enabled)}
-          className={`relative w-10 h-6 rounded-full transition-colors ${enabled ? "bg-accent" : "bg-[#3a3a3a]"}`}
+          className={`relative w-10 h-6 rounded-full border transition-all ${
+            enabled
+              ? "bg-accent border-accent shadow-[0_8px_20px_-10px_rgba(245,158,66,0.9)]"
+              : "bg-white/[0.10] border-white/[0.08] hover:bg-white/[0.14]"
+          }`}
         >
           <span
-            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`}
+            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-[#f7f3ed] shadow-[0_2px_8px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.65)] transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`}
           />
         </button>
       </div>

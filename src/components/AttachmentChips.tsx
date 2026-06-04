@@ -106,7 +106,7 @@ export const AttachmentChips = memo(function AttachmentChips({ attachments, vari
             key={`${a.filename}-${i}`}
             type="button"
             onClick={() => setActiveAttachment(a)}
-            className={`flex items-center gap-2 ${padding} bg-white/[0.05] border border-white/[0.07] rounded-xl max-w-[220px] hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20`}
+            className={`soft-card flex items-center gap-2 ${padding} rounded-xl max-w-[220px] hover:bg-white/[0.07] hover:border-white/[0.12] transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#f59e42]/35`}
             title={`Open ${a.filename}`}
             aria-label={`Open ${a.filename}`}
           >

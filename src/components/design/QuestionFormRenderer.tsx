@@ -49,7 +49,7 @@ export function QuestionFormRenderer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="my-3 rounded-xl border border-white/[0.08] bg-[#2a2a2c] overflow-hidden"
+      className="soft-card my-3 rounded-xl overflow-hidden"
       aria-label={headerText}
     >
       <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
@@ -137,7 +137,7 @@ export function QuestionFormRenderer({
                 id={`qf-${form.id}-${field.id}`}
                 value={(values[field.id] as string) ?? ""}
                 onChange={(e) => setText(field.id, e.target.value)}
-                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50"
+                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
               >
                 <option value="">Select...</option>
                 {field.options.map((opt) => (
@@ -155,7 +155,7 @@ export function QuestionFormRenderer({
                 value={(values[field.id] as string) ?? ""}
                 onChange={(e) => setText(field.id, e.target.value)}
                 placeholder={field.placeholder}
-                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 placeholder:text-[#666]"
+                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 placeholder:text-text-4"
               />
             )}
 
@@ -166,7 +166,7 @@ export function QuestionFormRenderer({
                 onChange={(e) => setText(field.id, e.target.value)}
                 placeholder={field.placeholder}
                 rows={3}
-                className="w-full bg-[#1a1a1c] border border-white/[0.06] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 resize-none placeholder:text-[#666]"
+                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 resize-none placeholder:text-text-4"
               />
             )}
           </div>
@@ -182,7 +182,7 @@ export function QuestionFormRenderer({
         <button
           type="submit"
           disabled={submitted || disabled}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f59e42] hover:bg-[#f0903a] disabled:bg-[#3a3a3a] disabled:cursor-not-allowed text-[12px] font-medium text-[#1a1a1c] transition-colors"
+          className="primary-action inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg disabled:opacity-45 disabled:cursor-not-allowed text-[12px] font-medium transition-colors"
         >
           {submitted ? "Submitted" : "Submit"}
           <ArrowRight size={12} strokeWidth={2.5} aria-hidden />

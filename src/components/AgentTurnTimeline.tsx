@@ -23,7 +23,7 @@ export function AgentTurnTimelineHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="flex items-center gap-2 py-1 px-1.5 -ml-1.5 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/5 transition-colors text-[13px] font-medium outline-none"
+      className="control-pill flex items-center gap-2 py-1 px-1.5 -ml-1.5 rounded text-[13px] font-medium outline-none transition-colors"
       aria-expanded={expanded}
       aria-label={expanded ? "Collapse run timeline" : "Expand run timeline"}
     >
@@ -90,7 +90,7 @@ export function AgentTurnRollbackButton({ message }: { message: Message }) {
         type="button"
         disabled={state === "running"}
         onClick={() => setPreviewOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-medium text-text-3 transition-colors hover:bg-white/[0.07] disabled:opacity-60"
+        className="control-pill inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11.5px] font-medium transition-colors disabled:opacity-60"
       >
         <RotateCcw size={12} strokeWidth={1.8} aria-hidden />
         {state === "running"
@@ -102,11 +102,11 @@ export function AgentTurnRollbackButton({ message }: { message: Message }) {
               : "Preview rollback"}
       </button>
       {previewOpen && state !== "done" && (
-        <div className="mt-2 rounded-lg border border-white/[0.08] bg-white/[0.035] p-3">
+        <div className="soft-card mt-2 rounded-lg p-3">
           <div className="text-[12px] font-medium text-text-2">Rollback preview</div>
           <div className="mt-2 flex flex-col gap-1">
             {rollbackPreview.map((file) => (
-              <div key={file.path} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2">
+              <div key={file.path} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
                 <div className="flex min-w-0 items-center gap-2 text-[11.5px] text-text-3">
                   <span className="rounded border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-4">
                     {file.action}
@@ -133,7 +133,7 @@ export function AgentTurnRollbackButton({ message }: { message: Message }) {
           <div className="mt-3 flex justify-end gap-2">
             <button
               type="button"
-              className="rounded-md px-2.5 py-1.5 text-[11.5px] text-text-3 transition-colors hover:bg-white/[0.05]"
+              className="control-pill rounded-md px-2.5 py-1.5 text-[11.5px] transition-colors"
               onClick={() => setPreviewOpen(false)}
             >
               Cancel
@@ -141,7 +141,7 @@ export function AgentTurnRollbackButton({ message }: { message: Message }) {
             <button
               type="button"
               disabled={state === "running"}
-              className="rounded-md bg-white px-2.5 py-1.5 text-[11.5px] font-medium text-black transition-colors hover:bg-white/90 disabled:opacity-60"
+              className="primary-action rounded-md px-2.5 py-1.5 text-[11.5px] font-medium transition-colors disabled:opacity-60"
               onClick={async () => {
                 setState("running");
                 try {

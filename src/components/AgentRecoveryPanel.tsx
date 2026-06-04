@@ -69,7 +69,7 @@ export function AgentRecoveryPanel() {
   };
 
   return (
-    <div className="w-full max-w-[720px] rounded-lg border border-white/[0.06] bg-white/[0.035] px-3 py-2">
+    <div className="liquid-surface w-full max-w-[720px] rounded-xl px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <RotateCcw size={13} strokeWidth={1.8} className="shrink-0 text-text-4" aria-hidden />
@@ -87,7 +87,7 @@ export function AgentRecoveryPanel() {
           <button
             type="button"
             onClick={copyAudit}
-            className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-text-3 transition-colors hover:bg-white/[0.07]"
+            className="control-pill inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
           >
             <Copy size={11} strokeWidth={1.8} aria-hidden />
             {copied ? "Copied" : "Copy audit"}
@@ -95,7 +95,7 @@ export function AgentRecoveryPanel() {
           <button
             type="button"
             onClick={() => downloadAudit("markdown")}
-            className="inline-flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-text-3 transition-colors hover:bg-white/[0.07]"
+            className="control-pill inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
           >
             <Download size={11} strokeWidth={1.8} aria-hidden />
             Download audit
@@ -111,7 +111,7 @@ export function AgentRecoveryPanel() {
             onClick={() => setSelectedId(checkpoint.messageId)}
             className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] transition-colors ${
               (selected?.id ?? checkpoints[0]?.messageId) === checkpoint.messageId
-                ? "bg-white/[0.07] text-text-2"
+                ? "bg-[#f59e42]/10 text-text-2 shadow-[inset_0_0_0_1px_rgba(245,158,66,0.16)]"
                 : "text-text-3 hover:bg-white/[0.04]"
             }`}
           >
@@ -124,7 +124,7 @@ export function AgentRecoveryPanel() {
         ))}
       </div>}
       {open && selected && preview.length > 0 && (
-        <div className="mt-2 rounded-md border border-white/[0.06] bg-white/[0.025] p-2">
+        <div className="soft-card mt-2 rounded-md p-2">
           <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Compare to current</div>
           <div className="mt-2 flex items-center justify-between gap-2">
             <div className="min-w-0 truncate text-[10.5px] text-text-4">
@@ -133,7 +133,7 @@ export function AgentRecoveryPanel() {
             <button
               type="button"
               onClick={() => setRenaming((value) => !value)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-text-3 transition-colors hover:bg-white/[0.07]"
+              className="control-pill inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors"
             >
               <Pencil size={11} strokeWidth={1.8} aria-hidden />
               Rename checkpoint
@@ -144,7 +144,7 @@ export function AgentRecoveryPanel() {
               value={checkpointNames[selected.id] ?? ""}
               onChange={(event) => setCheckpointName(selected.id, event.currentTarget.value)}
               placeholder="Name checkpoint"
-              className="mt-2 w-full rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4"
+              className="mt-2 w-full rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
             />
           )}
           <div className="mt-2 text-[10.5px] text-text-4">
