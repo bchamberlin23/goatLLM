@@ -4,16 +4,16 @@ import { SystemPromptSection } from "./SystemPromptSection";
 import { SettingsGroup } from "./SettingsGroup";
 
 const PLUS_ITEMS = [
-  { key: "upload", label: "Upload File", description: "Attach files to the prompt." },
-  { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution." },
-  { key: "usage", label: "Usage Dashboard", description: "Open panel for token count, latency, and cost details." },
-  { key: "compare", label: "Compare Models", description: "Compare responses from multiple models in parallel." },
-  { key: "notebook", label: "Notebook Mode", description: "Open interactive scratchpad with runnable code cells." },
-  { key: "browser", label: "Browser Panel", description: "Open local browser screen for agent actions." },
-  { key: "image", label: "Generate Image", description: "Input prompt to generate images directly." },
-  { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode." },
-  { key: "research", label: "Deep Research", description: "Toggle sequential multi-step web research." },
-  { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills for the chat session." },
+  { key: "upload", label: "Upload File", description: "Attach files to the prompt.", modes: ["chat", "design", "agent"] },
+  { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution.", modes: ["chat", "design", "agent"] },
+  { key: "usage", label: "Usage Dashboard", description: "Open panel for token count, latency, and cost details.", modes: ["chat", "design", "agent"] },
+  { key: "compare", label: "Compare Models", description: "Compare responses from multiple models in parallel.", modes: ["chat", "design", "agent"] },
+  { key: "notebook", label: "Notebook Mode", description: "Open interactive scratchpad with runnable code cells.", modes: ["chat", "design", "agent"] },
+  { key: "browser", label: "Browser Panel", description: "Open local browser screen for agent actions.", modes: ["chat", "design", "agent"] },
+  { key: "image", label: "Generate Image", description: "Input prompt to generate images directly.", modes: ["chat", "design", "agent"] },
+  { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode.", modes: ["agent"] },
+  { key: "research", label: "Deep Research", description: "Toggle sequential multi-step web research.", modes: ["chat", "design", "agent"] },
+  { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills for the chat session.", modes: ["chat", "design", "agent"] },
 ];
 
 export function InterfaceTab() {
@@ -117,28 +117,40 @@ export function InterfaceTab() {
                     <div className="text-[10.5px] text-text-4 mt-0.5 leading-relaxed">{item.description}</div>
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={plusMenuVisibility.chat?.[item.key] ?? false}
-                      onChange={(e) => setPlusMenuItemVisible("chat", item.key, e.target.checked)}
-                      className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                    />
+                    {item.modes.includes("chat") ? (
+                      <input
+                        type="checkbox"
+                        checked={plusMenuVisibility.chat?.[item.key] ?? false}
+                        onChange={(e) => setPlusMenuItemVisible("chat", item.key, e.target.checked)}
+                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-text-4 text-[11px]">—</span>
+                    )}
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={plusMenuVisibility.design?.[item.key] ?? false}
-                      onChange={(e) => setPlusMenuItemVisible("design", item.key, e.target.checked)}
-                      className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                    />
+                    {item.modes.includes("design") ? (
+                      <input
+                        type="checkbox"
+                        checked={plusMenuVisibility.design?.[item.key] ?? false}
+                        onChange={(e) => setPlusMenuItemVisible("design", item.key, e.target.checked)}
+                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-text-4 text-[11px]">—</span>
+                    )}
                   </td>
                   <td className="py-3 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={plusMenuVisibility.agent?.[item.key] ?? false}
-                      onChange={(e) => setPlusMenuItemVisible("agent", item.key, e.target.checked)}
-                      className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                    />
+                    {item.modes.includes("agent") ? (
+                      <input
+                        type="checkbox"
+                        checked={plusMenuVisibility.agent?.[item.key] ?? false}
+                        onChange={(e) => setPlusMenuItemVisible("agent", item.key, e.target.checked)}
+                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
+                      />
+                    ) : (
+                      <span className="text-text-4 text-[11px]">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
