@@ -345,7 +345,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       {showHero && (
         <div className="shrink-0 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full max-w-[860px] mx-auto flex-1 justify-center px-0 sm:px-6 pb-6 gap-3 relative">
           <div className="flex flex-col items-center text-center -mt-10 animate-[fadeIn_320ms_ease]">
-            {heroWorkspacePath && (
+            {heroWorkspacePath ? (
               <div className="liquid-surface mb-8 inline-flex max-w-[min(520px,calc(100vw-48px))] items-center gap-2 rounded-full px-4 py-1.5 text-[13px] text-[#c9c9c9]">
                 <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" aria-hidden="true" />
                 <span className="text-[#a0a0a0]">
@@ -355,6 +355,9 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                   {heroWorkspaceName}
                 </span>
               </div>
+            ) : (
+              // Reserve space for workspace banner in chat mode for consistent spacing
+              <div className="mb-8 h-[34px]" aria-hidden="true" />
             )}
             {needsSetup ? (
               <div className="mt-3 flex flex-col items-center gap-2 max-w-[480px]">
