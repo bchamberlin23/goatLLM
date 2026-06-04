@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type CSSProperties, type PointerEvent } from "react";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
@@ -29,6 +29,7 @@ export default function App() {
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [glow, setGlow] = useState({ x: 52, y: 8 });
 
   useEffect(() => { hydrate(); }, []);
   useEffect(() => {
@@ -43,6 +44,29 @@ export default function App() {
   }, [setSidebarOpen]);
   useEffect(() => { if (_hydrated) checkAllProvidersHealth(); }, [_hydrated]);
   useEffect(() => { if (_hydrated) void discoverAllLocalModels(); }, [_hydrated]);
+  useEffect(() => {
+    if (!_hydrated) return;
+    let unlisten: (() => void) | null = null;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<{ path: string; kind: "create" | "modify" | "remove"; at: number; diagnostic?: string }>(
+          "workspace-watch-event",
+          (event) => {
+            if (!event.payload?.path) return;
+            useChatStore.getState().addWatcherEvent(event.payload);
+          },
+        ),
+      )
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {
+        // Browser-mode dev server has no Tauri event bridge.
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, [_hydrated]);
   // Seed built-in skills then refresh the list once hydrated.
   useEffect(() => {
     if (!_hydrated) return;
@@ -96,6 +120,13 @@ export default function App() {
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
   const handleFocusInput = useCallback(() => useChatStore.getState().focusInput(), []);
+  const handleGlowMove = useCallback((event: PointerEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setGlow({
+      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100,
+      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100,
+    });
+  }, []);
 
   useKeyboardShortcuts({
     onOpenSettings: handleOpenSettings,
@@ -114,11 +145,13 @@ export default function App() {
       </div>
       <main
         className="flex-1 h-full flex flex-col relative overflow-hidden"
+        onPointerMove={handleGlowMove}
         style={{
-          background:
-            "radial-gradient(1100px 620px at 50% -10%, rgba(245,158,66,0.052), transparent 55%), radial-gradient(900px 560px at 100% 110%, rgba(255,255,255,0.026), transparent 58%), var(--bg)",
-        }}
+          "--glow-x": `${glow.x}%`,
+          "--glow-y": `${glow.y}%`,
+        } as CSSProperties}
       >
+        <div className="liquid-glow-field" aria-hidden="true" />
         <ChatView onOpenSettings={handleOpenSettings} />
       </main>
       <button

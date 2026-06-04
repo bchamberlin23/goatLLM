@@ -20,6 +20,7 @@ import {
   Undo2,
   Redo2,
   History,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   renderDocxPreview,
@@ -55,6 +56,7 @@ const ARTIFACT_LANG: Record<ArtifactKind, string> = {
   diagram: "plaintext",
   "code-snippet": "plaintext",
   "mini-app": "html",
+  image: "plaintext",
   "design-system": "markdown",
 };
 
@@ -72,6 +74,7 @@ const KIND_ICON: Record<ArtifactKind, typeof Code> = {
   diagram: FileCode,
   "code-snippet": Code,
   "mini-app": FileCode,
+  image: ImageIcon,
   "design-system": FileText,
 };
 const KIND_LABEL: Record<ArtifactKind, string> = {
@@ -88,6 +91,7 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
   diagram: "Diagram",
   "code-snippet": "Code",
   "mini-app": "App",
+  image: "Image",
   "design-system": "Design System",
 };
 
@@ -490,6 +494,18 @@ function ArtifactContent({
         />
       );
     }
+    case "image":
+      return (
+        <div className="flex-1 min-h-0 overflow-auto bg-[#0e0e0f]">
+          <div className="min-h-full flex items-center justify-center p-6">
+            <img
+              src={artifact.code}
+              alt={artifact.title}
+              className="max-h-full max-w-full rounded-xl border border-white/10 bg-black object-contain shadow-[0_28px_80px_-34px_rgba(0,0,0,0.95)]"
+            />
+          </div>
+        </div>
+      );
     case "markdown-document":
     case "design-system": {
       // Render markdown as HTML
@@ -1508,5 +1524,6 @@ const KIND_VERB: Record<ArtifactKind, string> = {
   diagram: "Creating diagram",
   "code-snippet": "Writing code",
   "mini-app": "Building app",
+  image: "Generating image",
   "design-system": "Documenting system",
 };

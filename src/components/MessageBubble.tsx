@@ -7,7 +7,7 @@ import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-se
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation, Volume2, VolumeX } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -17,6 +17,7 @@ import { AgentTurnRollbackButton, AgentTurnTimelineHeader } from "./AgentTurnTim
 import { useThrottledContent } from "../hooks/useThrottledContent";
 import { requestSuggestedCheckApproval } from "../lib/tools/approval";
 import { DeepResearchProgress } from "./DeepResearchProgress";
+import { speakText, stopSpeaking } from "../lib/speech";
 import {
   shouldExpandThinking,
   setThinkingPref,
@@ -135,7 +136,10 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [copied, setCopied] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const autoPlayedRef = useRef(false);
+  const voiceSettings = useChatStore((s) => s.voiceSettings);
 
   const handleCopy = useCallback(async () => {
     const text = isAssistant ? stripMarkdown(message.content) : message.content;
@@ -200,6 +204,32 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const handleContinue = useCallback(() => {
     useChatStore.getState().triggerContinue(message.conversationId);
   }, [message.conversationId]);
+
+  const handleSpeak = useCallback(() => {
+    if (speaking) {
+      stopSpeaking();
+      setSpeaking(false);
+      return;
+    }
+    const utterance = speakText(stripMarkdown(message.content), voiceSettings);
+    if (!utterance) return;
+    setSpeaking(true);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+  }, [message.content, speaking, voiceSettings]);
+
+  useEffect(() => {
+    if (!isAssistant || isStreaming || autoPlayedRef.current) return;
+    if (!voiceSettings.enabled || !voiceSettings.autoPlayAssistant) return;
+    if (!message.content.trim()) return;
+    if (Date.now() - message.createdAt > 15_000) return;
+    autoPlayedRef.current = true;
+    const utterance = speakText(stripMarkdown(message.content), voiceSettings);
+    if (!utterance) return;
+    setSpeaking(true);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+  }, [isAssistant, isStreaming, message.content, message.createdAt, voiceSettings]);
 
   const handleFork = useCallback(() => {
     const store = useChatStore.getState();
@@ -406,6 +436,20 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 {isAssistant && (
                   <button className="control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors" onClick={handleRegenerate} aria-label="Regenerate response" title="Regenerate">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 4v4h4" /><path d="M15 12v-4h-4" /><path d="M13.5 6A6 6 0 002.2 8.8M2.5 10a6 6 0 0011.3-2.9" /></svg>
+                  </button>
+                )}
+                {isAssistant && message.content.trim().length > 0 && voiceSettings.enabled && (
+                  <button
+                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${speaking ? "text-[#f59e42] border-[#f59e42]/25 bg-[#f59e42]/10" : ""}`}
+                    onClick={handleSpeak}
+                    aria-label={speaking ? "Stop response playback" : "Play response"}
+                    title={speaking ? "Stop playback" : "Play response"}
+                  >
+                    {speaking ? (
+                      <VolumeX size={13} strokeWidth={1.8} aria-hidden="true" />
+                    ) : (
+                      <Volume2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                    )}
                   </button>
                 )}
                 {message.content.trim().length > 0 && (

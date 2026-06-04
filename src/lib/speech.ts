@@ -42,6 +42,45 @@ export function isSpeechRecognitionSupported(): boolean {
   return SpeechRecognitionCtor !== null;
 }
 
+// ── Text-to-speech helpers ─────────────────────────────────────────────────
+
+export interface TextToSpeechOptions {
+  voiceURI?: string;
+  rate?: number;
+  pitch?: number;
+}
+
+export function isSpeechSynthesisSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+export function stopSpeaking() {
+  if (!isSpeechSynthesisSupported()) return;
+  window.speechSynthesis.cancel();
+}
+
+export function speakText(text: string, options: TextToSpeechOptions = {}): SpeechSynthesisUtterance | undefined {
+  if (!isSpeechSynthesisSupported()) {
+    throw new Error("Speech synthesis is not supported in this webview.");
+  }
+  const clean = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[#*_`>\[\]()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return undefined;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(clean);
+  utterance.rate = options.rate ?? 1;
+  utterance.pitch = options.pitch ?? 1;
+  if (options.voiceURI) {
+    const voice = window.speechSynthesis.getVoices().find((candidate) => candidate.voiceURI === options.voiceURI);
+    if (voice) utterance.voice = voice;
+  }
+  window.speechSynthesis.speak(utterance);
+  return utterance;
+}
+
 // ── React hook ───────────────────────────────────────────────────────────────
 
 interface UseSpeechToTextOptions {

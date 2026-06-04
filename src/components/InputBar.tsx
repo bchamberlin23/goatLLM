@@ -117,6 +117,11 @@ import {
   Wand2,
   ListChecks,
   Telescope,
+  Target,
+  Columns2,
+  BookOpen,
+  Globe2,
+  BarChart3,
 } from "lucide-react";
 import { useSpeechToText } from "../lib/speech";
 
@@ -247,6 +252,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const searchBackend = useChatStore((s) => s.searchBackend);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
+  const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
+  const featureFlags = useChatStore((s) => s.featureFlags);
+  const pursueGoalMode = useChatStore((s) => s.pursueGoalMode);
+  const setPursueGoalMode = useChatStore((s) => s.setPursueGoalMode);
+  const voiceSettings = useChatStore((s) => s.voiceSettings);
 
   const [error, setError] = useState<string | null>(null);
   // Per-conversation draft (text + staged attachments). Keyed by activeId, or
@@ -356,7 +366,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
   const speech = useSpeechToText({
     onTranscription: (text) => {
-      setValue((cur) => (cur.trim() ? cur + " " + text : text));
+      if (voiceSettings.enabled && voiceSettings.handsFree && text.trim()) {
+        setValue("");
+        setTimeout(() => handleSendRef.current?.({ content: text.trim() }), 0);
+      } else {
+        setValue((cur) => (cur.trim() ? cur + " " + text : text));
+      }
     },
     onError: (msg) => {
       setError(msg);
@@ -511,6 +526,15 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const expanded = expandPromptTemplate(trimmed, tpls);
         if (expanded !== trimmed) trimmed = expanded;
       }
+    }
+
+    if (!isResend && useChatStore.getState().pursueGoalMode) {
+      const goal = trimmed;
+      useChatStore.getState().setPursueGoalMode(false);
+      useChatStore.getState().setPlanMode(false);
+      trimmed =
+        `Pursue Goal:\n\n${goal}\n\n` +
+        `Work autonomously until the goal is genuinely handled. Start by making a concise plan, then inspect the project, browser, files, tools, and runtime state as needed. Execute the work, iterate on failures, verify with the strongest available checks, and end with a final result that explains what changed and what was validated.`;
     }
 
     // Bash inline execution: !command runs and sends output to LLM,
@@ -932,6 +956,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           isStreaming: false,
           streamingDurationMs: performance.now() - streamStartTime,
           turnDurationMs: performance.now() - streamStartTime,
+          modelId: selectedModelId ?? undefined,
           outputTokens: Math.round(wordCount * 1.33),
         });
 
@@ -978,6 +1003,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     }
 
     const editedFilesThisTurn = new Set<string>();
+    let capturedInputTokens: number | undefined;
     let capturedOutputTokens: number | undefined;
     let capturedGenerationMs: number | undefined;
 
@@ -1296,6 +1322,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       onToolCall: handleToolCall,
       onToolResult: handleToolResult,
       onUsage: (usage) => {
+        capturedInputTokens = usage.inputTokens;
         capturedOutputTokens = usage.outputTokens;
         if (usage.generationMs) capturedGenerationMs = usage.generationMs;
       },
@@ -1365,7 +1392,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           isStreaming: false,
           streamingDurationMs: displayDurationMs,
           turnDurationMs: streamDurationMs,
+          inputTokens: capturedInputTokens,
           outputTokens,
+          modelId: selectedModelId ?? undefined,
           editedFiles:
             editedFiles && editedFiles.length > 0 ? editedFiles : undefined,
         });
@@ -1541,7 +1570,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   return (
     <div className="w-full max-w-[720px] min-w-0">
       <div
-        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
+        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${showPlusMenu || showSkillPicker ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
       >
         {error && (
           <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-[#f87171]/[0.055] border border-[#f87171]/20 rounded-lg text-[12.5px] text-[#fca5a5] animate-[fadeIn_180ms_ease]">
@@ -1706,10 +1735,36 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               </button>
               {showPlusMenu && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowPlusMenu(false)} />
-                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-52 rounded-xl p-1.5 z-20 origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
+                  <div className="fixed inset-0 z-[80]" onClick={() => setShowPlusMenu(false)} />
+                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                     {[
                       { icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } },
+                      ...(featureFlags.pursueGoal
+                        ? [{
+                            icon: Target,
+                            label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
+                            description: pursueGoalMode
+                              ? "Your next message becomes an autonomous goal run."
+                              : "Plan, inspect, execute, iterate, and verify.",
+                            active: pursueGoalMode,
+                            onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
+                          }]
+                        : []),
+                      ...(featureFlags.costDashboard
+                        ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("usage"); } }]
+                        : []),
+                      ...(featureFlags.modelComparison
+                        ? [{ icon: Columns2, label: "Compare models", description: "Parallel prompts with latency, cost, diff.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("compare"); } }]
+                        : []),
+                      ...(featureFlags.notebookMode
+                        ? [{ icon: BookOpen, label: "Notebook mode", description: "Run text, Python, and AI prompt cells.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("notebook"); } }]
+                        : []),
+                      ...(featureFlags.browserMirror
+                        ? [{ icon: Globe2, label: "Browser panel", description: "Mirror agent-visible browser state.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("browser"); } }]
+                        : []),
+                      ...(featureFlags.imageGeneration
+                        ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("images"); } }]
+                        : []),
                       ...(agentMode
                         ? [{
                             icon: ListChecks,
@@ -1750,7 +1805,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
                           ("active" in opt && opt.active)
                             ? "bg-white/[0.06] text-text-1"
-                            : "text-[#d5d5d5] hover:bg-white/5"
+                            : "text-[#ececec] hover:bg-white/[0.065]"
                         }`}
                       >
                         <opt.icon
@@ -1761,7 +1816,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="truncate">{opt.label}</span>
                           {"description" in opt && opt.description && (
-                            <span className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
+                            <span className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
                               {opt.description}
                             </span>
                           )}
@@ -1779,10 +1834,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               {showSkillPicker && (
                 <>
                   <div
-                    className="fixed inset-0 z-10"
+                    className="fixed inset-0 z-[80]"
                     onClick={() => setShowSkillPicker(false)}
                   />
-                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-20 origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
+                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                     <div className="px-2.5 py-1.5 text-[11px] font-semibold tracking-wider uppercase text-[#888888]">
                       Choose skills
                     </div>
@@ -1801,7 +1856,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
                               selected
                                 ? "bg-white/[0.06] text-text-1"
-                                : "text-[#d5d5d5] hover:bg-white/5"
+                                : "text-[#ececec] hover:bg-white/[0.065]"
                             }`}
                           >
                             {selected ? (
@@ -1811,7 +1866,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="truncate">{skill.name}</div>
-                              <div className="text-[11px] text-[#a0a0a0] truncate leading-tight mt-0.5">
+                              <div className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
                                 {skill.description.slice(0, 80)}
                               </div>
                             </div>

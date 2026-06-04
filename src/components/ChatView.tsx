@@ -6,6 +6,7 @@ import { DesignWorkspacePicker } from "./design/DesignWorkspacePicker";
 import { ModeToggle } from "./ModeToggle";
 import { SafeArtifactPanel } from "./SafeArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
+import { ProductWorkspacePanel } from "./ProductWorkspacePanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder, X } from "lucide-react";
@@ -160,6 +161,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
   const attachmentPanelOpen = useChatStore((s) => s.attachmentPanelOpen);
+  const workspacePanelOpen = useChatStore((s) => s.workspacePanelOpen);
   const subagentPanelOpen = useChatStore((s) => s.subagentPanelOpen);
   const getModels = useChatStore((s) => s.getModels);
   const _hydrated = useChatStore((s) => s._hydrated);
@@ -179,8 +181,8 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, []);
 
   // Centered hero is reserved for the "no conversation selected" onboarding state.
-  const showHero = !activeId;
-  const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen;
+  const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen || workspacePanelOpen;
+  const showHero = !activeId && !workspacePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
   const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;
@@ -330,9 +332,9 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>
-              {(artifactPanelOpen || attachmentPanelOpen) && (
+              {(artifactPanelOpen || attachmentPanelOpen || workspacePanelOpen) && (
                 <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-                  {attachmentPanelOpen ? <AttachmentPanel /> : <SafeArtifactPanel />}
+                  {workspacePanelOpen ? <ProductWorkspacePanel /> : attachmentPanelOpen ? <AttachmentPanel /> : <SafeArtifactPanel />}
                 </div>
               )}
             </>
