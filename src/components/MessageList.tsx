@@ -311,14 +311,13 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
       </div>
       {showScrollBtn && (
         <button
-          className={`liquid-surface absolute bottom-4 h-8 px-3 rounded-full text-[#d5d5d5] flex items-center gap-1.5 hover:text-[#ececec] hover:-translate-y-0.5 transition-[color,transform,box-shadow] z-10 animate-[fadeInUp_150ms_ease] ${
+          className={`absolute bottom-4 h-9 w-9 rounded-full bg-[#2a2a2c]/90 border border-white/[0.08] text-[#a0a0a0] flex items-center justify-center shadow-lg hover:bg-[#333335] hover:text-[#ececec] hover:-translate-y-0.5 transition-all z-10 animate-[fadeInUp_150ms_ease] ${
             edgeScroll ? "left-[430px] -translate-x-1/2" : "left-1/2 -translate-x-1/2"
           }`}
           onClick={scrollToBottom}
           aria-label="Scroll to bottom"
         >
-          <ChevronDown size={14} strokeWidth={2} />
-          {isStreaming && <span className="text-[11px] font-medium">New messages</span>}
+          <ChevronDown size={16} strokeWidth={2.5} />
         </button>
       )}
     </div>
