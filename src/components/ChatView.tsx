@@ -180,9 +180,8 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Centered hero is reserved for the "no conversation selected" onboarding state.
   const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen || workspacePanelOpen;
-  const showHero = !activeId && !workspacePanelOpen;
+  const showHero = !activeId && !sidePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
   const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;

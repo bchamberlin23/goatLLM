@@ -1647,10 +1647,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
                 <span
                   key={sn}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.045] text-[12px] text-text-2 border border-white/[0.07] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+                  className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(245,158,66,0.08)]"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
-                  {sn}
+                  <Wand2 size={10} strokeWidth={1.75} className="shrink-0 opacity-80" aria-hidden="true" />
+                  <span>{sn}</span>
                   <button
                     onClick={() => {
                       if (activeId) {
@@ -1660,10 +1660,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                         setPendingSkills((prev) => prev.filter((n) => n !== sn));
                       }
                     }}
-                    className="ml-0.5 p-0.5 rounded-sm hover:bg-white/10 transition-colors text-text-3 hover:text-text-2"
+                    className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent/20 transition-colors text-[#d4944a]/60 hover:text-[#d4944a]"
                     aria-label={`Remove ${sn} skill`}
                   >
-                    <X size={10} strokeWidth={2} />
+                    <X size={9} strokeWidth={2.5} />
                   </button>
                 </span>
               ))}
@@ -1729,174 +1729,196 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         <div className={`flex flex-wrap items-center justify-between gap-2 ${isFollowUp ? "mt-2.5 pt-2.5" : "mt-4 min-h-[40px] pt-3"} border-t border-white/5`}>
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             {/* + menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowPlusMenu((s) => !s)}
-                className="control-icon w-7 h-7 rounded-full flex items-center justify-center transition-colors"
-                aria-label="Attach or add"
-                aria-expanded={showPlusMenu}
-              >
-                <Plus size={16} strokeWidth={2} aria-hidden="true" />
-              </button>
-              {showPlusMenu && (
-                <>
-                  <div className="fixed inset-0 z-[80]" onClick={() => setShowPlusMenu(false)} />
-                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
-                    {[
-                      ...(plusMenuVisibility[activeModeKey]?.upload !== false
-                        ? [{ icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } }]
-                        : []),
-                      ...(featureFlags.pursueGoal && plusMenuVisibility[activeModeKey]?.pursueGoal !== false
-                        ? [{
-                            icon: Target,
-                            label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
-                            description: pursueGoalMode
-                              ? "Your next message becomes an autonomous goal run."
-                              : "Plan, inspect, execute, iterate, and verify.",
-                            active: pursueGoalMode,
-                            onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
-                          }]
-                        : []),
-                      ...(featureFlags.costDashboard && plusMenuVisibility[activeModeKey]?.usage !== false
-                        ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("usage"); } }]
-                        : []),
-                      ...(featureFlags.modelComparison && plusMenuVisibility[activeModeKey]?.compare !== false
-                        ? [{ icon: Columns2, label: "Compare models", description: "Parallel prompts with latency, cost, diff.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("compare"); } }]
-                        : []),
-                      ...(featureFlags.notebookMode && plusMenuVisibility[activeModeKey]?.notebook !== false
-                        ? [{ icon: BookOpen, label: "Notebook mode", description: "Run text, Python, and AI prompt cells.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("notebook"); } }]
-                        : []),
-                      ...(featureFlags.browserMirror && plusMenuVisibility[activeModeKey]?.browser !== false
-                        ? [{ icon: Globe2, label: "Browser panel", description: "Mirror agent-visible browser state.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("browser"); } }]
-                        : []),
-                      ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
-                        ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("images"); } }]
-                        : []),
-                      ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
-                        ? [{
-                            icon: ListChecks,
-                            label: planMode ? "Plan mode — on" : "Plan mode",
-                            description: planMode
-                              ? "Read-only investigation. Toggle off to write."
-                              : "Read-only investigation, then a Build button.",
-                            active: planMode,
-                            onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
-                          }]
-                        : []),
-                      ...(((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true)) && plusMenuVisibility[activeModeKey]?.research !== false)
-                        ? [{
-                            icon: Telescope,
-                            label: researchMode ? "Deep Research — on" : "Deep Research",
-                            description: researchMode
-                              ? "Applies to your next message, then resets."
-                              : agentMode
-                                ? "Multi-step web research with citations."
-                                : "Multi-step web research with citations.",
-                            active: researchMode,
-                            onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
-                          }]
-                        : []),
-                      ...(skillsForCurrentMode.length > 0 && plusMenuVisibility[activeModeKey]?.skills !== false
-                        ? [{ icon: Wand2, label: "Choose skills", onClick: () => { setShowPlusMenu(false); setPendingSkills(activeId ? activeSkillNames : pendingSkills); setShowSkillPicker((s) => !s); } }]
-                        : []),
-                    ].map((opt) => (
-                      <button
-                        key={opt.label}
-                        onClick={opt.onClick}
-                        className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
-                          ("active" in opt && opt.active)
-                            ? "bg-white/[0.06] text-text-1"
-                            : "text-[#ececec] hover:bg-white/[0.065]"
-                        }`}
-                      >
-                        <opt.icon
-                          size={14}
-                          strokeWidth={1.75}
-                          className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-text-2" : "text-[#c9c9c9]"}`}
-                        />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="truncate">{opt.label}</span>
-                          {"description" in opt && opt.description && (
-                            <span className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
-                              {opt.description}
-                            </span>
-                          )}
-                        </div>
-                        {("active" in opt && opt.active) && (
-                          <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* Skill picker popover */}
-              {showSkillPicker && (
-                <>
-                  <div
-                    className="fixed inset-0 z-[80]"
-                    onClick={() => setShowSkillPicker(false)}
-                  />
-                  <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
-                    <div className="px-2.5 py-1.5 text-[11px] font-semibold tracking-wider uppercase text-[#888888]">
-                      Choose skills
-                    </div>
-                    {skillsForCurrentMode
-                      .filter((s) => !disabledSkills.has(s.name))
-                      .map((skill) => {
-                        const selected = pendingSkills.includes(skill.name);
-                        return (
-                          <button
-                            key={skill.name}
-                            onClick={() => {
-                              setPendingSkills((prev) =>
-                                selected ? prev.filter((n) => n !== skill.name) : [...prev, skill.name]
-                              );
-                            }}
-                            className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
-                              selected
-                                ? "bg-white/[0.06] text-text-1"
-                                : "text-[#ececec] hover:bg-white/[0.065]"
-                            }`}
-                          >
-                            {selected ? (
-                              <Check size={14} strokeWidth={2} className="text-accent shrink-0" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-sm border border-white/20 shrink-0" />
+            {!designMode && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowPlusMenu((s) => !s)}
+                  className="control-icon w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+                  aria-label="Attach or add"
+                  aria-expanded={showPlusMenu}
+                >
+                  <Plus size={16} strokeWidth={2} aria-hidden="true" />
+                </button>
+                {showPlusMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[80]" onClick={() => setShowPlusMenu(false)} />
+                    <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
+                      {[
+                        ...(plusMenuVisibility[activeModeKey]?.upload !== false
+                          ? [{ icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } }]
+                          : []),
+                        ...(featureFlags.pursueGoal && plusMenuVisibility[activeModeKey]?.pursueGoal !== false
+                          ? [{
+                              icon: Target,
+                              label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
+                              description: pursueGoalMode
+                                ? "Your next message becomes an autonomous goal run."
+                                : "Plan, inspect, execute, iterate, and verify.",
+                              active: pursueGoalMode,
+                              onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
+                            }]
+                          : []),
+                        ...(featureFlags.costDashboard && plusMenuVisibility[activeModeKey]?.usage !== false
+                          ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("usage"); } }]
+                          : []),
+                        ...(featureFlags.modelComparison && plusMenuVisibility[activeModeKey]?.compare !== false
+                          ? [{ icon: Columns2, label: "Compare models", description: "Parallel prompts with latency, cost, diff.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("compare"); } }]
+                          : []),
+                        ...(featureFlags.notebookMode && plusMenuVisibility[activeModeKey]?.notebook !== false
+                          ? [{ icon: BookOpen, label: "Notebook mode", description: "Run text, Python, and AI prompt cells.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("notebook"); } }]
+                          : []),
+                        ...(featureFlags.browserMirror && plusMenuVisibility[activeModeKey]?.browser !== false
+                          ? [{ icon: Globe2, label: "Browser panel", description: "Mirror agent-visible browser state.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("browser"); } }]
+                          : []),
+                        ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
+                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("images"); } }]
+                          : []),
+                        ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
+                          ? [{
+                              icon: ListChecks,
+                              label: planMode ? "Plan mode — on" : "Plan mode",
+                              description: planMode
+                                ? "Read-only investigation. Toggle off to write."
+                                : "Read-only investigation, then a Build button.",
+                              active: planMode,
+                              onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
+                            }]
+                          : []),
+                        ...(((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true)) && plusMenuVisibility[activeModeKey]?.research !== false)
+                          ? [{
+                              icon: Telescope,
+                              label: researchMode ? "Deep Research — on" : "Deep Research",
+                              description: researchMode
+                                ? "Applies to your next message, then resets."
+                                : agentMode
+                                  ? "Multi-step web research with citations."
+                                  : "Multi-step web research with citations.",
+                              active: researchMode,
+                              onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
+                            }]
+                          : []),
+                        ...(skillsForCurrentMode.length > 0 && plusMenuVisibility[activeModeKey]?.skills !== false
+                          ? [{ icon: Wand2, label: "Choose skills", onClick: () => { setShowPlusMenu(false); setPendingSkills(activeId ? activeSkillNames : pendingSkills); setShowSkillPicker((s) => !s); } }]
+                          : []),
+                      ].map((opt) => (
+                        <button
+                          key={opt.label}
+                          onClick={opt.onClick}
+                          className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
+                            ("active" in opt && opt.active)
+                              ? "bg-white/[0.06] text-text-1"
+                              : "text-[#ececec] hover:bg-white/[0.065]"
+                          }`}
+                        >
+                          <opt.icon
+                            size={14}
+                            strokeWidth={1.75}
+                            className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-text-2" : "text-[#c9c9c9]"}`}
+                          />
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="truncate">{opt.label}</span>
+                            {"description" in opt && opt.description && (
+                              <span className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
+                                {opt.description}
+                              </span>
                             )}
-                            <div className="flex-1 min-w-0">
-                              <div className="truncate">{skill.name}</div>
-                              <div className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
-                                {skill.description.slice(0, 80)}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    {skillsForCurrentMode.length === 0 && (
-                      <div className="px-2.5 py-3 text-[13px] text-[#a0a0a0]">
-                        {discoveredSkills.length > 0
-                          ? `No skills available in ${agentMode ? "agent" : "chat"} mode. Switch modes to see other skills.`
-                          : "No skills discovered. Add skills in Settings."}
+                          </div>
+                          {("active" in opt && opt.active) && (
+                            <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Skill picker popover */}
+                {showSkillPicker && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-[80]"
+                      onClick={() => setShowSkillPicker(false)}
+                    />
+                    <div className="popover-surface absolute bottom-full left-0 mb-2 w-72 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 px-2.5 py-2 mb-0.5">
+                        <Wand2 size={13} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden="true" />
+                        <span className="text-[12px] font-semibold text-text-1">Choose skills</span>
                       </div>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (activeId) {
-                          setConversationSkills(activeId, pendingSkills);
-                        }
-                        setShowSkillPicker(false);
-                      }}
-                      className="control-pill flex items-center justify-center gap-1.5 w-full mt-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors"
-                    >
-                      <Check size={14} strokeWidth={2.5} />
-                      Done
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                      {skillsForCurrentMode
+                        .filter((s) => !disabledSkills.has(s.name))
+                        .map((skill) => {
+                          const selected = pendingSkills.includes(skill.name);
+                          const modeColor =
+                            skill.mode === "agent"
+                              ? "text-[#d4944a] bg-[#f59e42]/10 border-[#f59e42]/20"
+                              : skill.mode === "chat"
+                                ? "text-[#7eb8f7] bg-[#3b82f6]/10 border-[#3b82f6]/20"
+                                : "text-[#b4a0f7] bg-[#8b5cf6]/10 border-[#8b5cf6]/20";
+                          return (
+                            <button
+                              key={skill.name}
+                              onClick={() => {
+                                setPendingSkills((prev) =>
+                                  selected ? prev.filter((n) => n !== skill.name) : [...prev, skill.name]
+                                );
+                              }}
+                              className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
+                                selected
+                                  ? "bg-white/[0.06] text-text-1"
+                                  : "text-[#ececec] hover:bg-white/[0.065]"
+                              }`}
+                            >
+                              {/* Animated checkbox */}
+                              <span
+                                className={`shrink-0 mt-0.5 w-3.5 h-3.5 rounded flex items-center justify-center transition-all duration-150 ${
+                                  selected
+                                    ? "bg-accent border border-accent/60"
+                                    : "border border-white/20"
+                                }`}
+                              >
+                                {selected && <Check size={9} strokeWidth={3} className="text-[#1a1a1c]" />}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="truncate">{skill.name}</span>
+                                  <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded border font-medium ${modeColor}`}>
+                                    {skill.mode}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5">
+                                  {skill.description.slice(0, 80)}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      {skillsForCurrentMode.length === 0 && (
+                        <div className="px-2.5 py-3 text-[13px] text-[#a0a0a0]">
+                          {discoveredSkills.length > 0
+                            ? `No skills available in ${agentMode ? "agent" : "chat"} mode. Switch modes to see other skills.`
+                            : "No skills discovered. Add skills in Settings."}
+                        </div>
+                      )}
+                      <div className="border-t border-white/[0.06] mt-1 pt-1">
+                        <button
+                          onClick={() => {
+                            if (activeId) {
+                              setConversationSkills(activeId, pendingSkills);
+                            }
+                            setShowSkillPicker(false);
+                          }}
+                          className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-colors bg-accent/15 hover:bg-accent/25 border border-accent/30 text-[#d4944a]"
+                        >
+                          <Check size={13} strokeWidth={2.5} />
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <input
               ref={fileInputRef}

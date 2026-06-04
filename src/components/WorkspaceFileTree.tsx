@@ -243,7 +243,7 @@ export function WorkspaceFileTree({ onOpenFile, onOpenInCanvas }: WorkspaceFileT
         });
       } else {
         // Text-like file — read as string.
-        const content: string = await invoke("read_file", { workspace: workspacePath, path: node.path, offset: null, limit: null });
+        const content: string = await invoke("read_file", { workspace: workspacePath, path: node.path });
         if (onOpenInCanvas) {
           // Open in the artifact panel canvas.
           onOpenInCanvas({ path: node.path, name: node.name, content });
@@ -261,7 +261,7 @@ export function WorkspaceFileTree({ onOpenFile, onOpenInCanvas }: WorkspaceFileT
     } catch (e) {
       console.warn(`[WorkspaceFileTree] Failed to open ${node.path}:`, e);
     }
-  }, [workspacePath, onOpenFile, toggleExpand]);
+  }, [workspacePath, onOpenFile, onOpenInCanvas, toggleExpand]);
 
   if (!workspacePath) return null;
 

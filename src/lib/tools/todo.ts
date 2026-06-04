@@ -285,6 +285,25 @@ export function formatBoardForToolOutput(board: TaskBoard, actionResult: string)
   return `${actionResult}\n\n${formatBoardForModel(board)}\n\n<!-- TODO_BOARD\n${boardJson}\nTODO_BOARD -->`;
 }
 
+export function updateToolOutputWithBoard(output: string, board: TaskBoard): string {
+  const markerIndex = output.indexOf("<!-- TODO_BOARD");
+  let actionResult = output;
+  if (markerIndex !== -1) {
+    const textBeforeMarker = output.slice(0, markerIndex).trim();
+    const tasksIndex = textBeforeMarker.lastIndexOf("\n\nTasks:");
+    const emptyIndex = textBeforeMarker.lastIndexOf("\n\nTask board is empty.");
+    const noTasksIndex = textBeforeMarker.lastIndexOf("\n\nNo tasks.");
+    
+    const cutIndex = Math.max(tasksIndex, emptyIndex, noTasksIndex);
+    if (cutIndex !== -1) {
+      actionResult = textBeforeMarker.slice(0, cutIndex).trim();
+    } else {
+      actionResult = textBeforeMarker;
+    }
+  }
+  return formatBoardForToolOutput(board, actionResult);
+}
+
 // ─── Replay ───────────────────────────────────────────────────────────────
 
 const BOARD_MARKER = "<!-- TODO_BOARD";
@@ -350,6 +369,19 @@ export function loadBoardFromHistory(
   convId: string,
   toolCalls: TodoToolCall[],
 ): TaskBoard | null {
+  if (typeof localStorage !== "undefined") {
+    try {
+      const saved = localStorage.getItem(`goatllm-todo-board-${convId}`);
+      if (saved) {
+        const parsed = parseBoardJson(saved);
+        if (parsed) {
+          boards.set(convId, parsed);
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
   // Walk in order — replay all actions to reconstruct state
   let board: TaskBoard = { tasks: new Map(), order: [] };
 

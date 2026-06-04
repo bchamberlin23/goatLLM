@@ -17,6 +17,7 @@ import {
   searchMessages,
 } from "../lib/db";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
+import type { TaskBoard } from "../lib/tools/todo";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
@@ -112,7 +113,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
     image: false,
     plan: false,
     research: false,
-    skills: true,
+    skills: false,
   },
   design: {
     upload: true,
@@ -124,7 +125,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
     image: false,
     plan: false,
     research: false,
-    skills: true,
+    skills: false,
   },
   agent: {
     upload: true,
@@ -134,7 +135,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
     notebook: false,
     browser: false,
     image: false,
-    plan: false,
+    plan: true,
     research: false,
     skills: true,
   },
@@ -1183,6 +1184,9 @@ interface ChatStore {
   setSearxngStatus: (status: string | null) => void;
   workspaceHealthEnabled: boolean;
   setWorkspaceHealthEnabled: (enabled: boolean) => void;
+  manualTasksEnabled: boolean;
+  setManualTasksEnabled: (enabled: boolean) => void;
+  updateManualTodoBoard: (conversationId: string, board: TaskBoard) => void;
 
   /** Per-turn web search call counter. Resets on each send. Caps the model at
    *  2 searches per turn to prevent runaway search loops. */
@@ -1503,6 +1507,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       memoryEnabled: true,
       searxngStatus: null,
       workspaceHealthEnabled: false,
+      manualTasksEnabled: false,
       webSearchCount: 0,
       autoArtifacts: true,
       officeArtifacts: true,
@@ -1590,6 +1595,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts, messageQueue: newQueue });
         deleteConversationFromDb(id);
         // Drop the in-memory attachment text cache for this conversation.
+        try { localStorage.removeItem(`goatllm-todo-board-${id}`); } catch {}
         import("../lib/attachment-cache").then((m) => m.clearConversation(id)).catch(() => {});
         import("../lib/url-fetch").then((m) => m.clearUrlFetchCache(id)).catch(() => {});
       },
@@ -3371,6 +3377,56 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ workspaceHealthEnabled: enabled });
         try { localStorage.setItem("goatllm-workspace-health-enabled", enabled ? "true" : "false"); } catch {}
       },
+      setManualTasksEnabled: (enabled) => {
+        set({ manualTasksEnabled: enabled });
+        try { localStorage.setItem("goatllm-manual-tasks-enabled", enabled ? "true" : "false"); } catch {}
+      },
+      updateManualTodoBoard: (conversationId, board) => {
+        import("../lib/tools/todo").then((m) => {
+          const inMemoryBoard = m.getBoardForConversation(conversationId);
+          inMemoryBoard.tasks = board.tasks;
+          inMemoryBoard.order = board.order;
+
+          const serialized = m.serializeBoard(board);
+          try {
+            localStorage.setItem(`goatllm-todo-board-${conversationId}`, serialized);
+          } catch {}
+
+          set((state) => {
+            const msgs = state.messages[conversationId] ?? [];
+            const lastMsgIndex = [...msgs].reverse().findIndex(
+              (msg) => msg.role === "assistant" && msg.toolCalls?.some((tc) => tc.toolName.startsWith("todo_"))
+            );
+            if (lastMsgIndex !== -1) {
+              const actualIndex = msgs.length - 1 - lastMsgIndex;
+              const msg = msgs[actualIndex];
+              const updatedToolCalls = msg.toolCalls?.map((tc) => {
+                if (tc.toolName.startsWith("todo_")) {
+                  const updatedOutput = m.updateToolOutputWithBoard(tc.output as string ?? "", board);
+                  return { ...tc, output: updatedOutput };
+                }
+                return tc;
+              });
+              const updatedMsg = { ...msg, toolCalls: updatedToolCalls };
+              const updatedMsgs = [...msgs];
+              updatedMsgs[actualIndex] = updatedMsg;
+
+              persistMessage(updatedMsg);
+
+              return {
+                messages: { ...state.messages, [conversationId]: updatedMsgs },
+                todoBoardUpdated: state.todoBoardUpdated + 1,
+              };
+            }
+
+            return {
+              todoBoardUpdated: state.todoBoardUpdated + 1,
+            };
+          });
+        }).catch((e) => {
+          console.error("Failed to update manual todo board:", e);
+        });
+      },
       incrementWebSearchCount: () => {
         set((s) => ({ webSearchCount: s.webSearchCount + 1 }));
       },
@@ -3918,6 +3974,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           }
           const memoryEnabled = localStorage.getItem("goatllm-memory-enabled") !== "false";
           const workspaceHealthEnabled = localStorage.getItem("goatllm-workspace-health-enabled") === "true";
+          const manualTasksEnabled = localStorage.getItem("goatllm-manual-tasks-enabled") === "true";
           if (!freeWebSearchToken) {
             try {
               freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -4081,6 +4138,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             memoryEnabled,
             searxngStatus: null,
             workspaceHealthEnabled,
+            manualTasksEnabled,
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,
@@ -4163,6 +4221,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           }
           const memoryEnabled = localStorage.getItem("goatllm-memory-enabled") !== "false";
           const workspaceHealthEnabled = localStorage.getItem("goatllm-workspace-health-enabled") === "true";
+          const manualTasksEnabled = localStorage.getItem("goatllm-manual-tasks-enabled") === "true";
           if (!freeWebSearchToken) {
             try {
               freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -4193,6 +4252,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             memoryEnabled,
             searxngStatus: null,
             workspaceHealthEnabled,
+            manualTasksEnabled,
             autoArtifacts,
             officeArtifacts,
             showDesignCritique,

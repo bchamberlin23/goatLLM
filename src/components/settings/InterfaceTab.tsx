@@ -1,19 +1,32 @@
+import { useState } from "react";
 import { useChatStore } from "../../stores/chat";
 import { ToggleRow } from "./ToggleRow";
 import { SystemPromptSection } from "./SystemPromptSection";
 import { SettingsGroup } from "./SettingsGroup";
+import {
+  Upload,
+  Target,
+  BarChart3,
+  Columns2,
+  BookOpen,
+  Globe2,
+  Image as ImageIcon,
+  ListChecks,
+  Telescope,
+  Wand2
+} from "lucide-react";
 
 const PLUS_ITEMS = [
-  { key: "upload", label: "Upload File", description: "Attach files to the prompt.", modes: ["chat", "design", "agent"] },
-  { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution.", modes: ["chat", "design", "agent"] },
-  { key: "usage", label: "Usage Dashboard", description: "Open panel for token count, latency, and cost details.", modes: ["chat", "design", "agent"] },
-  { key: "compare", label: "Compare Models", description: "Compare responses from multiple models in parallel.", modes: ["chat", "design", "agent"] },
-  { key: "notebook", label: "Notebook Mode", description: "Open interactive scratchpad with runnable code cells.", modes: ["chat", "design", "agent"] },
-  { key: "browser", label: "Browser Panel", description: "Open local browser screen for agent actions.", modes: ["chat", "design", "agent"] },
-  { key: "image", label: "Generate Image", description: "Input prompt to generate images directly.", modes: ["chat", "design", "agent"] },
-  { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode.", modes: ["agent"] },
-  { key: "research", label: "Deep Research", description: "Toggle sequential multi-step web research.", modes: ["chat", "design", "agent"] },
-  { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills for the chat session.", modes: ["chat", "design", "agent"] },
+  { key: "upload", label: "Upload File", description: "Attach files to the prompt.", modes: ["chat", "agent"], icon: Upload },
+  { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution.", modes: ["agent"], icon: Target },
+  { key: "usage", label: "Usage Dashboard", description: "Open panel for token count and cost details.", modes: ["chat", "agent"], icon: BarChart3 },
+  { key: "compare", label: "Compare Models", description: "Compare responses from multiple models in parallel.", modes: ["chat", "agent"], icon: Columns2 },
+  { key: "notebook", label: "Notebook Mode", description: "Open interactive scratchpad.", modes: ["agent"], icon: BookOpen },
+  { key: "browser", label: "Browser Panel", description: "Open local browser screen.", modes: ["agent"], icon: Globe2 },
+  { key: "image", label: "Generate Image", description: "Generate images from a prompt.", modes: ["chat", "agent"], icon: ImageIcon },
+  { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode.", modes: ["agent"], icon: ListChecks },
+  { key: "research", label: "Deep Research", description: "Toggle sequential web research.", modes: ["chat", "agent"], icon: Telescope },
+  { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills.", modes: ["chat", "agent"], icon: Wand2 },
 ];
 
 export function InterfaceTab() {
@@ -31,6 +44,7 @@ export function InterfaceTab() {
   const setGlowBackgroundMode = useChatStore((s) => s.setGlowBackgroundMode);
   const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
   const setPlusMenuItemVisible = useChatStore((s) => s.setPlusMenuItemVisible);
+  const [customModeTab, setCustomModeTab] = useState<"chat" | "agent">("chat");
 
   return (
     <>
@@ -99,63 +113,84 @@ export function InterfaceTab() {
       </SettingsGroup>
 
       <SettingsGroup title="Plus (+) Menu Customization" description="Configure which shortcuts are visible in the input bar's '+' menu for each mode.">
-        <div className="w-full border border-white/[0.06] rounded-xl bg-black/10 overflow-hidden">
-          <table className="w-full text-left border-collapse text-[12px]">
-            <thead>
-              <tr className="border-b border-white/[0.06] bg-white/[0.02] text-text-3 font-medium">
-                <th className="py-2.5 px-4 font-semibold text-text-2">Shortcut Item</th>
-                <th className="py-2.5 px-3 text-center font-semibold text-text-2 w-16">Chat</th>
-                <th className="py-2.5 px-3 text-center font-semibold text-text-2 w-16">Design</th>
-                <th className="py-2.5 px-3 text-center font-semibold text-text-2 w-16">Agent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PLUS_ITEMS.map((item) => (
-                <tr key={item.key} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.01] transition-colors">
-                  <td className="py-3 px-4">
-                    <div className="font-medium text-text-1">{item.label}</div>
-                    <div className="text-[10.5px] text-text-4 mt-0.5 leading-relaxed">{item.description}</div>
-                  </td>
-                  <td className="py-3 px-3 text-center">
-                    {item.modes.includes("chat") ? (
-                      <input
-                        type="checkbox"
-                        checked={plusMenuVisibility.chat?.[item.key] ?? false}
-                        onChange={(e) => setPlusMenuItemVisible("chat", item.key, e.target.checked)}
-                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                      />
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-1.5 p-1 rounded-xl bg-black/30 border border-white/[0.04] w-fit">
+            {(["chat", "agent"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setCustomModeTab(mode)}
+                className={`px-4 py-1.5 rounded-lg text-center text-[11px] capitalize font-medium transition-all ${
+                  customModeTab === mode
+                    ? "bg-white/[0.08] text-text-1 shadow-[0_2px_8px_rgba(0,0,0,0.2)] border border-white/[0.04]"
+                    : "text-text-3 border border-transparent hover:text-text-2 hover:bg-white/[0.02]"
+                }`}
+              >
+                {mode} Mode
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {PLUS_ITEMS.map((item) => {
+              const isSupported = item.modes.includes(customModeTab);
+              const isVisible = isSupported && (plusMenuVisibility[customModeTab]?.[item.key] ?? false);
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  disabled={!isSupported}
+                  onClick={() => setPlusMenuItemVisible(customModeTab, item.key, !isVisible)}
+                  className={`flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all duration-200 focus:outline-none ${
+                    !isSupported
+                      ? "border-white/[0.03] bg-black/15 opacity-40 cursor-not-allowed"
+                      : isVisible
+                        ? "border-accent/30 bg-accent/[0.04] text-text-1 shadow-[0_8px_20px_-12px_rgba(245,158,66,0.25)] -translate-y-px cursor-pointer"
+                        : "border-white/[0.05] bg-white/[0.01] text-text-3 hover:border-white/[0.12] hover:bg-white/[0.03] hover:-translate-y-px cursor-pointer"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className={`p-2 rounded-lg shrink-0 transition-colors duration-200 ${
+                      !isSupported
+                        ? "bg-white/[0.02] text-text-4"
+                        : isVisible 
+                          ? "bg-accent/10 text-accent" 
+                          : "bg-white/[0.04] text-text-3"
+                    }`}>
+                      <Icon size={14} strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12.5px] font-medium leading-none text-text-1">{item.label}</span>
+                        {isVisible && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                        )}
+                      </div>
+                      <div className="text-[10px] text-text-4 truncate mt-1 leading-normal max-w-full">{item.description}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Compact toggle indicator */}
+                  <div className="shrink-0">
+                    {isSupported ? (
+                      <div className={`relative w-8 h-4.5 rounded-full border transition-all ${
+                        isVisible ? "bg-accent border-accent" : "bg-white/[0.08] border-white/[0.06]"
+                      }`}>
+                        <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-[#f7f3ed] transition-transform duration-200 ${
+                          isVisible ? "translate-x-3.5" : "translate-x-0"
+                        }`} />
+                      </div>
                     ) : (
-                      <span className="text-text-4 text-[11px]">—</span>
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.03] border border-white/[0.05] text-[9.5px] font-medium text-text-4 select-none">
+                        <span>Agent Only</span>
+                      </div>
                     )}
-                  </td>
-                  <td className="py-3 px-3 text-center">
-                    {item.modes.includes("design") ? (
-                      <input
-                        type="checkbox"
-                        checked={plusMenuVisibility.design?.[item.key] ?? false}
-                        onChange={(e) => setPlusMenuItemVisible("design", item.key, e.target.checked)}
-                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-text-4 text-[11px]">—</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-3 text-center">
-                    {item.modes.includes("agent") ? (
-                      <input
-                        type="checkbox"
-                        checked={plusMenuVisibility.agent?.[item.key] ?? false}
-                        onChange={(e) => setPlusMenuItemVisible("agent", item.key, e.target.checked)}
-                        className="accent-accent cursor-pointer h-4 w-4 bg-[#1a1a1c] border-white/10 rounded focus:ring-0 focus:ring-offset-0 focus:outline-none"
-                      />
-                    ) : (
-                      <span className="text-text-4 text-[11px]">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </SettingsGroup>
 

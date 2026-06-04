@@ -896,6 +896,14 @@ function renderWorkspacePreview(
   );
 }
 
+function getWsFileIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  const imageExts = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
+  if (imageExts.has(ext)) return ImageIcon;
+  if (["pdf", "md", "markdown", "txt", "log", "csv"].includes(ext)) return FileText;
+  return FileCode;
+}
+
 // ── Full panel ──
 
 export function ArtifactPanel() {
@@ -1039,13 +1047,18 @@ export function ArtifactPanel() {
     setView(streamingForActive ? "code" : "preview");
   }, [streamingForActive, activeArtifactId]);
 
-  if (!activeId || !artifactPanelOpen) return null;
+  if (!artifactPanelOpen) return null;
+  if (!activeId && !wsFile) return null;
   // Allow the panel to show for workspace files even without artifacts.
   if ((!artifacts || artifacts.length === 0) && !wsFile) return null;
 
   const activeIdx = artifacts?.findIndex((a) => a.id === activeArtifactId) ?? -1;
-  const activeArtifact = activeIdx >= 0 ? artifacts![activeIdx] : artifacts?.[0];
-  const Icon = activeArtifact ? (KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html) : FileCode;
+  const activeArtifact = activeIdx >= 0 ? artifacts![activeIdx] : (wsFile ? undefined : artifacts?.[0]);
+  const Icon = wsFile
+    ? getWsFileIcon(wsFile.name)
+    : activeArtifact
+      ? (KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html)
+      : FileCode;
 
   const previewKey =
     previewReloadKey * 1_000_000 +
@@ -1062,8 +1075,8 @@ export function ArtifactPanel() {
     flashed === key ? "bg-[#f59e42]/20 text-[#f59e42]" : "";
 
   const handleClose = () => { flash("close"); setActiveArtifact(null); setWsFile(null); };
-  const handleUndo = () => { if (activeArtifact) { flash("undo"); undoArtifact(activeId, activeArtifact.id); } };
-  const handleRedo = () => { if (activeArtifact) { flash("redo"); redoArtifact(activeId, activeArtifact.id); } };
+  const handleUndo = () => { if (activeArtifact && activeId) { flash("undo"); undoArtifact(activeId, activeArtifact.id); } };
+  const handleRedo = () => { if (activeArtifact && activeId) { flash("redo"); redoArtifact(activeId, activeArtifact.id); } };
   const handleReload = () => {
     flash("reload");
     setPreviewReloadKey((k) => k + 1);
@@ -1248,7 +1261,7 @@ export function ArtifactPanel() {
           >
             <History size={13} strokeWidth={1.75} aria-hidden="true" />
           </button>
-          {historyOpen && (
+          {historyOpen && activeId && (
             <HistoryMenu
               artifact={activeArtifact}
               conversationId={activeId}

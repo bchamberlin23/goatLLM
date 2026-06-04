@@ -8,6 +8,8 @@ export function AdvancedTab() {
   const setJjAgent = useChatStore((s) => s.setJjAgent);
   const workspaceHealthEnabled = useChatStore((s) => s.workspaceHealthEnabled);
   const setWorkspaceHealthEnabled = useChatStore((s) => s.setWorkspaceHealthEnabled);
+  const manualTasksEnabled = useChatStore((s) => s.manualTasksEnabled);
+  const setManualTasksEnabled = useChatStore((s) => s.setManualTasksEnabled);
 
   return (
     <>
@@ -20,6 +22,18 @@ export function AdvancedTab() {
           onToggle={setWorkspaceHealthEnabled}
           title="Workspace health panel"
           description="Display workspace contract integrity status after agent runs. Off by default."
+        />
+      </SettingsGroup>
+
+      <SettingsGroup
+        title="Tasks"
+        description="Configure manual task planning and completion settings."
+      >
+        <ToggleRow
+          enabled={manualTasksEnabled}
+          onToggle={setManualTasksEnabled}
+          title="Manual task editing"
+          description="Allow manually adding, editing, deleting, and checking off tasks in the Tasks widget. Off by default."
         />
       </SettingsGroup>
 

@@ -7,7 +7,7 @@ import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-se
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation, Volume2, VolumeX } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation, Volume2, VolumeX, Sparkles } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -126,6 +126,31 @@ function ThinkingBlock({ messageId, content, elapsed, running }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Skill badge ─────────────────────────────────────────────────────────────
+// Two variants:
+//   static    — post-message badge; Sparkles icon + muted tone
+//   streaming — shown while auto-trigger skills are active; pulsing dot
+
+function SkillBadge({ name, variant }: { name: string; variant: "static" | "streaming" }) {
+  if (variant === "streaming") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-accent/[0.08] border border-accent/20 text-[11.5px] text-[#d4944a]">
+        <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-60" />
+          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
+        </span>
+        {name}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/[0.04] text-text-3 border border-white/[0.06]">
+      <Sparkles size={9} strokeWidth={1.75} className="text-accent/60 shrink-0" aria-hidden="true" />
+      {name}
+    </span>
   );
 }
 
@@ -301,17 +326,11 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           )}
         </div>
 
-        {/* Active skills badges */}
+        {/* Active skills badges — post-message (static) */}
         {message.activeSkillNames && message.activeSkillNames.length > 0 && (
           <div className={`flex items-center gap-1 flex-wrap ${isUser ? "justify-end" : ""}`}>
             {message.activeSkillNames.map((skillName) => (
-              <span
-                key={skillName}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/[0.04] text-text-3 border border-white/[0.06]"
-              >
-                <span className="h-1 w-1 rounded-full bg-accent shrink-0" aria-hidden="true" />
-                {skillName}
-              </span>
+              <SkillBadge key={skillName} name={skillName} variant="static" />
             ))}
           </div>
         )}
@@ -330,19 +349,14 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           <DeepResearchProgress state={message.deepResearch} />
         )}
 
+        {/* Auto-trigger skill badges — streaming only */}
         {isAssistant && isStreaming && (() => {
           const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
           if (autoTriggerNames.size === 0) return null;
           return (
             <div className="flex items-center gap-1.5 mb-1.5">
               {[...autoTriggerNames].map((name) => (
-                <span
-                  key={name}
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] text-[11.5px] text-text-3 border border-white/[0.06]"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
-                  {name}
-                </span>
+                <SkillBadge key={name} name={name} variant="streaming" />
               ))}
             </div>
           );
