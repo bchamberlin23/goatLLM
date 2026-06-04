@@ -9,10 +9,29 @@ export interface ResearchProgress {
   query_preview?: string;
   url?: string;
   title?: string;
+  current_source?: { url: string; title?: string };
   new_sources?: number;
   total_sources?: number;
   total_findings?: number;
   message?: string;
+}
+
+export interface DeepResearchOptions {
+  maxUrlsPerRound?: number;
+  maxContentChars?: number;
+  extractionConcurrency?: number;
+  minRounds?: number;
+  maxEmptyRounds?: number;
+  synthesisWindow?: number;
+  maxReportTokens?: number;
+}
+
+interface ResearchFinding {
+  url: string;
+  title?: string;
+  rational?: string;
+  evidence?: string;
+  summary?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,14 +224,44 @@ export function parseJsonArray(text: string): string[] {
       return parsed.map((item) => String(item));
     }
   } catch {
-    // Attempt regex fallback to extract strings in quotes
-    const matches = cleaned.match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g);
-    if (matches) {
-      return matches.map((m) => {
+    // Fallbacks below.
+  }
+
+  const lastStart = cleaned.lastIndexOf("[");
+  if (lastStart !== -1 && !cleaned.slice(lastStart).includes("]")) {
+    const completeItems = Array.from(cleaned.slice(lastStart).matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g));
+    if (completeItems.length > 0) {
+      return completeItems.map((m) => {
         try {
-          return JSON.parse(m);
+          return JSON.parse(m[0]);
         } catch {
-          return m.replace(/^"|"$/g, "");
+          return m[1];
+        }
+      });
+    }
+  }
+
+  // Models often echo the prompt's Example: [...] before the real array.
+  // Keep the last parseable array so those examples do not become searches.
+  let lastParsed: unknown[] | null = null;
+  for (const match of cleaned.matchAll(/\[[\s\S]*?\]/g)) {
+    try {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) lastParsed = parsed;
+    } catch {
+      // Keep scanning.
+    }
+  }
+  if (lastParsed) return lastParsed.map((item) => String(item));
+
+  if (lastStart !== -1) {
+    const completeItems = Array.from(cleaned.slice(lastStart).matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g));
+    if (completeItems.length > 0) {
+      return completeItems.map((m) => {
+        try {
+          return JSON.parse(m[0]);
+        } catch {
+          return m[1];
         }
       });
     }
@@ -257,6 +306,46 @@ async function callLlm(
   return response.text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 }
 
+function clampInt(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function formatFindings(findings: ResearchFinding[]): string {
+  return findings
+    .map((f, i) => {
+      const title = f.title || f.url || "Source";
+      const content = f.summary || f.evidence || "(no content)";
+      return `**Finding ${i + 1}** — [${title}](${f.url})\n${content}`;
+    })
+    .join("\n\n");
+}
+
+function fallbackReport(question: string, findings: ResearchFinding[]): string {
+  return (
+    `# ${question}\n\n` +
+    `_Automatic synthesis did not complete, so this report lists the ` +
+    `${findings.length} finding(s) gathered during Deep Research._\n\n` +
+    formatFindings(findings)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Research orchestrator
 // ---------------------------------------------------------------------------
@@ -266,15 +355,25 @@ export async function runDeepResearch(
   onProgress: (p: ResearchProgress) => void,
   abortSignal?: AbortSignal,
   maxRounds = 4,
-  maxTimeSeconds = 300
+  maxTimeSeconds = 300,
+  options: DeepResearchOptions = {}
 ): Promise<string> {
   const startTime = Date.now();
+  const maxUrlsPerRound = clampInt(options.maxUrlsPerRound ?? 3, 1, 20);
+  const maxContentChars = clampInt(options.maxContentChars ?? 15000, 2000, 100000);
+  const extractionConcurrency = clampInt(options.extractionConcurrency ?? 3, 1, 12);
+  const minRounds = clampInt(options.minRounds ?? 2, 1, maxRounds);
+  const maxEmptyRounds = clampInt(options.maxEmptyRounds ?? 2, 1, maxRounds);
+  const synthesisWindow = clampInt(options.synthesisWindow ?? 10, 1, 50);
+  const maxReportTokens = clampInt(options.maxReportTokens ?? 4096, 1024, 32000);
   const urlsFetched = new Set<string>();
   const queriesUsed = new Set<string>();
-  const findings: any[] = [];
+  const findings: ResearchFinding[] = [];
   let report = "";
   let researchPlan = "";
   let category: string | null = null;
+  let consecutiveEmptyRounds = 0;
+  let lastSearchError = "";
 
   const isTimeExceeded = () => {
     return (Date.now() - startTime) / 1000 > maxTimeSeconds;
@@ -331,9 +430,8 @@ Respond with ONLY the category name, nothing else.`;
   for (let roundNum = 1; roundNum <= maxRounds; roundNum++) {
     if (abortSignal?.aborted || isTimeExceeded()) break;
 
-    onProgress({ phase: "searching", round: roundNum, total_sources: urlsFetched.size });
+    onProgress({ phase: "searching", round: roundNum, total_sources: urlsFetched.size, total_findings: findings.length });
 
-    // Generate queries
     const numQueries = roundNum === 1 ? 4 : 3;
     const roundInstruction = roundNum === 1
       ? "This is the first round — generate broad, diverse queries that explore the key facets of the question."
@@ -350,18 +448,24 @@ Respond with ONLY the category name, nothing else.`;
     let queries: string[] = [];
     try {
       const queryResponse = await callLlm([{ role: "user", content: queryPrompt }], config, 0.5, 2048, abortSignal);
-      queries = parseJsonArray(queryResponse);
+      queries = parseJsonArray(queryResponse).map((q) => q.trim()).filter(Boolean);
     } catch (e) {
       console.error("Query generation failed:", e);
       onProgress({ phase: "warning", message: `Query generation failed in round ${roundNum}.` });
     }
 
-    // Filter deduplicated queries
     const newQueries = queries.filter((q) => !queriesUsed.has(q));
     newQueries.forEach((q) => queriesUsed.add(q));
 
     if (newQueries.length === 0) {
-      console.warn("No new queries generated, stopping rounds.");
+      lastSearchError = `no new URLs or search queries generated in round ${roundNum}`;
+      onProgress({ phase: "warning", round: roundNum, message: lastSearchError });
+      consecutiveEmptyRounds++;
+      if (consecutiveEmptyRounds >= maxEmptyRounds && findings.length === 0) {
+        const message = `Search unavailable: ${lastSearchError}`;
+        onProgress({ phase: "error", round: roundNum, message });
+        return message;
+      }
       break;
     }
 
@@ -370,118 +474,143 @@ Respond with ONLY the category name, nothing else.`;
       round: roundNum,
       queries: newQueries.length,
       query_preview: newQueries[0],
-      total_sources: urlsFetched.size
+      total_sources: urlsFetched.size,
+      total_findings: findings.length,
     });
 
-    // Run searches in parallel
-    const searchPromises = newQueries.map(async (query) => {
+    const searchResults = await Promise.all(newQueries.map(async (query) => {
       try {
         const { READ_ONLY_TOOLS } = await import("./tools/registry");
         if (!READ_ONLY_TOOLS.web_search.execute) {
           throw new Error("web_search tool has no execute function");
         }
-        const resultsJson = await READ_ONLY_TOOLS.web_search.execute({ query, maxResults: 5 }, {} as any);
+        const resultsJson = await READ_ONLY_TOOLS.web_search.execute({ query, maxResults: 10 }, {} as any);
         if (typeof resultsJson !== "string") {
           throw new Error("Expected string response from web_search");
         }
         const parsed = JSON.parse(resultsJson);
-        return Array.isArray(parsed) ? parsed : [];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        lastSearchError = `no results for "${query}"`;
+        return [];
       } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        lastSearchError = `${query}: ${detail}`;
         console.warn(`Search failed for query "${query}":`, e);
         return [];
       }
-    });
+    }));
 
-    const searchResults = await Promise.all(searchPromises);
     const urlsToFetch: { url: string; title: string }[] = [];
     for (const res of searchResults) {
       for (const item of res) {
-        const url = item.url;
+        const url = item?.url;
         if (url && !urlsFetched.has(url)) {
           urlsFetched.add(url);
-          urlsToFetch.push({ url, title: item.title || "" });
+          urlsToFetch.push({ url, title: item.title || url });
         }
+        if (urlsToFetch.length >= maxUrlsPerRound * newQueries.length) break;
       }
     }
 
-    const maxUrlsPerRound = 3;
     const targets = urlsToFetch.slice(0, maxUrlsPerRound * newQueries.length);
-
     if (targets.length === 0) {
-      onProgress({ phase: "warning", message: `No new URLs found in round ${roundNum}.` });
+      consecutiveEmptyRounds++;
+      const message = `No new URLs found in round ${roundNum}${lastSearchError ? ` (${lastSearchError})` : ""}.`;
+      onProgress({ phase: "warning", round: roundNum, message, total_sources: urlsFetched.size, total_findings: findings.length });
+      if (consecutiveEmptyRounds >= maxEmptyRounds && findings.length === 0) {
+        const errorMessage = `Search unavailable: ${message}`;
+        onProgress({ phase: "error", round: roundNum, message: errorMessage });
+        return errorMessage;
+      }
       continue;
     }
 
-    // Fetch and extract webpage contents sequentially or in parallel
-    const activeFindings: any[] = [];
-    const extractPromises = targets.map(async (target) => {
-      if (abortSignal?.aborted) return;
+    const activeFindings: ResearchFinding[] = [];
+    const extracted = await mapWithConcurrency(targets, extractionConcurrency, async (target) => {
+      if (abortSignal?.aborted) return null;
+      const displayTitle = target.title || target.url;
       onProgress({
         phase: "reading",
+        round: roundNum,
         url: target.url,
-        title: target.title || target.url,
-        total_sources: urlsFetched.size
+        title: displayTitle,
+        current_source: { url: target.url, title: displayTitle },
+        total_sources: urlsFetched.size,
+        total_findings: findings.length,
       });
 
       try {
         const { browserFetch } = await import("./browser-fetch");
         const fetchRes = await browserFetch({ url: target.url, mode: "text" });
-        if (fetchRes && fetchRes.content) {
-          let content = fetchRes.content;
-          const maxChars = 15000;
-          if (content.length > maxChars) {
-            content = content.slice(0, maxChars);
-          }
+        if (!fetchRes?.content) return null;
 
-          const extractPrompt = EXTRACTOR_PROMPT
-            .replace("{webpage_content}", content)
-            .replace("{goal}", question);
-
-          const extractResponse = await callLlm([{ role: "user", content: extractPrompt }], config, 0.2, 2048, abortSignal);
-          const parsedExtract = parseJsonObject(extractResponse);
-          if (parsedExtract) {
-            parsedExtract.url = target.url;
-            parsedExtract.title = target.title || fetchRes.url;
-            activeFindings.push(parsedExtract);
-          } else {
-            activeFindings.push({
-              url: target.url,
-              title: target.title || fetchRes.url,
-              rational: "Raw LLM extraction",
-              evidence: extractResponse.slice(0, 3000),
-              summary: extractResponse.slice(0, 500)
-            });
-          }
+        let content = fetchRes.content;
+        if (content.length > maxContentChars) {
+          const truncated = content.slice(0, maxContentChars);
+          const lastPara = truncated.lastIndexOf("\n\n");
+          content = lastPara > maxContentChars * 0.8 ? truncated.slice(0, lastPara) : truncated;
         }
+
+        const extractPrompt = EXTRACTOR_PROMPT
+          .replace("{webpage_content}", content)
+          .replace("{goal}", question);
+
+        const extractResponse = await callLlm([{ role: "user", content: extractPrompt }], config, 0.2, 2048, abortSignal);
+        const parsedExtract = parseJsonObject(extractResponse);
+        if (parsedExtract) {
+          return {
+            ...parsedExtract,
+            url: target.url,
+            title: target.title || fetchRes.url || target.url,
+          } as ResearchFinding;
+        }
+        return {
+          url: target.url,
+          title: target.title || fetchRes.url || target.url,
+          rational: "Raw LLM extraction",
+          evidence: extractResponse.slice(0, 3000),
+          summary: extractResponse.slice(0, 500),
+        };
       } catch (e) {
         console.warn(`Extraction failed for ${target.url}:`, e);
+        return null;
       }
     });
 
-    await Promise.all(extractPromises);
+    activeFindings.push(...extracted.filter((f): f is ResearchFinding => !!f));
 
     if (activeFindings.length > 0) {
       findings.push(...activeFindings);
+      consecutiveEmptyRounds = 0;
       onProgress({
         phase: "reading",
         round: roundNum,
         new_sources: activeFindings.length,
         total_sources: urlsFetched.size,
-        total_findings: findings.length
+        total_findings: findings.length,
       });
+    } else {
+      consecutiveEmptyRounds++;
+      const message = `No findings extracted in round ${roundNum}.`;
+      onProgress({ phase: "warning", round: roundNum, message, total_sources: urlsFetched.size, total_findings: findings.length });
+      if (consecutiveEmptyRounds >= maxEmptyRounds && findings.length === 0) {
+        const errorMessage = `Search unavailable: ${message}`;
+        onProgress({ phase: "error", round: roundNum, message: errorMessage });
+        return errorMessage;
+      }
     }
 
-    // Synthesize round findings
     if (findings.length > 0) {
       onProgress({
         phase: "analyzing",
         round: roundNum,
         total_sources: urlsFetched.size,
-        total_findings: findings.length
+        total_findings: findings.length,
       });
 
-      const formattedFindings = findings
-        .map((f, i) => `Finding #${i+1} from [${f.title}](${f.url}):\nSummary: ${f.summary}\nEvidence: ${f.evidence}`)
+      const windowedFindings = findings.slice(-synthesisWindow);
+      const formattedFindings = windowedFindings
+        .map((f, i) => `Finding #${i + 1} from [${f.title || f.url}](${f.url}):\nSummary: ${f.summary || ""}\nEvidence: ${f.evidence || ""}`)
         .join("\n\n---\n\n");
 
       const synthPrompt = SYNTHESIZE_PROMPT
@@ -490,17 +619,18 @@ Respond with ONLY the category name, nothing else.`;
         .replace("{new_findings}", formattedFindings);
 
       try {
-        report = await callLlm([{ role: "user", content: synthPrompt }], config, 0.3, 4096, abortSignal);
+        const nextReport = await callLlm([{ role: "user", content: synthPrompt }], config, 0.3, maxReportTokens, abortSignal);
+        if (nextReport.trim()) report = nextReport;
       } catch (e) {
         console.error("Synthesis failed:", e);
+        onProgress({ phase: "warning", round: roundNum, message: "Synthesis failed, keeping gathered findings." });
       }
     }
 
-    // Stop check
-    if (roundNum >= 2) {
+    if (roundNum >= minRounds) {
       const stopPrompt = STOP_PROMPT
         .replace("{question}", question)
-        .replace("{report}", report)
+        .replace("{report}", report || formatFindings(findings))
         .replace("{round_num}", String(roundNum));
 
       try {
@@ -519,6 +649,10 @@ Respond with ONLY the category name, nothing else.`;
   // 4. FINAL MAGAZINE-QUALITY REPORT
   onProgress({ phase: "writing", total_sources: urlsFetched.size, total_findings: findings.length });
 
+  if (!report && findings.length > 0) {
+    report = fallbackReport(question, findings);
+  }
+
   let finalPrompt = FINAL_REPORT_PROMPT
     .replace("{question}", question)
     .replace("{report}", report || "No detailed evidence collected.");
@@ -532,7 +666,7 @@ Respond with ONLY the category name, nothing else.`;
 
   let finalReport = "";
   try {
-    finalReport = await callLlm([{ role: "user", content: finalPrompt }], config, 0.3, 4096, abortSignal);
+    finalReport = await callLlm([{ role: "user", content: finalPrompt }], config, 0.3, maxReportTokens, abortSignal);
 
     const wordCount = finalReport.split(/\s+/).length;
     if (wordCount < 400 && !abortSignal?.aborted) {
@@ -551,11 +685,11 @@ Respond with ONLY the category name, nothing else.`;
             "- Target at least 1000 words\n" +
             "Write the full expanded report now."
         }
-      ], config, 0.4, 4096, abortSignal);
+      ], config, 0.4, maxReportTokens, abortSignal);
     }
   } catch (e) {
     console.error("Final report generation failed:", e);
-    finalReport = report || "Failed to generate research report.";
+    finalReport = report || "Failed to generate Deep Research report.";
   }
 
   // Format visual findings layout
@@ -573,9 +707,9 @@ Respond with ONLY the category name, nothing else.`;
     ? `\n<details>\n<summary><strong>Raw collected findings (${findings.length} sources)</strong></summary>\n\n${rawFindings}\n</details>\n`
     : "";
 
-  const finalOutput = `---
+const finalOutput = `---
 
-## Research Summary
+## Deep Research Summary
 
 ${stats}
 
@@ -587,8 +721,9 @@ ${sourcesSection}
 ${collectedSection}
 ---
 
-**The AI has analyzed all research findings above. Ask me anything about: "${question}"**
+**The AI has analyzed all Deep Research findings above. Ask me anything about: "${question}"**
 `;
 
+  onProgress({ phase: "done", total_sources: urlsFetched.size, total_findings: findings.length });
   return finalOutput;
 }

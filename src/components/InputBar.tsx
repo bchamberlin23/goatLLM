@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ClipboardEvent } from "react";
 import type { ToolSet } from "ai";
-import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type ToolCallEntry } from "../stores/chat";
+import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type DeepResearchEvent, type DeepResearchState, type ToolCallEntry } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
 import { shouldAutoApprove } from "../lib/tools/approval";
@@ -240,7 +240,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   // the plan finishes streaming so the user can flip into write mode.
   const planMode = useChatStore((s) => s.planMode);
   const setPlanMode = useChatStore((s) => s.setPlanMode);
-  // Research mode lives in the + menu now (used to be a top-bar toggle).
+  // Deep Research mode lives in the + menu now (used to be a top-bar toggle).
   // It's one-shot — the toggle resets after the first send (see handleSend).
   const researchMode = useChatStore((s) => s.researchMode);
   const toggleResearchMode = useChatStore((s) => s.toggleResearchMode);
@@ -720,7 +720,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       } catch { /* home dir unavailable — fall back to artifact-only mode */ }
     }
     const isPlanMode = isAgentMode && useChatStore.getState().planMode;
-    // Research mode is one-shot: we snapshot the toggle at send time and
+    // Deep Research mode is one-shot: we snapshot the toggle at send time and
     // immediately flip it off so the indicator resets in the UI. Anything
     // downstream in this turn (tool selection, system prompt, max rounds)
     // uses the captured value so the request the user just sent still
@@ -867,64 +867,55 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (isResearchMode) {
       try {
         const { runDeepResearch } = await import("../lib/deep-research");
-        const logLines: string[] = [];
+        let eventCounter = 0;
+        const events: DeepResearchEvent[] = [];
+        const startedAt = Date.now();
+        const phaseMessage = (progress: ResearchProgress) => {
+          if (progress.message) return progress.message;
+          if (progress.phase === "planning") return "Planning strategy";
+          if (progress.phase === "searching") {
+            return progress.query_preview
+              ? `Searching for "${progress.query_preview}"`
+              : `Searching web${progress.round ? `, round ${progress.round}` : ""}`;
+          }
+          if (progress.phase === "reading") {
+            if (progress.current_source?.title || progress.title) {
+              return `Reading ${progress.current_source?.title || progress.title}`;
+            }
+            if (progress.new_sources) return `Extracted findings from ${progress.new_sources} sources`;
+            return "Reading sources";
+          }
+          if (progress.phase === "analyzing") return "Analyzing findings";
+          if (progress.phase === "writing") return "Writing report";
+          if (progress.phase === "done") return "Deep Research complete";
+          if (progress.phase === "error") return "Deep Research stopped";
+          return "Deep Research update";
+        };
         const updateLog = (progress: ResearchProgress) => {
-          let logMarkdown = "";
-          const phaseText = progress.phase ? progress.phase.toUpperCase() : "RESEARCHING";
-          logMarkdown += `### 🔍 Deep Researching\n\n`;
-          logMarkdown += `| Metric | Status |\n`;
-          logMarkdown += `| :--- | :--- |\n`;
-          logMarkdown += `| **Phase** | ${phaseText} |\n`;
-          if (progress.round !== undefined) {
-            logMarkdown += `| **Round** | Round ${progress.round} |\n`;
-          }
-          if (progress.total_sources !== undefined) {
-            logMarkdown += `| **Sources Found** | ${progress.total_sources} |\n`;
-          }
-          if (progress.total_findings !== undefined) {
-            logMarkdown += `| **Findings Extracted** | ${progress.total_findings} |\n`;
-          }
-          logMarkdown += `\n`;
-
-          if (progress.phase === "planning") {
-            logLines.push("📋 Analyzing research question and formulating plan...");
-          } else if (progress.phase === "searching") {
-            if (progress.query_preview) {
-              logLines.push(`🔍 Round ${progress.round}: Generating queries. E.g. "${progress.query_preview}"`);
-            } else {
-              logLines.push(`🔍 Round ${progress.round}: Finding sources via search engines...`);
-            }
-          } else if (progress.phase === "reading") {
-            if (progress.url) {
-              const displayTitle = progress.title || progress.url;
-              const shortTitle = displayTitle.length > 55 ? displayTitle.slice(0, 52) + "..." : displayTitle;
-              logLines.push(`📖 Reading page: [${shortTitle}](${progress.url})`);
-            } else if (progress.new_sources) {
-              logLines.push(`🧠 Round ${progress.round}: Extracted findings from ${progress.new_sources} new sources.`);
-            }
-          } else if (progress.phase === "analyzing") {
-            logLines.push(`🧠 Round ${progress.round}: Synthesizing findings and updating draft report...`);
-          } else if (progress.phase === "writing") {
-            if (progress.message) {
-              logLines.push(`✍️ Writing: ${progress.message}`);
-            } else {
-              logLines.push(`✍️ Formulating final magazine-quality report...`);
-            }
-          } else if (progress.phase === "warning") {
-            logLines.push(`⚠️ Warning: ${progress.message}`);
+          const message = phaseMessage(progress);
+          if (events.length === 0 || events[events.length - 1].message !== message) {
+            events.push({
+              id: `${assistantMsg.id}-research-${eventCounter++}`,
+              phase: progress.phase,
+              message,
+              at: Date.now(),
+            });
           }
 
-          const dedupedLogs: string[] = [];
-          for (const line of logLines) {
-            if (dedupedLogs.length === 0 || dedupedLogs[dedupedLogs.length - 1] !== line) {
-              dedupedLogs.push(line);
-            }
-          }
+          const deepResearch: DeepResearchState = {
+            query: trimmed,
+            phase: progress.phase,
+            startedAt,
+            round: progress.round,
+            queries: progress.queries,
+            sourceCount: progress.total_sources,
+            findingCount: progress.total_findings,
+            currentSource: progress.current_source ?? (progress.url ? { url: progress.url, title: progress.title } : undefined),
+            events: events.slice(-8),
+            error: progress.phase === "error" ? progress.message : undefined,
+          };
 
-          logMarkdown += `#### Execution Logs\n\n`;
-          logMarkdown += dedupedLogs.slice(-10).map((l) => `- ${l}`).join("\n");
-
-          updateMessage(convId!, assistantMsg.id, { content: logMarkdown });
+          updateMessage(convId!, assistantMsg.id, { content: "", deepResearch });
         };
 
         const finalReport = await runDeepResearch(
@@ -937,6 +928,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const wordCount = finalReport.split(/\s+/).length;
         updateMessage(convId!, assistantMsg.id, {
           content: finalReport,
+          deepResearch: undefined,
           isStreaming: false,
           streamingDurationMs: performance.now() - streamStartTime,
           turnDurationMs: performance.now() - streamStartTime,
@@ -964,7 +956,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       } catch (err) {
         if (ac.signal.aborted) {
           updateMessage(convId!, assistantMsg.id, {
-            content: "Research aborted.",
+            content: "Deep Research aborted.",
+            deepResearch: undefined,
             isStreaming: false,
             interrupted: true,
           });
@@ -973,7 +966,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         }
         const errMsg = err instanceof Error ? err.message : String(err);
         updateMessage(convId!, assistantMsg.id, {
-          content: `Research Error: ${errMsg}`,
+          content: `Deep Research Error: ${errMsg}`,
+          deepResearch: undefined,
           isStreaming: false,
         });
         logError(convId!, errMsg, "deep-research");
@@ -1135,7 +1129,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       };
       // Suppress web_search pills beyond the hard cap — the tool returns an
       // error to the model but the user never sees a doomed search attempt.
-      // Research mode is exempt from the cap (it has its own budget via stepCountIs).
+      // Deep Research mode is exempt from the cap (it has its own budget via stepCountIs).
       if (tc.toolName === "web_search" && !isResearchMode && useChatStore.getState().webSearchCount >= 2) {
         return;
       }
@@ -1727,7 +1721,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
                           }]
                         : []),
-                      // Research mode — sits right above Skills so the
+                      // Deep Research mode — sits right above Skills so the
                       // “modes” cluster together. One-shot in chat mode (the
                       // toggle resets on send); persistent until off in
                       // agent mode. Hidden when there's no search backend
@@ -1736,12 +1730,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                       ...((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true))
                         ? [{
                             icon: Telescope,
-                            label: researchMode ? "Research — on" : "Research",
+                            label: researchMode ? "Deep Research — on" : "Deep Research",
                             description: researchMode
                               ? "Applies to your next message, then resets."
                               : agentMode
                                 ? "Multi-step web research with citations."
-                                : "Web-augmented answer with citations.",
+                                : "Multi-step web research with citations.",
                             active: researchMode,
                             onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
                           }]

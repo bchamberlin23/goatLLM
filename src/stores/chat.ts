@@ -165,6 +165,39 @@ export interface ToolCallEntry {
   subagentTranscript?: import("../lib/llm-types").SubagentTranscriptEntry[];
 }
 
+export type DeepResearchPhase =
+  | "planning"
+  | "searching"
+  | "reading"
+  | "analyzing"
+  | "writing"
+  | "done"
+  | "error"
+  | "warning";
+
+export interface DeepResearchEvent {
+  id: string;
+  phase: DeepResearchPhase;
+  message: string;
+  at: number;
+}
+
+export interface DeepResearchState {
+  query: string;
+  phase: DeepResearchPhase;
+  startedAt: number;
+  round?: number;
+  queries?: number;
+  sourceCount?: number;
+  findingCount?: number;
+  currentSource?: {
+    title?: string;
+    url: string;
+  };
+  events: DeepResearchEvent[];
+  error?: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -213,6 +246,8 @@ export interface Message {
    *  interrupted an in-flight turn to redirect it. Surfaced as a small badge
    *  so the thread makes clear the conversation was steered mid-stream. */
   steered?: boolean;
+  /** Live Deep Research progress metadata. Final reports remain normal markdown content. */
+  deepResearch?: DeepResearchState;
 }
 
 export interface Conversation {

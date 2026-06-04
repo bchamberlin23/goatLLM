@@ -16,6 +16,7 @@ import { SubagentTranscriptView } from "./SubagentTranscript";
 import { AgentTurnRollbackButton, AgentTurnTimelineHeader } from "./AgentTurnTimeline";
 import { useThrottledContent } from "../hooks/useThrottledContent";
 import { requestSuggestedCheckApproval } from "../lib/tools/approval";
+import { DeepResearchProgress } from "./DeepResearchProgress";
 import {
   shouldExpandThinking,
   setThinkingPref,
@@ -243,6 +244,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
   const thinkingElapsed = useElapsedLabel(isWorking ? startedAt : null, isWorking);
+  const hasDeepResearchProgress = isAssistant && !!message.deepResearch && isStreaming;
 
   return (
     <div className={`group px-6 py-1.5 w-full ${isUser ? "flex justify-end" : ""}`}>
@@ -285,13 +287,17 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         )}
 
         {/* Thinking block — plain turns only; tool turns embed thinking in AgentTurnView */}
-        {isAssistant && !hasToolCalls && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
+        {isAssistant && !hasToolCalls && !hasDeepResearchProgress && (message.thinkingContent && message.thinkingContent.trim().length > 0 || (isStreaming && message.content.length === 0)) && (
           <ThinkingBlock
             messageId={message.id}
             content={message.thinkingContent}
             elapsed={thinkingElapsed}
             running={isStreaming && message.content.length === 0}
           />
+        )}
+
+        {hasDeepResearchProgress && message.deepResearch && (
+          <DeepResearchProgress state={message.deepResearch} />
         )}
 
         {isAssistant && isStreaming && (() => {

@@ -59,6 +59,25 @@ describe("Deep Research JSON Helpers", () => {
     const fallback = 'Random prefix {"key": "value"} random suffix';
     expect(parseJsonObject(fallback)).toEqual({ key: "value" });
   });
+
+  it("ignores echoed example arrays and returns the real query array", () => {
+    const echoed =
+      'Example: ["query one", "query two", "query three"]\n' +
+      '["impact of AI on jobs", "AI automation statistics 2026"]';
+
+    expect(parseJsonArray(echoed)).toEqual([
+      "impact of AI on jobs",
+      "AI automation statistics 2026",
+    ]);
+  });
+
+  it("repairs truncated real arrays without harvesting prompt examples", () => {
+    const echoedTruncated =
+      'Example: ["query one", "query two"]\n' +
+      '["real query a", "real query b';
+
+    expect(parseJsonArray(echoedTruncated)).toEqual(["real query a"]);
+  });
 });
 
 describe("runDeepResearch Orchestrator", () => {
@@ -68,8 +87,23 @@ describe("runDeepResearch Orchestrator", () => {
     apiKey: "mock-api-key",
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
+    const { browserFetch } = await import("../lib/browser-fetch");
+    vi.mocked(READ_ONLY_TOOLS.web_search.execute!).mockResolvedValue(
+      JSON.stringify([
+        { url: "https://example.com/apple-news", title: "Apple Earnings 2023" },
+      ])
+    );
+    vi.mocked(browserFetch).mockResolvedValue({
+      url: "https://example.com/apple-news",
+      status: 200,
+      contentType: "text/plain",
+      bytes: 88,
+      truncated: false,
+      content: "Apple reported strong financial results for 2023, with total revenue of $383 billion.",
+    });
   });
 
   it("runs the full research flow successfully", async () => {
@@ -174,6 +208,138 @@ describe("runDeepResearch Orchestrator", () => {
     );
 
     // Should fail/abort and fall back to the error message
-    expect(finalReport).toContain("Failed to generate research report.");
+    expect(finalReport).toContain("Failed to generate Deep Research report.");
+  });
+
+  it("limits concurrent extraction work", async () => {
+    const { generateText } = await import("ai");
+    const { browserFetch } = await import("../lib/browser-fetch");
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
+
+    vi.mocked(READ_ONLY_TOOLS.web_search.execute!).mockResolvedValue(
+      JSON.stringify(
+        Array.from({ length: 6 }, (_, i) => ({
+          url: `https://example.com/source-${i}`,
+          title: `Source ${i}`,
+        })),
+      ),
+    );
+
+    let activeFetches = 0;
+    let maxActiveFetches = 0;
+    vi.mocked(browserFetch).mockImplementation(async ({ url }: any) => {
+      activeFetches++;
+      maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeFetches--;
+      return { url, content: "useful source content" } as any;
+    });
+
+    const responses = [
+      JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }),
+      "general",
+      JSON.stringify(["query one", "query two"]),
+      ...Array.from({ length: 6 }, () => JSON.stringify({
+        rational: "relevant",
+        evidence: "evidence",
+        summary: "summary",
+      })),
+      "Evolving report",
+      "Final detailed report with enough evidence.",
+      "Expanded final detailed report with enough evidence.",
+    ];
+    let callIndex = 0;
+    vi.mocked(generateText).mockImplementation(async () => ({
+      text: responses[callIndex++] || "fallback",
+      finishReason: "stop",
+      usage: { promptTokens: 1, completionTokens: 1 },
+    }) as any);
+
+    await runDeepResearch("Question?", dummyConfig, () => {}, undefined, 1, 300, {
+      extractionConcurrency: 2,
+      maxUrlsPerRound: 3,
+    });
+
+    expect(maxActiveFetches).toBeLessThanOrEqual(2);
+  });
+
+  it("surfaces actionable errors when search returns no findings for repeated rounds", async () => {
+    const { generateText } = await import("ai");
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
+
+    vi.mocked(READ_ONLY_TOOLS.web_search.execute!).mockResolvedValue("[]");
+    vi.mocked(generateText).mockImplementation(async ({ maxOutputTokens }: any) => ({
+      text: maxOutputTokens === 20
+        ? "general"
+        : maxOutputTokens === 1024
+          ? JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" })
+          : JSON.stringify(["empty query"]),
+      finishReason: "stop",
+      usage: { promptTokens: 1, completionTokens: 1 },
+    }) as any);
+
+    const events: any[] = [];
+    const finalReport = await runDeepResearch("Question?", dummyConfig, (p) => events.push(p), undefined, 4, 300, {
+      minRounds: 1,
+      maxEmptyRounds: 2,
+    });
+
+    expect(finalReport).toContain("Search unavailable");
+    expect(finalReport).toContain("no new URLs");
+    expect(events.some((e) => e.phase === "error" && /search/i.test(e.message))).toBe(true);
+  });
+
+  it("returns gathered findings when synthesis and final writing fail", async () => {
+    const { generateText } = await import("ai");
+
+    let callIndex = 0;
+    vi.mocked(generateText).mockImplementation(async () => {
+      callIndex++;
+      if (callIndex === 1) {
+        return { text: JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }) } as any;
+      }
+      if (callIndex === 2) return { text: "general" } as any;
+      if (callIndex === 3) return { text: JSON.stringify(["apple revenue 2023"]) } as any;
+      if (callIndex === 4) {
+        return {
+          text: JSON.stringify({
+            rational: "relevant",
+            evidence: "Apple revenue evidence",
+            summary: "Apple revenue summary",
+          }),
+        } as any;
+      }
+      throw new Error("LLM unavailable");
+    });
+
+    const finalReport = await runDeepResearch("What was Apple's 2023 revenue?", dummyConfig, () => {}, undefined, 1);
+
+    expect(finalReport).toContain("Automatic synthesis did not complete");
+    expect(finalReport).toContain("Apple revenue summary");
+  });
+
+  it("emits structured progress metadata for sources and findings", async () => {
+    const { generateText } = await import("ai");
+    let callIndex = 0;
+    const mockResponses = [
+      JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }),
+      "general",
+      JSON.stringify(["apple revenue 2023"]),
+      JSON.stringify({ rational: "relevant", evidence: "evidence", summary: "summary" }),
+      "Evolving report",
+      "Final report",
+      "Expanded final report",
+    ];
+    vi.mocked(generateText).mockImplementation(async () => ({
+      text: mockResponses[callIndex++] || "fallback",
+      finishReason: "stop",
+      usage: { promptTokens: 1, completionTokens: 1 },
+    }) as any);
+
+    const events: any[] = [];
+    await runDeepResearch("Question?", dummyConfig, (p) => events.push(p), undefined, 1);
+
+    expect(events.some((e) => e.phase === "reading" && e.current_source?.url)).toBe(true);
+    expect(events.some((e) => e.phase === "reading" && e.total_findings === 1)).toBe(true);
   });
 });
