@@ -1289,18 +1289,6 @@ export function ArtifactPanel() {
 
         <div className="flex-1" />
 
-        {/* Browser button */}
-        <button
-          onClick={() => setView(view === "browser" ? "preview" : "browser")}
-          aria-label="Toggle browser view"
-          title="Browser view"
-          className={`control-icon p-1 rounded transition-colors ${
-            view === "browser" ? "bg-[#f59e42]/20 text-[#f59e42]" : ""
-          }`}
-        >
-          <Globe size={13} strokeWidth={2} aria-hidden="true" />
-        </button>
-
         {/* Artifact-specific controls (hidden when viewing a workspace file) */}
         {activeArtifact && (<>
         <div className="flex items-center gap-0.5">

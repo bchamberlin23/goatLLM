@@ -491,202 +491,103 @@ interface CompareResult {
 
 function CompareModelsPanel({ models, onClose }: CompareModelsPanelProps) {
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
-  const [prompt, setPrompt] = useState("");
-  const [running, setRunning] = useState(false);
   const [results, setResults] = useState<CompareResult[]>([]);
+  const [running, setRunning] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const getLlmConfigForModel = useChatStore((s) => s.getLlmConfigForModel);
-  const usageSettings = useChatStore((s) => s.usageSettings);
 
   const toggleModel = (modelId: string) => {
     setSelectedModelIds((prev) => {
-      if (prev.includes(modelId)) {
-        return prev.filter((id) => id !== modelId);
-      }
-      if (prev.length >= 4) {
-        return prev;
-      }
+      if (prev.includes(modelId)) return prev.filter((id) => id !== modelId);
+      if (prev.length >= 4) return prev;
       return [...prev, modelId];
     });
   };
 
   const runComparison = async () => {
-    if (selectedModelIds.length < 2 || !prompt.trim() || running) {
-      return;
-    }
-
+    if (selectedModelIds.length < 2 || !prompt.trim() || running) return;
     setRunning(true);
     setResults([]);
-
     const newResults: CompareResult[] = [];
-
     for (const modelId of selectedModelIds) {
       const model = models.find((m) => m.id === modelId);
       if (!model) continue;
-
       const startTime = performance.now();
       try {
         const config = getLlmConfigForModel(modelId);
         if (!config) {
-          newResults.push({
-            modelId,
-            modelName: model.name,
-            response: "Error: Model not configured",
-            latencyMs: 0,
-            tokens: { input: 0, output: 0 },
-          });
+          newResults.push({ modelId, modelName: model.name, response: "Error: Model not configured", latencyMs: 0, tokens: { input: 0, output: 0 } });
           continue;
         }
-
         const llm = await createModel(config);
-        const result = await generateText({
-          model: llm,
-          prompt: prompt,
-        });
-
+        const result = await generateText({ model: llm, prompt, temperature: 0.2 });
         const latencyMs = performance.now() - startTime;
-        const tokens = {
-          input: result.usage?.inputTokens ?? 0,
-          output: result.usage?.outputTokens ?? 0,
-        };
-
-        // Calculate cost if price overrides exist
-        let cost: number | undefined;
-        const override = usageSettings.priceOverrides[modelId];
-        if (override) {
-          const inputCost = (tokens.input / 1_000_000) * (override.inputPerMillion ?? 0);
-          const outputCost = (tokens.output / 1_000_000) * (override.outputPerMillion ?? 0);
-          cost = inputCost + outputCost;
-        }
-
-        newResults.push({
-          modelId,
-          modelName: model.name,
-          response: result.text,
-          latencyMs,
-          tokens,
-          cost,
-        });
+        const tokens = { input: result.usage?.inputTokens ?? 0, output: result.usage?.outputTokens ?? 0 };
+        newResults.push({ modelId, modelName: model.name, response: result.text, latencyMs, tokens });
       } catch (error) {
-        newResults.push({
-          modelId,
-          modelName: model.name,
-          response: `Error: ${error instanceof Error ? error.message : String(error)}`,
-          latencyMs: performance.now() - startTime,
-          tokens: { input: 0, output: 0 },
-        });
+        newResults.push({ modelId, modelName: model.name, response: `Error: ${error instanceof Error ? error.message : String(error)}`, latencyMs: performance.now() - startTime, tokens: { input: 0, output: 0 } });
       }
     }
-
     setResults(newResults);
     setRunning(false);
   };
 
   return (
-    <div className="p-4 flex flex-col gap-3 max-h-[600px] overflow-y-auto">
-      {/* Header */}
+    <div className="p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <p className="text-[13px] font-medium text-[#ececec] truncate">
-            Compare Models
-          </p>
-          <p className="text-[11px] text-[#9a9a9a]">
-            Select 2-4 models to compare responses
-          </p>
-        </div>
-        <button
-          className="p-1 rounded-md text-text-3 hover:text-text-2 hover:bg-white/[0.06] transition-colors shrink-0"
-          onClick={onClose}
-          aria-label="Close compare"
-        >
-          <X size={14} strokeWidth={1.5} />
-        </button>
+        <p className="text-[13px] font-medium text-[#ececec]">Compare Models</p>
+        <button onClick={onClose} className="p-1 rounded-md text-text-3 hover:text-text-2" aria-label="Close compare"><X size={14} strokeWidth={1.5} /></button>
       </div>
+      <p className="text-[11px] text-[#9a9a9a]">Pick 2-4 models, enter a prompt, and run them in parallel.</p>
+      
+      {/* Prompt first */}
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        placeholder="What should each model respond to?"
+        rows={3}
+        className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-black/20 text-[13px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
+      />
 
       {/* Model selection */}
-      <div className="flex flex-col gap-2">
-        <label className="text-[11.5px] font-medium text-[#b4b4b4]">
-          Select models ({selectedModelIds.length}/4)
-        </label>
-        <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
-          {models.map((model) => {
-            const isSelected = selectedModelIds.includes(model.id);
-            return (
-              <button
-                key={model.id}
-                onClick={() => toggleModel(model.id)}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-[12px] transition-colors ${
-                  isSelected
-                    ? "bg-accent/20 border-accent/40 text-[#ececec]"
-                    : "bg-white/[0.06] border-white/10 text-[#d5d5d5] hover:bg-white/[0.08]"
-                } border`}
-                disabled={!isSelected && selectedModelIds.length >= 4}
-              >
-                {isSelected && <Check size={12} className="text-accent shrink-0" />}
-                <span className="truncate">{model.name}</span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto">
+        {models.map((model) => {
+          const isSelected = selectedModelIds.includes(model.id);
+          return (
+            <button
+              key={model.id}
+              onClick={() => toggleModel(model.id)}
+              disabled={!isSelected && selectedModelIds.length >= 4}
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-left text-[12px] border transition-colors ${
+                isSelected ? "bg-accent/20 border-accent/40 text-text-1" : "bg-white/[0.06] border-white/10 text-text-2 hover:bg-white/[0.08]"
+              } disabled:opacity-40`}
+            >
+              {isSelected && <Check size={11} className="text-accent shrink-0" />}
+              <span className="truncate">{model.name}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Prompt input */}
-      <label className="flex flex-col gap-1">
-        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Prompt</span>
-        <textarea
-          className="w-full px-2.5 py-2 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors resize-none"
-          placeholder="Enter a prompt to test across all selected models..."
-          rows={3}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-      </label>
-
-      {/* Run button */}
       <button
-        className="primary-action py-2 rounded-md text-[13px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={runComparison}
         disabled={selectedModelIds.length < 2 || !prompt.trim() || running}
+        className="primary-action py-2 rounded-lg text-[12px] font-medium disabled:opacity-50"
       >
-        {running ? (
-          <span className="flex items-center justify-center gap-2">
-            <Loader2 size={14} className="animate-spin" />
-            Running comparison...
-          </span>
-        ) : (
-          "Run Comparison"
-        )}
+        {running ? <><Loader2 size={13} className="animate-spin inline mr-1.5" />Running...</> : `Compare ${selectedModelIds.length} model${selectedModelIds.length === 1 ? "" : "s"}`}
       </button>
 
-      {/* Results */}
       {results.length > 0 && (
-        <div className="flex flex-col gap-3 mt-2">
-          <div className="text-[11.5px] font-medium text-[#b4b4b4]">Results</div>
-          <div className="grid grid-cols-1 gap-3">
-            {results.map((result) => (
-              <div
-                key={result.modelId}
-                className="flex flex-col gap-2 p-3 rounded-md bg-white/[0.04] border border-white/10"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <span className="text-[12px] font-medium text-[#ececec] truncate">
-                      {result.modelName}
-                    </span>
-                    <div className="flex items-center gap-3 text-[10px] text-[#9a9a9a]">
-                      <span>{Math.round(result.latencyMs)}ms</span>
-                      <span>{result.tokens.input + result.tokens.output} tokens</span>
-                      {result.cost !== undefined && (
-                        <span>${result.cost.toFixed(6)}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-[12px] text-[#d5d5d5] whitespace-pre-wrap break-words max-h-[150px] overflow-y-auto">
-                  {result.response}
-                </div>
+        <div className="flex flex-col gap-2">
+          {results.map((r) => (
+            <div key={r.modelId} className="rounded-lg border border-white/[0.06] bg-black/20 p-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[12px] font-medium text-text-1 truncate">{r.modelName}</span>
+                <span className="text-[10px] text-text-3">{Math.round(r.latencyMs)}ms</span>
               </div>
-            ))}
-          </div>
+              <pre className="text-[11.5px] text-text-2 whitespace-pre-wrap max-h-[150px] overflow-y-auto">{r.response}</pre>
+            </div>
+          ))}
         </div>
       )}
     </div>

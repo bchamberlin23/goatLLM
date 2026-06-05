@@ -345,7 +345,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             {formatMessageTime(message.createdAt)}
           </span>
           {branchInfo && (
-            <div className="flex items-center gap-0.5 ml-1">
+            <div className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handlePrevBranch}
                 disabled={branchInfo.currentIndex === 0}

@@ -1999,6 +1999,18 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             </button>
             )}
 
+            {/* Image generation button */}
+            {featureFlags.imageGeneration && (
+            <button
+              onClick={() => { setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); }}
+              className="control-icon p-1.5 rounded-md transition-colors"
+              aria-label="Generate image"
+              title="Generate image"
+            >
+              <ImageIcon size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            )}
+
             {designMode ? (!activeId && <DesignPills />) : <AgentPill />}
             {agentMode && planMode && (
               <button
