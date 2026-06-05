@@ -252,7 +252,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const searchBackend = useChatStore((s) => s.searchBackend);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
-  const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
+  const setNotebookMode = useChatStore((s) => s.setNotebookMode);
   const featureFlags = useChatStore((s) => s.featureFlags);
   const pursueGoalMode = useChatStore((s) => s.pursueGoalMode);
   const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
@@ -291,6 +291,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     [setDraftAttachments],
   );
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showImageGen, setShowImageGen] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageGenLoading, setImageGenLoading] = useState(false);
+  const [imageGenResult, setImageGenResult] = useState<string | null>(null);
+  const [imageGenError, setImageGenError] = useState<string | null>(null);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [pendingSkills, setPendingSkills] = useState<string[]>(() => {
     try {
@@ -1552,6 +1557,50 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     setFileRefPosition(null);
   }, []);
 
+  // ── Image generation ──
+  const providerConfigs = useChatStore((s) => s.providerConfigs);
+  const addImageArtifact = useChatStore((s) => s.addImageArtifact);
+  const handleGenerateImage = useCallback(async () => {
+    const prompt = imagePrompt.trim();
+    if (!prompt || imageGenLoading) return;
+    setImageGenLoading(true);
+    setImageGenError(null);
+    setImageGenResult(null);
+    try {
+      const cfg = providerConfigs.openai;
+      if (!cfg?.apiKey) throw new Error("Configure an OpenAI API key in Settings first.");
+      const baseUrl = (cfg.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+      const res = await fetch(`${baseUrl}/images/generations`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cfg.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-image-1.5",
+          prompt,
+          size: "1024x1024",
+          quality: "auto",
+          background: "auto",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
+      const first = json?.data?.[0];
+      const base64 = first?.b64_json ?? first?.url;
+      const dataUrl = base64?.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
+      setImageGenResult(dataUrl);
+      // Add image as artifact to conversation
+      if (activeId) {
+        addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
+      }
+    } catch (error) {
+      setImageGenError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImageGenLoading(false);
+    }
+  }, [imagePrompt, imageGenLoading, providerConfigs, activeId, addImageArtifact]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Don't handle Enter if file picker is open (let the picker handle it)
     if (fileRefQuery !== null && (e.key === "Enter" || e.key === "Tab" || e.key === "Escape" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
@@ -1759,19 +1808,19 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                             }]
                           : []),
                         ...(featureFlags.costDashboard && plusMenuVisibility[activeModeKey]?.usage !== false
-                          ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("usage"); } }]
+                          ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); } }]
                           : []),
                         ...(featureFlags.modelComparison && plusMenuVisibility[activeModeKey]?.compare !== false
-                          ? [{ icon: Columns2, label: "Compare models", description: "Parallel prompts with latency, cost, diff.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("compare"); } }]
+                          ? [{ icon: Columns2, label: "Compare models", description: "Open the model picker to select 2-4 models.", onClick: () => { setShowPlusMenu(false); } }]
                           : []),
                         ...(featureFlags.notebookMode && plusMenuVisibility[activeModeKey]?.notebook !== false
-                          ? [{ icon: BookOpen, label: "Notebook mode", description: "Run text, Python, and AI prompt cells.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("notebook"); } }]
+                          ? [{ icon: BookOpen, label: "Notebook mode", description: "Switch to notebook mode with text, Python, and AI cells.", onClick: () => { setShowPlusMenu(false); setNotebookMode(true); } }]
                           : []),
                         ...(featureFlags.browserMirror && plusMenuVisibility[activeModeKey]?.browser !== false
-                          ? [{ icon: Globe2, label: "Browser panel", description: "Mirror agent-visible browser state.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("browser"); } }]
+                          ? [{ icon: Globe2, label: "Browser panel", description: "Open the artifact panel in browser view.", onClick: () => { setShowPlusMenu(false); } }]
                           : []),
                         ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
-                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); openWorkspacePanel("images"); } }]
+                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); } }]
                           : []),
                         ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
                           ? [{
@@ -1995,6 +2044,93 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           </div>
         </div>
       </div>
+
+      {/* Image generation modal */}
+      {showImageGen && (
+        <div
+          className="fixed inset-0 z-[250] flex items-center justify-center bg-[#111112]/70 backdrop-blur-md animate-[fadeIn_150ms_ease]"
+          onClick={() => setShowImageGen(false)}
+        >
+          <div
+            className="modal-surface w-[420px] max-w-[90vw] rounded-2xl overflow-hidden animate-[contextMenuIn_180ms_ease]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Generate image"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
+                <h3 className="text-[14px] font-semibold text-[#ececec]">Generate Image</h3>
+              </div>
+              <button
+                onClick={() => setShowImageGen(false)}
+                className="control-icon w-7 h-7 flex items-center justify-center rounded-md"
+                aria-label="Close"
+              >
+                <X size={14} strokeWidth={2} />
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-[12px] text-[#a0a0a0] mb-3">
+                Describe the image you want to generate. Images are added to the conversation as artifacts.
+              </p>
+              <textarea
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                placeholder="A majestic mountain landscape at sunset..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 resize-none outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 mb-3"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleGenerateImage();
+                  }
+                }}
+              />
+
+              {imageGenLoading && (
+                <div className="flex items-center justify-center gap-2 py-8 text-[13px] text-[#a0a0a0]">
+                  <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
+                  Generating image...
+                </div>
+              )}
+
+              {imageGenError && (
+                <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 mb-3 text-[12px] text-red-400">
+                  {imageGenError}
+                </div>
+              )}
+
+              {imageGenResult && (
+                <div className="mb-3">
+                  <img
+                    src={imageGenResult}
+                    alt={imagePrompt}
+                    className="w-full rounded-xl border border-white/10"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowImageGen(false)}
+                  className="control-pill px-4 py-2 rounded-lg text-[12.5px] transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={!imagePrompt.trim() || imageGenLoading}
+                  className="primary-action px-4 py-2 rounded-lg text-[12.5px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {imageGenLoading ? "Generating..." : "Generate"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
