@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Brain,
+  CalendarClock,
+  Cloud,
   Cpu,
+  Eye,
   Flag,
   Layout,
   Mic2,
@@ -14,7 +18,7 @@ import { InterfaceTab } from "./InterfaceTab";
 import { AdvancedTab } from "./AdvancedTab";
 import { SettingsGroup } from "./SettingsGroup";
 import { ToggleRow } from "./ToggleRow";
-import { useChatStore, type ProductFeatureFlags } from "../../stores/chat";
+import { useChatStore, type ProductFeatureFlags, type ScheduledAgent } from "../../stores/chat";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
 
@@ -23,6 +27,10 @@ export type SettingsTabId =
   | "appearance"
   | "features"
   | "voice"
+  | "sync"
+  | "memory"
+  | "schedules"
+  | "watcher"
   | "advanced";
 
 const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; keywords: string }[] = [
@@ -30,6 +38,10 @@ const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; 
   { id: "appearance", label: "Appearance", hint: "Canvas and polish", icon: Layout, keywords: "appearance interface artifacts design theme liquid glass" },
   { id: "features", label: "Feature Flags", hint: "Product modules", icon: Flag, keywords: "flags beta toggles modules pursue goal" },
   { id: "voice", label: "Voice", hint: "Speak and dictate", icon: Mic2, keywords: "voice text to speech tts dictate microphone hands free" },
+  { id: "sync", label: "Sync", hint: "iCloud and S3", icon: Cloud, keywords: "cloud sync icloud s3 encrypted cross device" },
+  { id: "memory", label: "Memory/RAG", hint: "Retrieval controls", icon: Brain, keywords: "memory rag embeddings retrieval provenance documents source" },
+  { id: "schedules", label: "Scheduled Agents", hint: "Recurring runs", icon: CalendarClock, keywords: "scheduled agents cron recurring daily nightly digest" },
+  { id: "watcher", label: "Watcher", hint: "File system events", icon: Eye, keywords: "watcher filesystem events notify changes" },
   { id: "advanced", label: "Advanced", hint: "Tools and developer", icon: Shield, keywords: "advanced developer tools mcp search searxng permissions skills semantic" },
 ];
 
@@ -184,6 +196,10 @@ export function SettingsTabs() {
         {activeTab === "appearance" && <AppearanceSettings />}
         {activeTab === "features" && <FeatureFlagSettings />}
         {activeTab === "voice" && <VoiceSettings />}
+        {activeTab === "sync" && <SyncSettings />}
+        {activeTab === "memory" && <MemorySettings />}
+        {activeTab === "schedules" && <ScheduleSettings />}
+        {activeTab === "watcher" && <WatcherSettings />}
         {activeTab === "advanced" && <AdvancedDeveloperSettings />}
       </div>
     </div>
@@ -260,6 +276,146 @@ function VoiceSettings() {
   );
 }
 
+function SyncSettings() {
+  const syncSettings = useChatStore((s) => s.syncSettings);
+  const setSyncSettings = useChatStore((s) => s.setSyncSettings);
+  return (
+    <SettingsGroup title="Encrypted cloud sync" description="Opt-in sync package target for iCloud Drive or user-supplied S3-compatible storage.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ToggleRow enabled={syncSettings.enabled} onToggle={(enabled) => setSyncSettings({ ...syncSettings, enabled })} title="Enable sync" description="Allow export/import actions." />
+        <Field label="Provider">
+          <Select value={syncSettings.provider} onChange={(e) => setSyncSettings({ ...syncSettings, provider: e.target.value as "icloud" | "s3" })}>
+            <option value="icloud">iCloud Drive</option>
+            <option value="s3">S3-compatible</option>
+          </Select>
+        </Field>
+        <Field label="Prefix">
+          <TextInput value={syncSettings.prefix ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, prefix: e.target.value })} />
+        </Field>
+        <Field label="Encryption key hint">
+          <TextInput value={syncSettings.encryptionKeyHint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, encryptionKeyHint: e.target.value })} />
+        </Field>
+        <Field label="S3 bucket">
+          <TextInput value={syncSettings.bucket ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, bucket: e.target.value })} />
+        </Field>
+        <Field label="S3 endpoint">
+          <TextInput value={syncSettings.endpoint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, endpoint: e.target.value })} placeholder="https://... or file:///..." />
+        </Field>
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function MemorySettings() {
+  const ragSettings = useChatStore((s) => s.ragSettings);
+  const setRagSettings = useChatStore((s) => s.setRagSettings);
+  const memoryEnabled = useChatStore((s) => s.memoryEnabled);
+  const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
+  return (
+    <SettingsGroup title="Memory and retrieval" description="Control what can be remembered, retrieved, and shown with provenance.">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <ToggleRow enabled={memoryEnabled} onToggle={setMemoryEnabled} title="Long-term memory" description="Allow memories to be saved and searched during chat turns." />
+        <ToggleRow enabled={ragSettings.projectMemory} onToggle={(v) => setRagSettings({ ...ragSettings, projectMemory: v })} title="Project memory" description="Use project-scoped memory sources when available." />
+        <ToggleRow enabled={ragSettings.conversationMemory} onToggle={(v) => setRagSettings({ ...ragSettings, conversationMemory: v })} title="Conversation memory" description="Use conversation-specific remembered facts." />
+        <ToggleRow enabled={ragSettings.retrievalPreview} onToggle={(v) => setRagSettings({ ...ragSettings, retrievalPreview: v })} title="Retrieval preview" description="Show what memory snippets were retrieved before use." />
+        <ToggleRow enabled={ragSettings.provenance} onToggle={(v) => setRagSettings({ ...ragSettings, provenance: v })} title="Provenance" description="Track where remembered context came from." />
+        <Field label="Max retrieved memories">
+          <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
+        </Field>
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function ScheduleSettings() {
+  const agents = useChatStore((s) => s.scheduledAgents);
+  const setAgents = useChatStore((s) => s.setScheduledAgents);
+  const [name, setName] = useState("");
+  const [schedule, setSchedule] = useState("@daily");
+  const [prompt, setPrompt] = useState("");
+
+  const addAgent = () => {
+    if (!prompt.trim()) return;
+    const agent: ScheduledAgent = {
+      id: crypto.randomUUID(),
+      name: name.trim() || "Scheduled agent",
+      prompt: prompt.trim(),
+      schedule: schedule.trim() || "@daily",
+      enabled: true,
+      nextRunAt: Date.now() + 3600000,
+      lastStatus: "idle",
+    };
+    setAgents([agent, ...agents]);
+    setName("");
+    setPrompt("");
+    setSchedule("@daily");
+  };
+
+  return (
+    <SettingsGroup title="Scheduled agents" description="Cron-style recurring runs for digests, repo checks, and periodic work.">
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Daily digest)" />
+          <TextInput value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="@daily or 0 9 * * *" />
+        </div>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="What should the agent do on schedule?"
+          rows={2}
+          className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-black/20 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
+        />
+        <button onClick={addAgent} disabled={!prompt.trim()} className="primary-action self-start px-4 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50">
+          Add Schedule
+        </button>
+      </div>
+      {agents.length > 0 && (
+        <div className="mt-4 flex flex-col gap-2">
+          <div className="text-[11.5px] font-medium text-text-2">{agents.length} configured agent{agents.length === 1 ? "" : "s"}</div>
+          {agents.map((agent) => (
+            <div key={agent.id} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12.5px] font-medium text-text-1 truncate">{agent.name}</span>
+                <button onClick={() => setAgents(agents.filter((a) => a.id !== agent.id))} className="control-icon p-0.5 rounded text-text-3 hover:text-red-400">
+                  ✕
+                </button>
+              </div>
+              <div className="mt-1 text-[11px] text-text-3">{agent.schedule}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SettingsGroup>
+  );
+}
+
+function WatcherSettings() {
+  const events = useChatStore((s) => s.watcherEvents);
+  const clearEvents = useChatStore((s) => s.clearWatcherEvents);
+  return (
+    <SettingsGroup title="Filesystem watcher" description="Native notify events for config changes, test signals, and generated artifacts.">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] text-text-2">{events.length} event{events.length === 1 ? "" : "s"} received</span>
+          {events.length > 0 && (
+            <button onClick={clearEvents} className="control-pill px-3 py-1 rounded-md text-[11px]">Clear events</button>
+          )}
+        </div>
+        {events.length > 0 && (
+          <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
+            {events.map((event, i) => (
+              <div key={`${event.path}-${event.at}-${i}`} className="rounded border border-white/[0.06] bg-black/20 px-3 py-1.5">
+                <div className="text-[11.5px] text-text-2 truncate">{event.path}</div>
+                <div className="text-[10.5px] text-text-3">{event.kind} · {new Date(event.at).toLocaleTimeString()}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </SettingsGroup>
+  );
+}
+
 function AdvancedDeveloperSettings() {
   return (
     <>
@@ -268,7 +424,7 @@ function AdvancedDeveloperSettings() {
       <SettingsGroup title="Developer note" description="Workspace features like usage, sync, memory, prompts, schedules, and more are now accessible directly from the sidebar.">
         <div className="soft-card flex items-center gap-3 rounded-xl p-4 text-[12.5px] text-text-2">
           <Sparkles size={15} className="text-accent" />
-          Feature architecture is persisted locally and connected to Tauri commands where native access is required.
+          Features are integrated directly into the app: usage tracking in context meter, model comparison in model picker, branch navigation on messages, browser in artifact panel, notebook as a mode, and image generation in the input bar.
         </div>
       </SettingsGroup>
     </>
