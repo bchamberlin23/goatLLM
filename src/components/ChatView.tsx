@@ -195,7 +195,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       ? "attachment"
       : null;
   const sidePanelOpen = canvasPanel !== null;
-  const showHero = !activeId && !sidePanelOpen;
+  const showHero = !activeId && !sidePanelOpen && !notebookMode;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
   const heroWorkspacePath = notebookMode ? null : agentMode ? workspacePath : designMode ? designWorkspacePath : null;

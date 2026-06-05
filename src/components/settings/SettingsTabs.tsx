@@ -116,7 +116,7 @@ const FEATURE_LABELS: Record<keyof ProductFeatureFlags, { title: string; descrip
   costDashboard: { title: "Cost dashboard", description: "Per-conversation token, cost, budget, and alert surfaces." },
   modelComparison: { title: "Model comparison", description: "Parallel multi-model prompting with metrics and diff view." },
   browserMirror: { title: "Browser mirror", description: "Embedded panel for agent-visible browser state." },
-  notebookMode: { title: "Notebook mode", description: "Runnable text, Python, and AI prompt cells." },
+  notebookMode: { title: "Canvas", description: "A freeform board of documents and runnable Python with an AI assistant." },
   imageGeneration: { title: "Image generation", description: "OpenAI, Flux, Stable Diffusion, and custom image endpoints." },
   cloudSync: { title: "Cloud sync", description: "Opt-in encrypted export/import to iCloud Drive or S3-compatible storage." },
   promptLibrary: { title: "Prompt library", description: "Versioned `.goat/prompts/*.md` manager with search and stats." },

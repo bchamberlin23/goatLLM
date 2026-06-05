@@ -401,6 +401,25 @@ export function createNotebookCell(kind: NotebookCellKind, content = "", seed = 
   };
 }
 
+/**
+ * Notebook cells persist their last status, but "running" is a runtime-only
+ * flag. When rehydrating from storage, any cell left mid-run (app closed while
+ * a cell was executing) must reset so a loaded notebook looks like a finished
+ * one — no stuck spinners. A cell that captured partial output before the close
+ * is treated as "done"; one with nothing yet falls back to "idle".
+ * See CLAUDE.md "Persistence for New Features".
+ */
+export function sanitizeNotebookCells(cells: unknown): NotebookCell[] {
+  if (!Array.isArray(cells)) return [];
+  return cells
+    .filter((cell): cell is NotebookCell => !!cell && typeof cell === "object" && "id" in cell)
+    .map((cell) =>
+      cell.status === "running"
+        ? { ...cell, status: cell.output ? ("done" as const) : ("idle" as const) }
+        : cell,
+    );
+}
+
 export interface SyncConfig {
   enabled: boolean;
   provider: "icloud" | "s3";

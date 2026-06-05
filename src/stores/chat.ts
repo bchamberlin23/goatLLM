@@ -6,7 +6,13 @@ import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
 import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
+import { sanitizeNotebookCells } from "../lib/product-workspace";
 import type { NotebookCell, SyncConfig, WatcherEventSummaryInput } from "../lib/product-workspace";
+import {
+  createBoard,
+  sanitizeBoard,
+  type CanvasBoard,
+} from "../lib/canvas";
 import {
   loadAllFromDb,
   loadMessagesForConversation,
@@ -35,6 +41,7 @@ const IMAGE_GEN_SETTINGS_KEY = "goatllm-image-gen-settings";
 const FEATURE_FLAGS_KEY = "goatllm-feature-flags";
 const PLUS_MENU_VISIBILITY_KEY = "goatllm-plus-menu-visibility";
 const NOTEBOOK_CELLS_KEY = "goatllm-notebook-cells";
+const CANVAS_BOARD_KEY = "goatllm-canvas-board";
 const MODEL_COMPARISON_RUNS_KEY = "goatllm-model-comparison-runs";
 const IMAGE_JOBS_KEY = "goatllm-image-jobs";
 const SCHEDULED_AGENTS_KEY = "goatllm-scheduled-agents";
@@ -247,6 +254,19 @@ function saveJsonSetting(key: string, value: unknown) {
   } catch {
     // ignore quota errors
   }
+}
+
+// Reset runtime-only "running" status on load (no stuck spinners). The actual
+// rule lives in sanitizeNotebookCells. See CLAUDE.md "Persistence for New Features".
+function loadNotebookCells(): NotebookCell[] {
+  return sanitizeNotebookCells(loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []));
+}
+
+// Canvas board (multi-panel work area + assistant thread). Sanitize on load so
+// streaming chat messages and running code panels never restore mid-flight.
+// See CLAUDE.md "Persistence for New Features".
+function loadCanvasBoard(): CanvasBoard {
+  return sanitizeBoard(loadJsonValue<CanvasBoard>(CANVAS_BOARD_KEY, createBoard()));
 }
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -1117,7 +1137,10 @@ interface ChatStore {
   updateModelComparisonRun: (runId: string, updates: Partial<ModelComparisonRun>) => void;
   notebookCells: NotebookCell[];
   setNotebookCells: (cells: NotebookCell[]) => void;
-  updateNotebookCell: (cellId: string, updates: Partial<NotebookCell>) => void;
+  updateNotebookCell: (cellId: string, updates: Partial<NotebookCell>, persist?: boolean) => void;
+  // Canvas board — multi-panel document work area with a side assistant.
+  canvasBoard: CanvasBoard;
+  setCanvasBoard: (board: CanvasBoard, persist?: boolean) => void;
   imageJobs: ImageGenerationJob[];
   addImageJob: (job: ImageGenerationJob) => void;
   updateImageJob: (jobId: string, updates: Partial<ImageGenerationJob>) => void;
@@ -1548,7 +1571,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
       browserMirror: DEFAULT_BROWSER_MIRROR,
       modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
-      notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+      notebookCells: loadNotebookCells(),
+      canvasBoard: loadCanvasBoard(),
       imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
       scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
       watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
@@ -3265,12 +3289,22 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(NOTEBOOK_CELLS_KEY, cells);
       },
 
-      updateNotebookCell: (cellId, updates) => {
+      setCanvasBoard: (board, persist = true) => {
+        set({ canvasBoard: board });
+        // Mid-stream updates pass persist=false to avoid writing the whole board
+        // on every token; sanitizeBoard settles partial state on reload anyway.
+        if (persist) saveJsonSetting(CANVAS_BOARD_KEY, board);
+      },
+
+      updateNotebookCell: (cellId, updates, persist = true) => {
         const next = get().notebookCells.map((cell) =>
           cell.id === cellId ? { ...cell, ...updates, updatedAt: Date.now() } : cell,
         );
         set({ notebookCells: next });
-        saveJsonSetting(NOTEBOOK_CELLS_KEY, next);
+        // Mid-stream token updates pass persist=false to avoid writing the whole
+        // cells array to localStorage on every delta. The sanitizer discards any
+        // partial "running" state on reload, so skipping the write is safe.
+        if (persist) saveJsonSetting(NOTEBOOK_CELLS_KEY, next);
       },
 
       addImageJob: (job) => {
@@ -4270,7 +4304,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
-            notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+            notebookCells: loadNotebookCells(),
+            canvasBoard: loadCanvasBoard(),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
             scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
@@ -4379,7 +4414,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
-            notebookCells: loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []),
+            notebookCells: loadNotebookCells(),
+            canvasBoard: loadCanvasBoard(),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
             scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),

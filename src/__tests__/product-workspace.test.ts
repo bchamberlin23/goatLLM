@@ -9,6 +9,7 @@ import {
   estimateMessageCost,
   filterPromptDocuments,
   normalizeSyncConfig,
+  sanitizeNotebookCells,
   summarizeWatcherEvent,
 } from "../lib/product-workspace";
 
@@ -117,6 +118,28 @@ describe("product workspace primitives", () => {
     expect(cell.status).toBe("idle");
     expect(sync.remoteLabel).toBe("S3 goat");
     expect(sync.prefix).toBe("projects/goat");
+  });
+
+  it("resets stuck running cells on hydrate without losing partial output", () => {
+    const cleaned = sanitizeNotebookCells([
+      { id: "a", kind: "ai", content: "q", status: "running", output: "partial", updatedAt: 1 },
+      { id: "b", kind: "code", content: "print(1)", status: "running", output: "", updatedAt: 2 },
+      { id: "c", kind: "text", content: "note", status: "done", output: "note", updatedAt: 3 },
+    ]);
+
+    // Running cell with captured output is treated as finished.
+    expect(cleaned[0].status).toBe("done");
+    expect(cleaned[0].output).toBe("partial");
+    // Running cell with nothing yet falls back to idle.
+    expect(cleaned[1].status).toBe("idle");
+    // Already-settled cells are untouched.
+    expect(cleaned[2].status).toBe("done");
+  });
+
+  it("tolerates malformed notebook storage", () => {
+    expect(sanitizeNotebookCells(null)).toEqual([]);
+    expect(sanitizeNotebookCells("oops")).toEqual([]);
+    expect(sanitizeNotebookCells([null, 5, { id: "ok", kind: "text", content: "", status: "idle", updatedAt: 1 }])).toHaveLength(1);
   });
 
   it("summarizes watcher events into user-facing reactions", () => {

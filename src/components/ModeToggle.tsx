@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useChatStore } from "../stores/chat";
-import { MessageCircle, Bot, Palette, BookOpen } from "lucide-react";
+import { MessageCircle, Bot, Palette, LayoutGrid } from "lucide-react";
 
 /**
- * Four side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ] [ Notebook ]
+ * Four side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ] [ Canvas ]
  *
  * Pure mode switch — the per-mode permission picker (Agent) and the
  * design-system / direction pickers (Design) live elsewhere in the
@@ -79,11 +79,11 @@ export function ModeToggle() {
         role="radio"
         aria-checked={notebookMode}
         onClick={handleNotebook}
-        title="Notebook mode — Jupyter-like interface with text, code, and AI cells."
+        title="Canvas mode — a freeform board of documents and runnable code with an AI assistant."
         className={optionClass(notebookMode)}
       >
-        <BookOpen size={12} strokeWidth={2} aria-hidden="true" />
-        <span>Notebook</span>
+        <LayoutGrid size={12} strokeWidth={2} aria-hidden="true" />
+        <span>Canvas</span>
       </button>
     </div>
   );
