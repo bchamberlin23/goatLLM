@@ -863,7 +863,7 @@ export function extractArtifactBlocks(
   return sorted.map(({ _idx: _, ...rest }) => rest) as ParsedArtifactBlock[];
 }
 
-interface ChatStore {
+export interface ChatStore {
   conversations: Conversation[];
   activeId: string | null;
   /** Bumps every time `setActiveConversation` is called, even when the new id matches

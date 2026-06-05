@@ -503,7 +503,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         // it can.
       }
     }
-    displayContent = await extractAndAppend(displayContent, currentFiles, convId);
+    displayContent = await extractAndAppend(displayContent, currentFiles, convId ?? undefined);
 
     // Auto-fetch URLs and YouTube links the user typed in their message.
     // Each unique URL gets its readable text inlined as `[Web: ...]` or
