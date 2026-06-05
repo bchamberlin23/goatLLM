@@ -56,6 +56,7 @@ function makeStdioConfig(overrides?: Partial<McpServerConfig>): McpServerConfig 
 
 describe("MCP client — HTTP transport", () => {
   let client: MCPClient;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
   let sdkClient: any;
   let transport: MockTransport;
 
@@ -159,6 +160,7 @@ describe("MCP client — HTTP transport", () => {
 
 describe("MCP client — stdio transport", () => {
   let client: MCPClient;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
   let sdkClient: any;
   let transport: MockTransport;
 

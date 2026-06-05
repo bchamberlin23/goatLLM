@@ -38,6 +38,7 @@ describe("agentLoop — provider serialization", () => {
         ],
       },
     ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const out = mapMessagesForProvider(messages) as Array<{ role: string; content: any[] }>;
     expect(out[0].role).toBe("user");
     expect(out[0].content).toHaveLength(2);

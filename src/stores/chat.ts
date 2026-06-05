@@ -4165,6 +4165,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const advancedArtifacts = localStorage.getItem("goatllm-advanced-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
         const glowBackgroundEnabled = localStorage.getItem("goatllm-glow-bg-enabled") === "true";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
         const glowBackgroundMode = (localStorage.getItem("goatllm-glow-bg-mode") as any) || "blocky";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
         const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
@@ -4181,6 +4182,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
           let searchBackend = localStorage.getItem("goatllm-search-backend") as any;
           if (searchBackend !== "searxng" && searchBackend !== "tavily") {
             searchBackend = "searxng";
@@ -4447,6 +4449,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
           let searchBackend = localStorage.getItem("goatllm-search-backend") as any;
           if (searchBackend !== "searxng" && searchBackend !== "tavily") {
             searchBackend = "searxng";

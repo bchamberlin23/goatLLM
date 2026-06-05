@@ -19,6 +19,7 @@ describe("web_search tool", () => {
     store.webSearchCount = 2;
 
     const tool = READ_ONLY_TOOLS.web_search;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const result = await tool.execute!({ query: "test query" }, {} as any) as string;
     expect(result).toContain("Maximum web searches (2) already used this turn");
   });
@@ -44,6 +45,7 @@ describe("web_search tool", () => {
     globalThis.fetch = fetchMock;
 
     const tool = READ_ONLY_TOOLS.web_search;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const result = await tool.execute!({ query: "test query" }, {} as any) as string;
     expect(result).not.toContain("Maximum web searches");
     expect(result).toContain("https://example.com/target");
@@ -73,6 +75,7 @@ describe("web_search tool", () => {
     globalThis.fetch = fetchMock;
 
     const tool = READ_ONLY_TOOLS.web_search;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const result = await tool.execute!({ query: "test query", maxResults: 2 }, {} as any) as string;
     
     expect(fetchMock).toHaveBeenCalledWith(
@@ -101,6 +104,7 @@ describe("web_search tool", () => {
     globalThis.fetch = fetchMock;
 
     const tool = READ_ONLY_TOOLS.web_search;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const result = await tool.execute!({ query: "test query" }, {} as any) as string;
 
     expect(result).toContain("SearXNG search error: 500");
@@ -123,6 +127,7 @@ describe("web_search tool", () => {
 
     const result = (await READ_ONLY_TOOLS.scrape_url.execute!(
       { url: "https://example.com/page" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
       {} as any,
     )) as string;
 

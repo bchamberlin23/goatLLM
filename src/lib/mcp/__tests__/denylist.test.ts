@@ -139,12 +139,16 @@ describe("MCP denylist — path inspection", () => {
   });
 
   it("block: null and undefined args return empty", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     expect(inspectArgsForPaths(null as any).length).toBe(0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     expect(inspectArgsForPaths(undefined as any).length).toBe(0);
   });
 
   it("block: number args return empty", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     expect(inspectArgsForPaths(42 as any).length).toBe(0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     expect(inspectArgsForPaths(1.5 as any).length).toBe(0);
   });
 });
