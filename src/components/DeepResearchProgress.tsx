@@ -7,6 +7,8 @@ import {
   FileText,
   Search,
   Telescope,
+  RotateCw,
+  Globe,
 } from "lucide-react";
 import type { DeepResearchPhase, DeepResearchState } from "../stores/chat";
 import { Shimmer, useElapsedLabel } from "./ThinkingIndicator";
@@ -55,24 +57,36 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
   const sources = state.sources ?? [];
   const findings = state.findings ?? [];
 
-  function metric(value: string | number | undefined, label: string, onClick?: () => void) {
+  function metric(
+    value: string | number | undefined,
+    label: string,
+    Icon?: any,
+    onClick?: () => void
+  ) {
     if (value === undefined || value === null || value === "") return null;
     const text = label ? `${value} ${label}` : String(value);
+    
+    const content = (
+      <>
+        {Icon && <Icon size={11} className="text-text-3 shrink-0" />}
+        <span className="font-medium text-text-1">{text}</span>
+      </>
+    );
     
     if (onClick) {
       return (
         <button
           onClick={onClick}
-          className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums hover:bg-white/[0.07] hover:border-white/[0.1] active:bg-white/[0.05] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.035] px-2.5 py-1 text-[11px] text-text-3 tabular-nums backdrop-blur-[8px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-white/[0.07] hover:border-white/[0.1] active:bg-white/[0.05] transition-colors cursor-pointer"
         >
-          <span className="font-medium text-text-1">{text}</span>
+          {content}
         </button>
       );
     }
     
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums">
-        <span className="font-medium text-text-1">{text}</span>
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.035] px-2.5 py-1 text-[11px] text-text-3 tabular-nums backdrop-blur-[8px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        {content}
       </span>
     );
   }
@@ -90,7 +104,11 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
-            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.02] text-text-2">
+            <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border bg-white/[0.02] text-text-2 transition-all duration-300 ${
+              isWorking
+                ? "border-white/[0.12] shadow-[0_0_12px_rgba(255,255,255,0.06)]"
+                : "border-white/[0.06]"
+            }`}>
               <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -138,16 +156,18 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
 
         {/* Metric Chips */}
         <div className="mt-3.5 flex flex-wrap gap-1.5">
-          {metric(state.round ? `Round ${state.round}` : undefined, "")}
-          {metric(state.queries, "queries")}
+          {metric(state.round ? `Round ${state.round}` : undefined, "", RotateCw)}
+          {metric(state.queries, "queries", Search)}
           {metric(
             state.sourceCount,
             state.sourceCount === 1 ? "source" : "sources",
+            Globe,
             sources.length > 0 ? () => setDetailTab("sources") : undefined
           )}
           {metric(
             state.findingCount,
             state.findingCount === 1 ? "finding" : "findings",
+            FileText,
             findings.length > 0 ? () => setDetailTab("findings") : undefined
           )}
         </div>
@@ -188,18 +208,23 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {/* Custom dot indicator */}
-                  <span
-                    className={`absolute -left-[18.5px] top-[5px] h-1.5 w-1.5 rounded-full border border-[#0f0f10] ${
-                      event.phase === "error"
-                        ? "bg-error"
-                        : event.phase === "done"
-                          ? "bg-success"
-                          : isCurrentTask
-                            ? "bg-white animate-pulse"
+                  {isCurrentTask ? (
+                    <span className="absolute -left-[21.5px] top-[4px] flex h-3.5 w-3.5 items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-white/40 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
+                    </span>
+                  ) : (
+                    <span
+                      className={`absolute -left-[17.5px] top-[7px] h-1.5 w-1.5 rounded-full border border-[#0f0f10] ${
+                        event.phase === "error"
+                          ? "bg-error"
+                          : event.phase === "done"
+                            ? "bg-success"
                             : "bg-text-4"
-                    }`}
-                    aria-hidden="true"
-                  />
+                      }`}
+                      aria-hidden="true"
+                    />
+                  )}
                   {isCurrentTask ? (
                     <Shimmer text={event.message} className="min-w-0 truncate font-normal text-text-2" />
                   ) : (
