@@ -114,6 +114,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
   chat: {
     upload: true,
     pursueGoal: false,
+    image: false,
     plan: false,
     research: false,
     skills: false,
@@ -121,6 +122,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
   design: {
     upload: true,
     pursueGoal: false,
+    image: false,
     plan: false,
     research: false,
     skills: false,
@@ -128,6 +130,7 @@ const DEFAULT_PLUS_MENU_VISIBILITY: PlusMenuVisibility = {
   agent: {
     upload: true,
     pursueGoal: true,
+    image: true,
     plan: true,
     research: false,
     skills: true,

@@ -1844,6 +1844,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                               onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
                             }]
                           : []),
+                        ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
+                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); } }]
+                          : []),
                         ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
                           ? [{
                               icon: ListChecks,
@@ -2018,18 +2021,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               ) : (
                 <Mic size={15} strokeWidth={1.75} aria-hidden="true" />
               )}
-            </button>
-            )}
-
-            {/* Image generation button */}
-            {featureFlags.imageGeneration && (
-            <button
-              onClick={() => { setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); }}
-              className="control-icon p-1.5 rounded-md transition-colors"
-              aria-label="Generate image"
-              title="Generate image"
-            >
-              <ImageIcon size={15} strokeWidth={1.75} aria-hidden="true" />
             </button>
             )}
 

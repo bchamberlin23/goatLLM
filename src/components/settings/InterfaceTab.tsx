@@ -6,6 +6,7 @@ import { SettingsGroup } from "./SettingsGroup";
 import {
   Upload,
   Target,
+  Image as ImageIcon,
   ListChecks,
   Telescope,
   Wand2
@@ -14,6 +15,7 @@ import {
 const PLUS_ITEMS = [
   { key: "upload", label: "Upload File", description: "Attach files to the prompt.", modes: ["chat", "agent"], icon: Upload },
   { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution.", modes: ["agent"], icon: Target },
+  { key: "image", label: "Generate Image", description: "Generate images from a prompt.", modes: ["chat", "agent"], icon: ImageIcon },
   { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode.", modes: ["agent"], icon: ListChecks },
   { key: "research", label: "Deep Research", description: "Toggle sequential web research.", modes: ["chat", "agent"], icon: Telescope },
   { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills.", modes: ["chat", "agent"], icon: Wand2 },
