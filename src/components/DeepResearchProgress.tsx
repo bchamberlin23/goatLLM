@@ -63,7 +63,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
       return (
         <button
           onClick={onClick}
-          className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums hover:bg-white/5 hover:border-hairline-strong active:bg-white/5 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums hover:bg-white/[0.07] hover:border-white/[0.1] active:bg-white/[0.05] transition-colors cursor-pointer"
         >
           <span className="font-medium text-text-1">{text}</span>
         </button>
@@ -71,7 +71,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
     }
     
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums">
+      <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.035] px-2 py-1 text-[11px] text-text-3 tabular-nums">
         <span className="font-medium text-text-1">{text}</span>
       </span>
     );
@@ -83,14 +83,14 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
     <>
       <section
         aria-label="Deep Research progress"
-        className={`my-1.5 w-full rounded-xl border border-hairline bg-bg px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${
+        className={`my-1.5 w-full rounded-xl border border-white/[0.05] bg-[#0f0f10] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${
           isWorking ? "dr-active-card" : ""
         }`}
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
-            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-hairline bg-white/[0.02] text-text-2">
+            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.02] text-text-2">
               <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -154,7 +154,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
 
         {/* Current Source (Active/Loading) */}
         {state.currentSource && (
-          <div className="skeleton-sheen mt-3 rounded-lg border border-hairline bg-white/[0.015] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+          <div className="skeleton-sheen mt-3 rounded-lg border border-white/[0.055] bg-white/[0.015] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-4">
               <BookOpen size={11} strokeWidth={1.7} aria-hidden="true" />
               Reading source
@@ -177,7 +177,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
 
         {/* Timeline Events */}
         {recentEvents.length > 0 && (
-          <div className="mt-4 border-l border-hairline pl-3.5 space-y-3">
+          <div className="mt-4 border-l border-white/[0.04] pl-3.5 space-y-3">
             {recentEvents.map((event, index) => {
               const isLast = index === recentEvents.length - 1;
               const isCurrentTask = isLast && isWorking;
@@ -189,7 +189,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
                 >
                   {/* Custom dot indicator */}
                   <span
-                    className={`absolute -left-[18.5px] top-[5px] h-1.5 w-1.5 rounded-full border border-bg ${
+                    className={`absolute -left-[18.5px] top-[5px] h-1.5 w-1.5 rounded-full border border-[#0f0f10] ${
                       event.phase === "error"
                         ? "bg-error"
                         : event.phase === "done"
