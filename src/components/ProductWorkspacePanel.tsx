@@ -311,6 +311,7 @@ export function ProductWorkspacePanel() {
 function UsageSection() {
   const messages = useActiveConversationMessages();
   const usageSettings = useChatStore((s) => s.usageSettings);
+  const setUsageSettings = useChatStore((s) => s.setUsageSettings);
   const conversations = useChatStore((s) => s.conversations);
   const activeId = useChatStore((s) => s.activeId);
   const conversationModel = activeId ? conversations.find((c) => c.id === activeId)?.modelId : null;
@@ -328,6 +329,58 @@ function UsageSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      <Section title="Budget configuration" icon={BarChart3}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1.5 text-[12px]">
+            <span className="font-medium text-text-2">Monthly budget (USD)</span>
+            <TextInput
+              type="number"
+              min={0}
+              step={1}
+              value={usageSettings.monthlyBudgetUsd}
+              onChange={(e) => setUsageSettings({ ...usageSettings, monthlyBudgetUsd: Number(e.target.value) || 0 })}
+              placeholder="100"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[12px]">
+            <span className="font-medium text-text-2">Expensive session alert (USD)</span>
+            <TextInput
+              type="number"
+              min={0}
+              step={0.1}
+              value={usageSettings.expensiveSessionUsd}
+              onChange={(e) => setUsageSettings({ ...usageSettings, expensiveSessionUsd: Number(e.target.value) || 0 })}
+              placeholder="5"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-[12px]">
+            <input
+              type="checkbox"
+              checked={usageSettings.showInlineAlerts}
+              onChange={(e) => setUsageSettings({ ...usageSettings, showInlineAlerts: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-text-2">Show inline budget alerts</span>
+          </label>
+        </div>
+        <label className="mt-3 flex flex-col gap-1.5 text-[12px]">
+          <span className="font-medium text-text-2">Price overrides (JSON)</span>
+          <TextArea
+            value={JSON.stringify(usageSettings.priceOverrides, null, 2)}
+            onChange={(e) => {
+              try {
+                setUsageSettings({ ...usageSettings, priceOverrides: JSON.parse(e.target.value) });
+              } catch {
+                // ignore parse errors while typing
+              }
+            }}
+            placeholder='{"gpt-4": {"input": 0.00003, "output": 0.00006}}'
+            className="font-mono text-[11px]"
+          />
+          <span className="text-[10.5px] text-text-3">Override default pricing per model</span>
+        </label>
+      </Section>
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard label="Cost" value={formatUsd(usage.totalCostUsd)} detail={`${Math.round(usage.budgetStatus.ratio * 100)}% of budget`} />
         <MetricCard label="Input" value={formatTokens(usage.totalInputTokens)} detail="tokens sent" />

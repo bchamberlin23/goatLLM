@@ -193,11 +193,9 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     ? "artifact"
     : attachmentCanvasRequested
       ? "attachment"
-      : workspacePanelOpen
-        ? "workspace"
-        : null;
+      : null;
   const sidePanelOpen = canvasPanel !== null;
-  const showHero = !activeId && !sidePanelOpen;
+  const showHero = !activeId && !sidePanelOpen && !workspacePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
   const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;
@@ -296,7 +294,13 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       )}
       <TopBar />
-      {!showHero && (
+      
+      {/* Workspace panel as full-screen view when active */}
+      {workspacePanelOpen ? (
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <ProductWorkspacePanel />
+        </div>
+      ) : !showHero ? (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* Subagent panel replaces chat when active */}
           {subagentPanelOpen ? (
@@ -349,7 +353,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               </div>
               {sidePanelOpen && (
                 <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-                  {canvasPanel === "workspace" ? <ProductWorkspacePanel /> : canvasPanel === "attachment" ? <AttachmentPanel /> : (
+                  {canvasPanel === "attachment" ? <AttachmentPanel /> : (
                     <SafeArtifactPanel resetKey={`${activeId ?? ""}:${activeArtifactId ?? ""}:${workspaceFile?.path ?? ""}`} />
                   )}
                 </div>
@@ -357,7 +361,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
             </>
           )}
         </div>
-      )}
+      ) : null}
 
       {showHero && (
         <div className="shrink-0 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full max-w-[860px] mx-auto flex-1 justify-center px-0 sm:px-6 pb-6 gap-3 relative">

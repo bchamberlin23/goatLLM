@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  BarChart3,
-  BookOpen,
-  Brain,
-  CalendarClock,
-  Cloud,
   Cpu,
   Flag,
   Layout,
@@ -20,7 +15,6 @@ import { AdvancedTab } from "./AdvancedTab";
 import { SettingsGroup } from "./SettingsGroup";
 import { ToggleRow } from "./ToggleRow";
 import { useChatStore, type ProductFeatureFlags } from "../../stores/chat";
-import { normalizeSyncConfig } from "../../lib/product-workspace";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
 
@@ -28,24 +22,14 @@ export type SettingsTabId =
   | "providers"
   | "appearance"
   | "features"
-  | "cost"
   | "voice"
-  | "sync"
-  | "memory"
-  | "prompts"
-  | "schedules"
   | "advanced";
 
 const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; keywords: string }[] = [
   { id: "providers", label: "Providers", hint: "Models and keys", icon: Cpu, keywords: "providers models api keys openai anthropic ollama lm studio" },
   { id: "appearance", label: "Appearance", hint: "Canvas and polish", icon: Layout, keywords: "appearance interface artifacts design theme liquid glass" },
   { id: "features", label: "Feature Flags", hint: "Product modules", icon: Flag, keywords: "flags beta toggles modules pursue goal" },
-  { id: "cost", label: "Cost & Budget", hint: "Usage controls", icon: BarChart3, keywords: "cost usage tokens budget spending alerts price" },
   { id: "voice", label: "Voice", hint: "Speak and dictate", icon: Mic2, keywords: "voice text to speech tts dictate microphone hands free" },
-  { id: "sync", label: "Sync", hint: "iCloud and S3", icon: Cloud, keywords: "cloud sync icloud s3 encrypted cross device" },
-  { id: "memory", label: "Memory/RAG", hint: "Retrieval controls", icon: Brain, keywords: "memory rag embeddings retrieval provenance documents source" },
-  { id: "prompts", label: "Prompt Library", hint: "Versioned prompts", icon: BookOpen, keywords: "prompt library templates version tags share fork clone" },
-  { id: "schedules", label: "Scheduled Agents", hint: "Recurring runs", icon: CalendarClock, keywords: "scheduled agents cron recurring daily nightly digest" },
   { id: "advanced", label: "Advanced", hint: "Tools and developer", icon: Shield, keywords: "advanced developer tools mcp search searxng permissions skills semantic" },
 ];
 
@@ -199,12 +183,7 @@ export function SettingsTabs() {
         {activeTab === "providers" && <ProvidersTab />}
         {activeTab === "appearance" && <AppearanceSettings />}
         {activeTab === "features" && <FeatureFlagSettings />}
-        {activeTab === "cost" && <CostSettings />}
         {activeTab === "voice" && <VoiceSettings />}
-        {activeTab === "sync" && <SyncSettings />}
-        {activeTab === "memory" && <MemorySettings />}
-        {activeTab === "prompts" && <PromptLibrarySettings />}
-        {activeTab === "schedules" && <ScheduleSettings />}
         {activeTab === "advanced" && <AdvancedDeveloperSettings />}
       </div>
     </div>
@@ -236,58 +215,6 @@ function FeatureFlagSettings() {
         ))}
       </div>
     </SettingsGroup>
-  );
-}
-
-function CostSettings() {
-  const usageSettings = useChatStore((s) => s.usageSettings);
-  const setUsageSettings = useChatStore((s) => s.setUsageSettings);
-  return (
-    <>
-      <SettingsGroup title="Budget status" description="Controls the conversation usage dashboard and expensive-session warnings.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Monthly budget">
-            <TextInput
-              type="number"
-              min={0}
-              step={1}
-              value={usageSettings.monthlyBudgetUsd}
-              onChange={(e) => setUsageSettings({ ...usageSettings, monthlyBudgetUsd: Number(e.target.value) || 0 })}
-            />
-          </Field>
-          <Field label="Expensive-session alert">
-            <TextInput
-              type="number"
-              min={0}
-              step={0.1}
-              value={usageSettings.expensiveSessionUsd}
-              onChange={(e) => setUsageSettings({ ...usageSettings, expensiveSessionUsd: Number(e.target.value) || 0 })}
-            />
-          </Field>
-        </div>
-        <div className="mt-3">
-          <ToggleRow
-            enabled={usageSettings.showInlineAlerts}
-            onToggle={(enabled) => setUsageSettings({ ...usageSettings, showInlineAlerts: enabled })}
-            title="Inline budget alerts"
-            description="Surface cost warnings when a conversation crosses configured thresholds."
-          />
-        </div>
-      </SettingsGroup>
-      <SettingsGroup title="Price overrides" description="Optional JSON keyed by model id, e.g. openai:gpt-4o.">
-        <textarea
-          value={JSON.stringify(usageSettings.priceOverrides, null, 2)}
-          onChange={(e) => {
-            try {
-              setUsageSettings({ ...usageSettings, priceOverrides: JSON.parse(e.target.value) });
-            } catch {
-              // keep typing until JSON is valid
-            }
-          }}
-          className="min-h-[180px] w-full rounded-xl border border-white/[0.08] bg-black/20 p-3 font-mono text-[12px] text-text-1 outline-none focus:border-accent/45"
-        />
-      </SettingsGroup>
-    </>
   );
 }
 
@@ -333,108 +260,12 @@ function VoiceSettings() {
   );
 }
 
-function SyncSettings() {
-  const syncSettings = useChatStore((s) => s.syncSettings);
-  const setSyncSettings = useChatStore((s) => s.setSyncSettings);
-  return (
-    <SettingsGroup title="Encrypted cloud sync" description="Opt-in sync package target for iCloud Drive or user-supplied S3-compatible storage.">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ToggleRow enabled={syncSettings.enabled} onToggle={(enabled) => setSyncSettings({ ...syncSettings, enabled })} title="Enable sync" description="Allow export/import actions from the Workspace sync panel." />
-        <Field label="Provider">
-          <Select
-            value={syncSettings.provider}
-            onChange={(e) => setSyncSettings(normalizeSyncConfig({ ...syncSettings, provider: e.target.value as "icloud" | "s3" }))}
-          >
-            <option value="icloud">iCloud Drive</option>
-            <option value="s3">S3-compatible</option>
-          </Select>
-        </Field>
-        <Field label="Prefix">
-          <TextInput value={syncSettings.prefix ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, prefix: e.target.value })} />
-        </Field>
-        <Field label="Encryption passphrase / hint">
-          <TextInput value={syncSettings.encryptionKeyHint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, encryptionKeyHint: e.target.value })} />
-        </Field>
-        <Field label="S3 bucket">
-          <TextInput value={syncSettings.bucket ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, bucket: e.target.value })} />
-        </Field>
-        <Field label="S3 endpoint">
-          <TextInput value={syncSettings.endpoint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, endpoint: e.target.value })} placeholder="https://... or file:///..." />
-        </Field>
-      </div>
-    </SettingsGroup>
-  );
-}
-
-function MemorySettings() {
-  const ragSettings = useChatStore((s) => s.ragSettings);
-  const setRagSettings = useChatStore((s) => s.setRagSettings);
-  const memoryEnabled = useChatStore((s) => s.memoryEnabled);
-  const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
-  return (
-    <>
-      <SettingsGroup title="Memory and retrieval" description="Control what can be remembered, retrieved, and shown with provenance.">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <ToggleRow enabled={memoryEnabled} onToggle={setMemoryEnabled} title="Long-term memory" description="Allow memories to be saved and searched during chat turns." />
-          <ToggleRow enabled={ragSettings.projectMemory} onToggle={(projectMemory) => setRagSettings({ ...ragSettings, projectMemory })} title="Project memory" description="Use project-scoped memory sources when available." />
-          <ToggleRow enabled={ragSettings.conversationMemory} onToggle={(conversationMemory) => setRagSettings({ ...ragSettings, conversationMemory })} title="Conversation memory" description="Use conversation-specific remembered facts." />
-          <ToggleRow enabled={ragSettings.retrievalPreview} onToggle={(retrievalPreview) => setRagSettings({ ...ragSettings, retrievalPreview })} title="Retrieval preview" description="Show what memory snippets were retrieved before use." />
-          <ToggleRow enabled={ragSettings.provenance} onToggle={(provenance) => setRagSettings({ ...ragSettings, provenance })} title="Provenance" description="Track where remembered context came from." />
-          <Field label="Max retrieved memories">
-            <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
-          </Field>
-        </div>
-      </SettingsGroup>
-    </>
-  );
-}
-
-function PromptLibrarySettings() {
-  const workspacePath = useChatStore((s) => s.workspacePath);
-  const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
-  return (
-    <SettingsGroup title="Prompt library" description="Visual manager for `.goat/prompts/*.md` with local history, stats, tags, clone, and share.">
-      <div className="soft-card rounded-xl p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[13px] font-medium text-text-1">{workspacePath ? workspacePath : "No workspace selected"}</div>
-            <div className="mt-1 text-[11px] text-text-3">Open the workspace panel to edit prompts and save versions to disk.</div>
-          </div>
-          <button type="button" className="primary-action rounded-lg px-3 py-1.5 text-[12px] font-medium" onClick={() => openWorkspacePanel("prompts")}>
-            Open Library
-          </button>
-        </div>
-      </div>
-    </SettingsGroup>
-  );
-}
-
-function ScheduleSettings() {
-  const scheduledAgents = useChatStore((s) => s.scheduledAgents);
-  const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
-  return (
-    <SettingsGroup title="Scheduled agents" description="Cron-style recurring runs for digests, repo checks, and periodic work.">
-      <div className="soft-card rounded-xl p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[22px] font-semibold text-text-1">{scheduledAgents.length}</div>
-            <div className="text-[11px] text-text-3">configured recurring agents</div>
-          </div>
-          <button type="button" className="primary-action rounded-lg px-3 py-1.5 text-[12px] font-medium" onClick={() => openWorkspacePanel("schedules")}>
-            Manage Runs
-          </button>
-        </div>
-      </div>
-    </SettingsGroup>
-  );
-}
-
 function AdvancedDeveloperSettings() {
   return (
     <>
       <ToolsTab />
       <AdvancedTab />
-      <SettingsGroup title="Developer note" description="Use the Workspace panel for watcher, sync, prompt library, notebook, browser, and image generation operational views.">
+      <SettingsGroup title="Developer note" description="Workspace features like usage, sync, memory, prompts, schedules, and more are now accessible directly from the sidebar.">
         <div className="soft-card flex items-center gap-3 rounded-xl p-4 text-[12.5px] text-text-2">
           <Sparkles size={15} className="text-accent" />
           Feature architecture is persisted locally and connected to Tauri commands where native access is required.
