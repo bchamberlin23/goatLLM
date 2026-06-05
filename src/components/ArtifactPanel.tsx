@@ -97,6 +97,22 @@ const KIND_LABEL: Record<ArtifactKind, string> = {
 
 const OFFICE_KINDS = new Set<ArtifactKind>(["docx", "pptx", "xlsx"]);
 
+function kindIcon(kind: ArtifactKind) {
+  return KIND_ICON[kind] ?? FileCode;
+}
+
+function kindLabel(kind: ArtifactKind) {
+  return KIND_LABEL[kind] ?? "Artifact";
+}
+
+function artifactLanguage(kind: ArtifactKind) {
+  return ARTIFACT_LANG[kind] ?? "plaintext";
+}
+
+function kindVerb(kind: ArtifactKind) {
+  return KIND_VERB[kind] ?? "Opening artifact";
+}
+
 // ── Rendered artifact content ──
 
 function ArtifactContent({
@@ -279,8 +295,8 @@ function ArtifactContent({
         >
           <MonacoEditor
             height="100%"
-            defaultLanguage={ARTIFACT_LANG[artifact.kind]}
-            language={ARTIFACT_LANG[artifact.kind]}
+            defaultLanguage={artifactLanguage(artifact.kind)}
+            language={artifactLanguage(artifact.kind)}
             value={artifact.code}
             theme="vs-dark"
             onMount={handleEditorMount}
@@ -573,6 +589,18 @@ function ArtifactContent({
       );
     }
   }
+
+  return (
+    <div className="flex flex-col items-center justify-center flex-1 text-[#a0a0a0] p-8">
+      <Code size={48} strokeWidth={1.5} className="mb-4 text-[#666]" />
+      <p className="text-[13px] text-center mb-2">
+        Preview is not available for this artifact type.
+      </p>
+      <p className="text-[11px] text-[#666] text-center">
+        Switch to Code view to see the full source.
+      </p>
+    </div>
+  );
 }
 
 // ── Header pill: Code | Preview ──
@@ -931,6 +959,7 @@ export function ArtifactPanel() {
   const setWsFile = useChatStore((s) => s.setWorkspaceFile);
   const [fileRefreshKey, setFileRefreshKey] = useState(0);
   const flashTimer = useRef<number | null>(null);
+  const previousActiveId = useRef(activeId);
   /** True when the user has manually flipped the toggle for this artifact.
    *  Once they've expressed a preference, we stop auto-switching. */
   const userPickedView = useRef<string | null>(null);
@@ -957,6 +986,12 @@ export function ArtifactPanel() {
   useEffect(() => {
     userPickedView.current = null;
   }, [activeArtifactId]);
+
+  useEffect(() => {
+    if (previousActiveId.current === activeId) return;
+    previousActiveId.current = activeId;
+    setWsFile(null);
+  }, [activeId, setWsFile]);
 
   // Refresh file browser when tool calls complete (files may have changed)
   // Use a stable selector to avoid unnecessary re-renders
@@ -1014,12 +1049,6 @@ export function ArtifactPanel() {
     return () => { cancelled = true; };
   }, [wsFile?.path, wsFile?.content, workspacePath]);
 
-  // Reset wsFile when conversation changes
-  useEffect(() => {
-    setWsFile(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId]);
-
   // Auto-switch: while the agent is streaming, pin the editor open so the
   // user watches the code being typed; once streaming finishes, snap to
   // preview so they see the rendered result. Skip both moves once the user
@@ -1047,7 +1076,8 @@ export function ArtifactPanel() {
     setView(streamingForActive ? "code" : "preview");
   }, [streamingForActive, activeArtifactId]);
 
-  if (!artifactPanelOpen) return null;
+  const artifactCanvasRequested = artifactPanelOpen || !!activeArtifactId || !!wsFile;
+  if (!artifactCanvasRequested) return null;
   if (!activeId && !wsFile) return null;
   // Allow the panel to show for workspace files even without artifacts.
   if ((!artifacts || artifacts.length === 0) && !wsFile) return null;
@@ -1057,7 +1087,7 @@ export function ArtifactPanel() {
   const Icon = wsFile
     ? getWsFileIcon(wsFile.name)
     : activeArtifact
-      ? (KIND_ICON[activeArtifact.kind] ?? KIND_ICON.html)
+      ? kindIcon(activeArtifact.kind)
       : FileCode;
 
   const previewKey =
@@ -1195,7 +1225,7 @@ export function ArtifactPanel() {
         </span>
         {activeArtifact && (
           <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
-            {KIND_LABEL[activeArtifact.kind]}
+            {kindLabel(activeArtifact.kind)}
           </span>
         )}
 
@@ -1354,11 +1384,10 @@ export function ArtifactPanel() {
         </button>
       </div>
 
-      {/* Body: sidebar + content */}
+      {/* Body: optional file browser + content */}
       <div className="flex-1 min-h-0 flex">
-        {/* Sidebar: file browser + artifact list */}
-        <div className="w-[200px] shrink-0 border-r border-white/[0.05] bg-[#181819]/42 flex flex-col overflow-hidden">
-          {(agentMode || designMode) && (
+        {(agentMode || designMode) && (
+          <div className="w-[200px] shrink-0 border-r border-white/[0.05] bg-[#181819]/42 flex flex-col overflow-hidden">
             <div className="flex-1 min-h-0 overflow-hidden">
               <WorkspaceFileBrowser
                 onFileContent={(path, name, content) => {
@@ -1367,38 +1396,8 @@ export function ArtifactPanel() {
                 refreshKey={fileRefreshKey}
               />
             </div>
-          )}
-          {artifacts && artifacts.length > 0 && (
-            <div className="border-t border-white/[0.04]">
-              <div className="px-3 py-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">Artifacts</span>
-              </div>
-              <div className="max-h-[160px] overflow-y-auto px-1 pb-1">
-                {artifacts.map((a) => {
-                  const AIcon = KIND_ICON[a.kind];
-                  const isActive = a.id === activeArtifact?.id && !wsFile;
-                  return (
-                    <button
-                      key={a.id}
-                      onClick={() => {
-                        setActiveArtifact(a.id);
-                        setWsFile(null);
-                      }}
-                      className={`flex items-center gap-1.5 w-full text-left py-[3px] px-2 rounded-md text-[12px] transition-colors ${
-                        isActive
-                          ? "bg-[#f59e42]/10 text-[#f59e42]"
-                          : "text-[#b4b4b4] hover:bg-white/[0.04] hover:text-[#ececec]"
-                      }`}
-                    >
-                      <AIcon size={12} strokeWidth={1.75} className="shrink-0 text-[#666]" />
-                      <span className="truncate">{a.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Content area */}
         <div className="flex-1 min-h-0 flex flex-col">
@@ -1471,7 +1470,7 @@ export function ArtifactPanel() {
 
 export function ArtifactCard({ artifact }: { artifact: Artifact }) {
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
-  const Icon = KIND_ICON[artifact.kind];
+  const Icon = kindIcon(artifact.kind);
 
   return (
     <button
@@ -1483,7 +1482,7 @@ export function ArtifactCard({ artifact }: { artifact: Artifact }) {
       </div>
       <div className="flex flex-col min-w-0 flex-1">
         <span className="text-[12px] font-medium text-[#d5d5d5] truncate">{artifact.title}</span>
-        <span className="text-[11px] text-[#a0a0a0]">{KIND_LABEL[artifact.kind]}</span>
+        <span className="text-[11px] text-[#a0a0a0]">{kindLabel(artifact.kind)}</span>
       </div>
       <span className="text-[11px] text-[#a0a0a0] group-hover:text-[#ececec] transition-colors shrink-0">Open</span>
     </button>
@@ -1504,9 +1503,9 @@ export function ArtifactPlaceholderCard({
   kind: ArtifactKind;
   title: string;
 }) {
-  const Icon = KIND_ICON[kind];
-  const verb = KIND_VERB[kind];
-  const label = KIND_LABEL[kind];
+  const Icon = kindIcon(kind);
+  const verb = kindVerb(kind);
+  const label = kindLabel(kind);
   return (
     <div className="soft-card flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left">
       <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">

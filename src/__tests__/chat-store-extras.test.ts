@@ -285,6 +285,68 @@ describe("sidebar toggle", () => {
     // It should not auto-open — user closed it for a reason.
     expect(useChatStore.getState().sidebarOpen).toBe(false);
   });
+
+  it("opening an artifact exits the subagent panel so the canvas can render", () => {
+    const store = useChatStore.getState();
+    store.openSubagentPanel("tool-call-1");
+    expect(useChatStore.getState().subagentPanelOpen).toBe(true);
+
+    store.setActiveArtifact("artifact-1");
+
+    const state = useChatStore.getState();
+    expect(state.subagentPanelOpen).toBe(false);
+    expect(state.activeSubagentToolCallId).toBeNull();
+    expect(state.artifactPanelOpen).toBe(true);
+  });
+
+  it("opening a workspace file exits the subagent panel so the canvas can render", () => {
+    const store = useChatStore.getState();
+    store.openSubagentPanel("tool-call-1");
+    expect(useChatStore.getState().subagentPanelOpen).toBe(true);
+
+    store.setWorkspaceFile({ path: "src/App.tsx", name: "App.tsx", content: "export {};" });
+
+    const state = useChatStore.getState();
+    expect(state.subagentPanelOpen).toBe(false);
+    expect(state.activeSubagentToolCallId).toBeNull();
+    expect(state.artifactPanelOpen).toBe(true);
+  });
+
+  it("restores an open workspace file when returning to a conversation", () => {
+    const store = useChatStore.getState();
+    const firstId = store.createConversation();
+    const secondId = store.createConversation();
+    store.setActiveConversation(firstId);
+
+    store.setWorkspaceFile({ path: "src/App.tsx", name: "App.tsx", content: "export {};" });
+    store.setActiveConversation(secondId);
+    store.setActiveConversation(firstId);
+
+    const state = useChatStore.getState();
+    expect(state.artifactPanelOpen).toBe(true);
+    expect(state.workspaceFile?.path).toBe("src/App.tsx");
+    expect(state.activeArtifactId).toBeNull();
+  });
+
+  it("opening an artifact recovers the owning conversation if activeId is stale", () => {
+    const store = useChatStore.getState();
+    const convId = store.createConversation();
+    const msg = store.addMessage({
+      conversationId: convId,
+      role: "assistant",
+      content: "```html\n<p>hi</p>\n```",
+    });
+    store.detectArtifacts(convId, msg.id, msg.content);
+    const artifactId = useChatStore.getState().artifacts[convId][0].id;
+
+    useChatStore.setState({ activeId: null, activeArtifactId: null, artifactPanelOpen: false });
+    store.setActiveArtifact(artifactId);
+
+    const state = useChatStore.getState();
+    expect(state.activeId).toBe(convId);
+    expect(state.activeArtifactId).toBe(artifactId);
+    expect(state.artifactPanelOpen).toBe(true);
+  });
 });
 
 describe("permission mode", () => {

@@ -2258,15 +2258,33 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       setActiveArtifact: (id) => {
-        set({
-          activeArtifactId: id,
-          artifactPanelOpen: !!id,
-          workspacePanelOpen: id ? false : get().workspacePanelOpen,
-          // Opening an artifact closes the attachment/workspace viewer.
-          activeAttachment: id ? null : get().activeAttachment,
-          attachmentPanelOpen: id ? false : get().attachmentPanelOpen,
-          workspaceFile: id ? null : get().workspaceFile,
-          sidebarOpen: id ? false : get().sidebarOpen,
+        set((state) => {
+          let ownerConversationId: string | null = state.activeId;
+          if (id) {
+            const currentList = state.activeId ? state.artifacts[state.activeId] : undefined;
+            const currentHasArtifact = currentList?.some((a) => a.id === id) ?? false;
+            if (!currentHasArtifact) {
+              for (const [conversationId, list] of Object.entries(state.artifacts)) {
+                if (list.some((a) => a.id === id)) {
+                  ownerConversationId = conversationId;
+                  break;
+                }
+              }
+            }
+          }
+          return {
+            activeId: id ? ownerConversationId : state.activeId,
+            activeArtifactId: id,
+            artifactPanelOpen: !!id,
+            workspacePanelOpen: id ? false : state.workspacePanelOpen,
+            // Opening an artifact closes the attachment/workspace viewer.
+            activeAttachment: id ? null : state.activeAttachment,
+            attachmentPanelOpen: id ? false : state.attachmentPanelOpen,
+            workspaceFile: id ? null : state.workspaceFile,
+            subagentPanelOpen: id ? false : state.subagentPanelOpen,
+            activeSubagentToolCallId: id ? null : state.activeSubagentToolCallId,
+            sidebarOpen: id ? false : state.sidebarOpen,
+          };
         });
       },
 
@@ -2280,6 +2298,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           activeArtifactId: f ? null : get().activeArtifactId,
           activeAttachment: f ? null : get().activeAttachment,
           attachmentPanelOpen: f ? false : get().attachmentPanelOpen,
+          subagentPanelOpen: f ? false : get().subagentPanelOpen,
+          activeSubagentToolCallId: f ? null : get().activeSubagentToolCallId,
           sidebarOpen: f ? false : get().sidebarOpen,
         });
       },

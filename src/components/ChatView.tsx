@@ -160,6 +160,10 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const workspacePath = useChatStore((s) => s.workspacePath);
   const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
   const artifactPanelOpen = useChatStore((s) => s.artifactPanelOpen);
+  const activeArtifactId = useChatStore((s) => s.activeArtifactId);
+  const artifacts = useChatStore((s) => (s.activeId ? s.artifacts[s.activeId] : undefined));
+  const workspaceFile = useChatStore((s) => s.workspaceFile);
+  const activeAttachment = useChatStore((s) => s.activeAttachment);
   const attachmentPanelOpen = useChatStore((s) => s.attachmentPanelOpen);
   const workspacePanelOpen = useChatStore((s) => s.workspacePanelOpen);
   const subagentPanelOpen = useChatStore((s) => s.subagentPanelOpen);
@@ -180,7 +184,19 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     return () => clearInterval(interval);
   }, []);
 
-  const sidePanelOpen = artifactPanelOpen || attachmentPanelOpen || workspacePanelOpen;
+  const selectedArtifactExists =
+    !!activeArtifactId && !!artifacts?.some((artifact) => artifact.id === activeArtifactId);
+  const artifactCanvasRequested =
+    !!workspaceFile || selectedArtifactExists || (!!artifactPanelOpen && !!artifacts?.length);
+  const attachmentCanvasRequested = attachmentPanelOpen && !!activeAttachment;
+  const canvasPanel = artifactCanvasRequested
+    ? "artifact"
+    : attachmentCanvasRequested
+      ? "attachment"
+      : workspacePanelOpen
+        ? "workspace"
+        : null;
+  const sidePanelOpen = canvasPanel !== null;
   const showHero = !activeId && !sidePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
@@ -331,9 +347,11 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                   <InputBar onOpenSettings={onOpenSettings} />
                 </div>
               </div>
-              {(artifactPanelOpen || attachmentPanelOpen || workspacePanelOpen) && (
+              {sidePanelOpen && (
                 <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-                  {workspacePanelOpen ? <ProductWorkspacePanel /> : attachmentPanelOpen ? <AttachmentPanel /> : <SafeArtifactPanel />}
+                  {canvasPanel === "workspace" ? <ProductWorkspacePanel /> : canvasPanel === "attachment" ? <AttachmentPanel /> : (
+                    <SafeArtifactPanel resetKey={`${activeId ?? ""}:${activeArtifactId ?? ""}:${workspaceFile?.path ?? ""}`} />
+                  )}
                 </div>
               )}
             </>
