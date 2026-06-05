@@ -974,6 +974,37 @@ export function ArtifactPanel() {
     flashTimer.current = window.setTimeout(() => setFlashed(null), 450);
   }, []);
 
+  // Browser navigation handlers must be hoisted above the early returns below
+  // (artifactCanvasRequested, wsFile presence, etc.). Rules of Hooks require
+  // hooks to be called in the same order on every render — when the panel is
+  // closed on first render and opens on a later render, hooks placed after
+  // the early return would not run on the closed render and React would
+  // throw "Rendered more hooks than during the previous render".
+  const handleBrowserNavigate = useCallback((url: string) => {
+    if (!url.trim()) return;
+    const normalizedUrl = url.match(/^https?:\/\//) ? url : `https://${url}`;
+    setBrowserUrl(normalizedUrl);
+    const newHistory = [...browserHistory.slice(0, browserHistoryIndex + 1), normalizedUrl];
+    setBrowserHistory(newHistory);
+    setBrowserHistoryIndex(newHistory.length - 1);
+  }, [browserHistory, browserHistoryIndex]);
+
+  const handleBrowserBack = useCallback(() => {
+    if (browserHistoryIndex > 0) {
+      const newIndex = browserHistoryIndex - 1;
+      setBrowserHistoryIndex(newIndex);
+      setBrowserUrl(browserHistory[newIndex]);
+    }
+  }, [browserHistory, browserHistoryIndex]);
+
+  const handleBrowserForward = useCallback(() => {
+    if (browserHistoryIndex < browserHistory.length - 1) {
+      const newIndex = browserHistoryIndex + 1;
+      setBrowserHistoryIndex(newIndex);
+      setBrowserUrl(browserHistory[newIndex]);
+    }
+  }, [browserHistory, browserHistoryIndex]);
+
   useEffect(() => () => {
     if (flashTimer.current) window.clearTimeout(flashTimer.current);
   }, []);
@@ -1115,35 +1146,6 @@ export function ArtifactPanel() {
     flash("reload");
     setPreviewReloadKey((k) => k + 1);
   };
-
-  const handleBrowserNavigate = useCallback((url: string) => {
-    if (!url.trim()) return;
-    
-    // Add protocol if missing
-    const normalizedUrl = url.match(/^https?:\/\//) ? url : `https://${url}`;
-    setBrowserUrl(normalizedUrl);
-    
-    // Add to history
-    const newHistory = [...browserHistory.slice(0, browserHistoryIndex + 1), normalizedUrl];
-    setBrowserHistory(newHistory);
-    setBrowserHistoryIndex(newHistory.length - 1);
-  }, [browserHistory, browserHistoryIndex]);
-
-  const handleBrowserBack = useCallback(() => {
-    if (browserHistoryIndex > 0) {
-      const newIndex = browserHistoryIndex - 1;
-      setBrowserHistoryIndex(newIndex);
-      setBrowserUrl(browserHistory[newIndex]);
-    }
-  }, [browserHistory, browserHistoryIndex]);
-
-  const handleBrowserForward = useCallback(() => {
-    if (browserHistoryIndex < browserHistory.length - 1) {
-      const newIndex = browserHistoryIndex + 1;
-      setBrowserHistoryIndex(newIndex);
-      setBrowserUrl(browserHistory[newIndex]);
-    }
-  }, [browserHistory, browserHistoryIndex]);
 
   const handleCopy = () => {
     if (!activeArtifact) return;

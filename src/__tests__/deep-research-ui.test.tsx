@@ -21,6 +21,11 @@ function resetStore() {
     designMode: false,
     tavilyApiKey: "test-key",
     searchBackend: "tavily",
+    plusMenuVisibility: {
+      chat: { research: true },
+      design: { research: true },
+      agent: { research: true },
+    },
     discoveredSkills: [],
     disabledSkills: new Set(),
     autoTriggerSkills: new Set(),

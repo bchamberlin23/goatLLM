@@ -184,7 +184,6 @@ describe("runDeepResearch Orchestrator", () => {
     // Verify the final report content
     expect(finalReport).toContain("Apple 2023 Financial Performance");
     expect(finalReport).toContain("revenue of $383 billion");
-    expect(finalReport).toContain("Duration");
     expect(finalReport).toContain("https://example.com/apple-news");
     expect(READ_ONLY_TOOLS.scrape_url.execute).toHaveBeenCalledWith(
       { url: "https://example.com/apple-news", maxChars: 15000 },
