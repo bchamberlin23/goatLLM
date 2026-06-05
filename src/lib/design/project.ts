@@ -12,6 +12,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { log, withError } from "../logger";
 
 export interface DesignProject {
   /** Stable id — the conversation id this project belongs to. */
@@ -109,7 +110,7 @@ async function saveProjectToDisk(project: DesignProject): Promise<void> {
       content: JSON.stringify(metadata, null, 2),
     });
   } catch (error) {
-    console.warn("Failed to save project to disk:", error);
+    log.warn("Failed to save project to disk", withError("design-project", undefined, error));
     // Don't throw — localStorage is the source of truth
   }
 }

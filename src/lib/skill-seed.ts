@@ -71,6 +71,8 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return tauriInvoke<T>(cmd, args);
 }
 
+import { log, withError } from "./logger";
+
 // Bake version. Bump when bakeSkillContent's output format changes so a
 // stale seed gets refreshed on next launch. The marker is written into the
 // SKILL.md as an HTML comment.
@@ -175,12 +177,12 @@ async function seedOneSkill(manifest: SeedManifest): Promise<number> {
     try {
       const resp = await fetch(url);
       if (!resp.ok) {
-        console.warn(`[seed] Failed to fetch ${url}: ${resp.status}`);
+        log.warn(`Failed to fetch ${url}: ${resp.status}`, { tag: "seed", data: { url, status: resp.status } });
         continue;
       }
       raw = await resp.text();
     } catch (e) {
-      console.warn(`[seed] Network error fetching ${url}:`, e);
+      log.warn(`Network error fetching ${url}`, withError("seed", { url }, e));
       continue;
     }
 
@@ -203,7 +205,7 @@ async function seedOneSkill(manifest: SeedManifest): Promise<number> {
       });
       written++;
     } catch (e) {
-      console.warn(`[seed] Failed to write ${relPath}:`, e);
+      log.warn(`Failed to write ${relPath}`, withError("seed", { relPath }, e));
     }
   }
 
@@ -221,10 +223,10 @@ export async function seedBuiltinSkills(): Promise<void> {
     try {
       const written = await seedOneSkill(manifest);
       if (written > 0) {
-        console.log(`[seed] Seeded ${written} files for skill "${manifest.name}"`);
+        log.info(`Seeded ${written} files for skill "${manifest.name}"`, { tag: "seed", data: { written, name: manifest.name } });
       }
     } catch (e) {
-      console.warn(`[seed] Failed to seed "${manifest.name}":`, e);
+      log.warn(`Failed to seed "${manifest.name}"`, withError("seed", { name: manifest.name }, e));
     }
   }
 }

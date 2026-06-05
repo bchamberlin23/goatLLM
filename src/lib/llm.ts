@@ -9,6 +9,7 @@
 import { generateText } from "ai";
 import { createModel } from "./model-factory";
 import { agentLoop, type AgentLoopOptions } from "./agentLoop";
+import { log, withError } from "./logger";
 import type {
   LlmConfig,
   LlmMessage,
@@ -103,7 +104,7 @@ export async function generateTitle(
     const cleaned = sanitizeTitle(result.text);
     return cleaned || null;
   } catch (err) {
-    console.warn("[generateTitle] failed, will fall back to heuristic:", err);
+    log.warn("generateTitle failed, will fall back to heuristic", withError("llm", undefined, err));
     return null;
   }
 }

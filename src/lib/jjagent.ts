@@ -1,4 +1,5 @@
 import { invoke } from "./tools/_helpers";
+import { log, withError } from "./logger";
 
 export interface JjAgentSession {
   changeId: string;
@@ -61,7 +62,7 @@ export async function startJjAgentSession(
 
     return { changeId, startedAt: Date.now() };
   } catch (e) {
-    console.warn("jjagent: failed to start session:", e);
+    log.warn("jjagent: failed to start session", withError("jjagent", undefined, e));
     return null;
   }
 }
@@ -84,12 +85,12 @@ export async function endJjAgentSession(
       description: `goatllm agent turn (completed in ${elapsed}s)\n\nClaude-session-id: (complete)`,
     });
   } catch (e) {
-    console.warn("jjagent: failed to describe change before squash:", e);
+    log.warn("jjagent: failed to describe change before squash", withError("jjagent", undefined, e));
   }
 
   try {
     await invoke("jj_squash", { workspace, changeId: session.changeId });
   } catch (e) {
-    console.warn("jjagent: failed to squash change:", e);
+    log.warn("jjagent: failed to squash change", withError("jjagent", undefined, e));
   }
 }

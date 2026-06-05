@@ -22,6 +22,7 @@
 
 import type { Conversation, Message } from "../stores/chat";
 import { compareMessages } from "../stores/chat";
+import { log, withError } from "./logger";
 
 let _invoke: (<T>(cmd: string, args?: Record<string, unknown>) => Promise<T>) | null = null;
 
@@ -51,7 +52,7 @@ function safeSet(key: string, value: string) {
       if (oldest) localStorage.removeItem(oldest);
       localStorage.setItem(key, value);
     } catch (e2) {
-      console.error("[db] localStorage write failed:", e2, "(original:", e, ")");
+      log.error("localStorage write failed", withError("db", { originalError: e instanceof Error ? e.message : String(e) }, e2));
     }
   }
 }
@@ -119,7 +120,7 @@ let draining = false;
 
 function enqueueWrite(job: WriteJob) {
   writeQueue.push(async () => {
-    try { await job(); } catch (e) { console.error("[db] queued write failed:", e); }
+    try { await job(); } catch (e) { log.error("queued write failed", withError("db", undefined, e)); }
   });
   if (!draining) {
     draining = true;
@@ -255,7 +256,7 @@ export async function loadAllFromDb(): Promise<HydratedData> {
     sqliteConvs = data.conversations.map(fromDbConversation);
     sqliteMsgs = data.messages.map(fromDbMessage);
   } catch (e) {
-    console.warn("[db] SQLite load failed, using journal only:", e);
+    log.warn("SQLite load failed, using journal only", withError("db", undefined, e));
   }
 
   // Merge conversations: union by id, journal entry wins for fields it has
@@ -480,7 +481,7 @@ export async function searchMessages(query: string): Promise<MessageSearchResult
     const invoke = await getInvoke();
     return await invoke<MessageSearchResult[]>("search_messages", { query });
   } catch (e) {
-    console.warn("[db] Failed to search messages:", e);
+    log.warn("Failed to search messages", withError("db", undefined, e));
     return [];
   }
 }

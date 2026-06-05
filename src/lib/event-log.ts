@@ -11,6 +11,8 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return tauriInvoke<T>(cmd, args);
 }
 
+import { log, withError } from "./logger";
+
 export type EventType =
   | "message"
   | "tool_call"
@@ -43,7 +45,7 @@ export async function logAgentEvent(event: AgentEvent): Promise<void> {
     });
   } catch (e) {
     // Best-effort logging — never break the app for logging failures
-    console.warn("[event-log] Failed to log event:", e);
+    log.warn("Failed to log event", withError("event-log", undefined, e));
   }
 }
 

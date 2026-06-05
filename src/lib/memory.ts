@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { embedQuery } from "./semantic-index";
 import { useChatStore } from "../stores/chat";
+import { log, withError } from "./logger";
 
 export interface Memory {
   id: string;
@@ -34,7 +35,7 @@ export async function addMemory(text: string, category = "fact"): Promise<void> 
     embedding = await embedQuery(cleanText, { url: ollamaUrl, model: embeddingModel });
     model = embeddingModel;
   } catch (e) {
-    console.warn("Could not generate memory embedding (Ollama offline?), saving text-only memory:", e);
+    log.warn("Could not generate memory embedding (Ollama offline?), saving text-only memory", withError("memory", undefined, e));
   }
 
   await invoke("memory_insert", {
@@ -87,7 +88,7 @@ export async function searchMemories(query: string, limit = 8): Promise<MemorySe
     return hits;
   } catch (e) {
     // 2. Fallback to SQL text search
-    console.debug("Semantic memory search failed, falling back to substring search:", e);
+    log.debug("Semantic memory search failed, falling back to substring search", withError("memory", undefined, e));
     return invoke<MemorySearchHit[]>("memory_search_text", { query: cleanQuery, limit });
   }
 }
