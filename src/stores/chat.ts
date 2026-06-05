@@ -10,8 +10,11 @@ import { sanitizeNotebookCells } from "../lib/product-workspace";
 import type { NotebookCell, SyncConfig, WatcherEventSummaryInput } from "../lib/product-workspace";
 import {
   createBoard,
-  sanitizeBoard,
+  createNotebook,
+  sanitizeNotebooks,
+  migrateLegacyBoard,
   type CanvasBoard,
+  type Notebook,
 } from "../lib/canvas";
 import {
   loadAllFromDb,
@@ -24,6 +27,7 @@ import {
 } from "../lib/db";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
+import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
@@ -42,12 +46,15 @@ const FEATURE_FLAGS_KEY = "goatllm-feature-flags";
 const PLUS_MENU_VISIBILITY_KEY = "goatllm-plus-menu-visibility";
 const NOTEBOOK_CELLS_KEY = "goatllm-notebook-cells";
 const CANVAS_BOARD_KEY = "goatllm-canvas-board";
+const NOTEBOOKS_KEY = "goatllm-notebooks";
+const ACTIVE_NOTEBOOK_KEY = "goatllm-active-notebook";
 const MODEL_COMPARISON_RUNS_KEY = "goatllm-model-comparison-runs";
 const IMAGE_JOBS_KEY = "goatllm-image-jobs";
 const SCHEDULED_AGENTS_KEY = "goatllm-scheduled-agents";
 const WATCHER_EVENTS_KEY = "goatllm-watcher-events";
 const RAG_SETTINGS_KEY = "goatllm-rag-settings";
 const BRANCH_TIPS_KEY = "goatllm-active-branch-tips";
+const MESSAGE_QUEUE_KEY = "goatllm-message-queue";
 
 const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
   requireBuildForWeb: true,
@@ -107,7 +114,8 @@ const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   costDashboard: true,
   modelComparison: true,
   browserMirror: true,
-  notebookMode: true,
+  // Notebook is a work in progress — off by default; enable in Advanced settings.
+  notebookMode: false,
   imageGeneration: true,
   cloudSync: true,
   promptLibrary: true,
@@ -262,11 +270,37 @@ function loadNotebookCells(): NotebookCell[] {
   return sanitizeNotebookCells(loadJsonValue<NotebookCell[]>(NOTEBOOK_CELLS_KEY, []));
 }
 
-// Canvas board (multi-panel work area + assistant thread). Sanitize on load so
-// streaming chat messages and running code panels never restore mid-flight.
-// See CLAUDE.md "Persistence for New Features".
-function loadCanvasBoard(): CanvasBoard {
-  return sanitizeBoard(loadJsonValue<CanvasBoard>(CANVAS_BOARD_KEY, createBoard()));
+// Notebooks (a collection of named multi-panel boards + assistant threads).
+// Sanitize on load so streaming chat messages and running code panels never
+// restore mid-flight. On first run after the multi-notebook upgrade, fold any
+// legacy single canvas board into one notebook so existing work survives, then
+// drop the legacy key. See CLAUDE.md "Persistence for New Features".
+function loadNotebooks(): Notebook[] {
+  const rawNotebooks = localStorage.getItem(NOTEBOOKS_KEY);
+  if (rawNotebooks === null) {
+    // No notebooks key yet — attempt one-time migration from the legacy board.
+    const legacy = loadJsonValue<CanvasBoard>(CANVAS_BOARD_KEY, createBoard());
+    const migrated = migrateLegacyBoard(legacy, null);
+    if (migrated.length > 0) {
+      saveJsonSetting(NOTEBOOKS_KEY, migrated);
+      try {
+        localStorage.removeItem(CANVAS_BOARD_KEY);
+      } catch {
+        // ignore
+      }
+    }
+    return migrated;
+  }
+  return sanitizeNotebooks(loadJsonValue<Notebook[]>(NOTEBOOKS_KEY, []));
+}
+
+// Pick the active notebook id on hydrate: the persisted one if it still exists,
+// otherwise the most recently updated notebook (or null when there are none).
+function resolveActiveNotebookId(notebooks: Notebook[]): string | null {
+  const stored = loadJsonValue<string | null>(ACTIVE_NOTEBOOK_KEY, null);
+  if (stored && notebooks.some((n) => n.id === stored)) return stored;
+  if (notebooks.length === 0) return null;
+  return [...notebooks].sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
 }
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
@@ -518,6 +552,10 @@ export interface PlusMenuVisibility {
   chat: Record<string, boolean>;
   design: Record<string, boolean>;
   agent: Record<string, boolean>;
+}
+
+export interface QueuedMessage {
+  content: string;
 }
 
 export interface BrowserMirrorState {
@@ -869,7 +907,7 @@ interface ChatStore {
    * LM Studio). Non-persisted; refreshed on app start and when the user
    * edits a local provider's base URL. Keyed by providerId.
    */
-  discoveredModels: Record<string, { id: string; name: string; contextWindow?: number }[]>;
+  discoveredModels: Record<string, { id: string; name: string; contextWindow?: number; vision?: boolean }[]>;
   discoveryStatus: Record<string, "idle" | "loading" | "ok" | "error">;
   discoveryError: Record<string, string | null>;
 
@@ -957,7 +995,7 @@ interface ChatStore {
   // Regenerate (non-persisted)
   resendPayload: { conversationId: string; content: string; attachments?: Attachment[] } | null;
   /** Agent-mode message queue: messages sent while the LLM is working. */
-  messageQueue: Record<string, { content: string }[]>;
+  messageQueue: Record<string, QueuedMessage[]>;
   steerPayload: { conversationId: string; content: string; steered?: boolean } | null;
   triggerResend: (conversationId: string, content: string, attachments?: Attachment[]) => void;
   clearResend: () => void;
@@ -1138,9 +1176,16 @@ interface ChatStore {
   notebookCells: NotebookCell[];
   setNotebookCells: (cells: NotebookCell[]) => void;
   updateNotebookCell: (cellId: string, updates: Partial<NotebookCell>, persist?: boolean) => void;
-  // Canvas board — multi-panel document work area with a side assistant.
-  canvasBoard: CanvasBoard;
-  setCanvasBoard: (board: CanvasBoard, persist?: boolean) => void;
+  // Notebooks — a collection of named multi-panel document work areas, each
+  // with its own side assistant thread. Replaces the single canvas board.
+  notebooks: Notebook[];
+  activeNotebookId: string | null;
+  createNotebook: () => string;
+  renameNotebook: (id: string, name: string) => void;
+  deleteNotebook: (id: string) => void;
+  setActiveNotebook: (id: string) => void;
+  getActiveNotebook: () => Notebook | null;
+  setActiveNotebookContents: (board: CanvasBoard, persist?: boolean) => void;
   imageJobs: ImageGenerationJob[];
   addImageJob: (job: ImageGenerationJob) => void;
   updateImageJob: (jobId: string, updates: Partial<ImageGenerationJob>) => void;
@@ -1203,6 +1248,8 @@ interface ChatStore {
   // Tool API keys
   tavilyApiKey: string;
   setTavilyApiKey: (key: string) => void;
+  firecrawlApiKey: string;
+  setFirecrawlApiKey: (key: string) => void;
 
   // Free web search (deepcode-style endpoint, no API key needed)
   freeWebSearch: boolean;
@@ -1473,7 +1520,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       discoveryStatus: {},
       discoveryError: {},
       resendPayload: null,
-      messageQueue: {},
+      messageQueue: loadJsonValue<Record<string, QueuedMessage[]>>(MESSAGE_QUEUE_KEY, {}),
       steerPayload: null,
       artifacts: {},
       artifactPanelOpen: false,
@@ -1536,6 +1583,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       messageSearchResults: [],
       messageSearchLoading: false,
       tavilyApiKey: "",
+      firecrawlApiKey: "",
       freeWebSearch: false,
       chatCodeExec: false,
       freeWebSearchToken: "",
@@ -1572,7 +1620,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       browserMirror: DEFAULT_BROWSER_MIRROR,
       modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
       notebookCells: loadNotebookCells(),
-      canvasBoard: loadCanvasBoard(),
+      notebooks: loadNotebooks(),
+      activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
       imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
       scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
       watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
@@ -1631,6 +1680,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           newActiveId = null;
         }
         set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts, messageQueue: newQueue });
+        saveJsonSetting(MESSAGE_QUEUE_KEY, newQueue);
         deleteConversationFromDb(id);
         // Drop the in-memory attachment text cache for this conversation.
         try { localStorage.removeItem(`goatllm-todo-board-${id}`); } catch {}
@@ -2179,20 +2229,26 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       enqueueMessage: (conversationId, content) =>
-        set((state) => ({
-          messageQueue: {
+        set((state) => {
+          const messageQueue = {
             ...state.messageQueue,
             [conversationId]: [...(state.messageQueue[conversationId] || []), { content }],
-          },
-        })),
+          };
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return { messageQueue };
+        }),
 
       dequeueMessage: (conversationId) => {
         const queue = get().messageQueue[conversationId];
         if (!queue || queue.length === 0) return undefined;
         const [first, ...rest] = queue;
-        set((state) => ({
-          messageQueue: { ...state.messageQueue, [conversationId]: rest },
-        }));
+        set((state) => {
+          const messageQueue = { ...state.messageQueue };
+          if (rest.length > 0) messageQueue[conversationId] = rest;
+          else delete messageQueue[conversationId];
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return { messageQueue };
+        });
         return first;
       },
 
@@ -2202,9 +2258,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const queue = get().messageQueue[conversationId];
         if (queue) {
           const filtered = queue.filter((q) => q.content !== content);
-          set((state) => ({
-            messageQueue: { ...state.messageQueue, [conversationId]: filtered },
-          }));
+          set((state) => {
+            const messageQueue = { ...state.messageQueue };
+            if (filtered.length > 0) messageQueue[conversationId] = filtered;
+            else delete messageQueue[conversationId];
+            saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+            return { messageQueue };
+          });
         }
         set({ steerPayload: { conversationId, content, steered: true } });
       },
@@ -3251,6 +3311,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const next = { ...get().featureFlags, [key]: enabled };
         set({ featureFlags: next });
         saveJsonSetting(FEATURE_FLAGS_KEY, next);
+        // Disabling the Notebook feature while you're in it would otherwise
+        // strand you on a view with no way back (its toggle is hidden). Drop
+        // back to chat mode.
+        if (key === "notebookMode" && !enabled && get().notebookMode) {
+          set({ notebookMode: false });
+          try { localStorage.setItem("goatllm-notebook-mode", "false"); } catch {}
+        }
       },
 
       setPlusMenuItemVisible: (mode, key, visible) => {
@@ -3289,11 +3356,62 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(NOTEBOOK_CELLS_KEY, cells);
       },
 
-      setCanvasBoard: (board, persist = true) => {
-        set({ canvasBoard: board });
-        // Mid-stream updates pass persist=false to avoid writing the whole board
-        // on every token; sanitizeBoard settles partial state on reload anyway.
-        if (persist) saveJsonSetting(CANVAS_BOARD_KEY, board);
+      createNotebook: () => {
+        const nb = createNotebook();
+        const next = [...get().notebooks, nb];
+        set({ notebooks: next, activeNotebookId: nb.id });
+        saveJsonSetting(NOTEBOOKS_KEY, next);
+        saveJsonSetting(ACTIVE_NOTEBOOK_KEY, nb.id);
+        return nb.id;
+      },
+
+      renameNotebook: (id, name) => {
+        const clean = name.trim();
+        const next = get().notebooks.map((nb) =>
+          nb.id === id ? { ...nb, name: clean || nb.name, updatedAt: Date.now() } : nb,
+        );
+        set({ notebooks: next });
+        saveJsonSetting(NOTEBOOKS_KEY, next);
+      },
+
+      deleteNotebook: (id) => {
+        const next = get().notebooks.filter((nb) => nb.id !== id);
+        let activeId = get().activeNotebookId;
+        if (activeId === id) {
+          // Fall back to the most recently updated remaining notebook, or none.
+          activeId =
+            next.length > 0
+              ? [...next].sort((a, b) => b.updatedAt - a.updatedAt)[0].id
+              : null;
+        }
+        set({ notebooks: next, activeNotebookId: activeId });
+        saveJsonSetting(NOTEBOOKS_KEY, next);
+        saveJsonSetting(ACTIVE_NOTEBOOK_KEY, activeId);
+      },
+
+      setActiveNotebook: (id) => {
+        set({ activeNotebookId: id });
+        saveJsonSetting(ACTIVE_NOTEBOOK_KEY, id);
+      },
+
+      getActiveNotebook: () => {
+        const { notebooks, activeNotebookId } = get();
+        return notebooks.find((nb) => nb.id === activeNotebookId) ?? null;
+      },
+
+      setActiveNotebookContents: (board, persist = true) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return; // no-op: guards against streaming into a deleted notebook
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? { ...nb, panels: board.panels, chat: board.chat, updatedAt: Date.now() }
+            : nb,
+        );
+        set({ notebooks: next });
+        // Mid-stream updates pass persist=false to avoid writing the whole
+        // collection on every token; sanitizeNotebooks settles partial state on
+        // reload anyway.
+        if (persist) saveJsonSetting(NOTEBOOKS_KEY, next);
       },
 
       updateNotebookCell: (cellId, updates, persist = true) => {
@@ -3482,6 +3600,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       setTavilyApiKey: (key) => {
         set({ tavilyApiKey: key });
         try { localStorage.setItem("goatllm-tavily-key", key); } catch {}
+      },
+      setFirecrawlApiKey: (key) => {
+        set({ firecrawlApiKey: key });
+        try { localStorage.setItem("goatllm-firecrawl-key", key); } catch {}
       },
 
       setFreeWebSearch: (enabled) => {
@@ -3712,35 +3834,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const body = await res.json();
-          // OpenAI-compatible: { data: [{ id }, ...] }. Ollama also exposes
-          // /api/tags but its /v1/models matches the OpenAI shape.
-          const items: Array<{
-            id?: string;
-            name?: string;
-            // LM Studio surfaces these directly on /v1/models entries
-            max_context_length?: number;
-            loaded_context_length?: number;
-            context_length?: number;
-          }> = Array.isArray(body?.data)
-            ? body.data
-            : Array.isArray(body?.models)
-              ? body.models
-              : [];
-          const baseList = items
-            .map((m) => {
-              const id = String(m.id ?? m.name ?? "").trim();
-              // LM Studio: pull whichever field the server provides.
-              const lmCtx =
-                typeof m.max_context_length === "number"
-                  ? m.max_context_length
-                  : typeof m.loaded_context_length === "number"
-                    ? m.loaded_context_length
-                    : typeof m.context_length === "number"
-                      ? m.context_length
-                      : undefined;
-              return { id, name: id, contextWindow: lmCtx };
-            })
-            .filter((m) => m.id.length > 0);
+          const baseList = normalizeProviderModels(providerId, body);
 
           // Ollama doesn't include context_length on /v1/models. Fan out to
           // /api/show for each discovered tag and pull the real architecture
@@ -3753,7 +3847,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             const apiRoot = baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
             const enriched = await Promise.all(
               baseList.map(async (m) => {
-                if (typeof m.contextWindow === "number") return m;
                 try {
                   const ctl = new AbortController();
                   const t = setTimeout(() => ctl.abort(), 3000);
@@ -3766,30 +3859,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                   clearTimeout(t);
                   if (!r.ok) return m;
                   const showBody = await r.json();
-                  // model_info is a flat dict keyed by `<arch>.context_length`
-                  // (e.g. "llama.context_length"). Walk the keys instead of
-                  // hardcoding an architecture.
-                  const info = showBody?.model_info ?? {};
-                  let ctx: number | undefined;
-                  for (const k of Object.keys(info)) {
-                    if (k.endsWith(".context_length")) {
-                      const v = Number(info[k]);
-                      if (Number.isFinite(v) && v > 0) {
-                        ctx = v;
-                        break;
-                      }
-                    }
-                  }
-                  // Older Ollama versions surface a top-level
-                  // `parameters` string with `num_ctx` lines. Fall back
-                  // to that before giving up.
-                  if (ctx === undefined && typeof showBody?.parameters === "string") {
-                    const match = showBody.parameters.match(/num_ctx\s+(\d+)/);
-                    if (match) {
-                      const v = Number(match[1]);
-                      if (Number.isFinite(v) && v > 0) ctx = v;
-                    }
-                  }
+                  const ctx = contextWindowFromOllamaShow(showBody);
                   return ctx ? { ...m, contextWindow: ctx } : m;
                 } catch {
                   return m;
@@ -4091,6 +4161,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             localStorage.getItem("goatllm-selected-model") ||
             `${ZEN_FREE_PROVIDER_ID}:deepseek-v4-flash-free`;
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
+          const firecrawlKey = localStorage.getItem("goatllm-firecrawl-key") || "";
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
@@ -4237,6 +4308,18 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const activeId = localStorage.getItem("goatllm-active-conversation") || null;
           // Only restore activeId if that conversation actually exists in loaded data
           const validActiveId = activeId && data.conversations.some((c) => c.id === activeId) ? activeId : null;
+          const conversationIds = new Set(data.conversations.map((c) => c.id));
+          const savedMessageQueue = loadJsonValue<Record<string, QueuedMessage[]>>(MESSAGE_QUEUE_KEY, {});
+          const messageQueue = Object.fromEntries(
+            Object.entries(savedMessageQueue)
+              .filter(([conversationId, queued]) => conversationIds.has(conversationId) && Array.isArray(queued))
+              .map(([conversationId, queued]) => [
+                conversationId,
+                queued.filter((q) => q && typeof q.content === "string" && q.content.trim().length > 0),
+              ])
+              .filter(([, queued]) => queued.length > 0),
+          ) as Record<string, QueuedMessage[]>;
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
 
           // Load skill state from localStorage
           let skillPaths: string[] = [];
@@ -4257,6 +4340,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             providerConfigs,
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
+            firecrawlApiKey: firecrawlKey,
             freeWebSearch,
             chatCodeExec,
             freeWebSearchToken,
@@ -4295,6 +4379,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             disabledSkills,
             autoTriggerSkills,
             activeId: validActiveId,
+            messageQueue,
             workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
             usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
@@ -4305,7 +4390,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
             notebookCells: loadNotebookCells(),
-            canvasBoard: loadCanvasBoard(),
+            notebooks: loadNotebooks(),
+            activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
             scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
@@ -4340,6 +4426,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const providerConfigs = loadProviderConfigs();
           const savedModel = localStorage.getItem("goatllm-selected-model") || null;
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
+          const firecrawlKey = localStorage.getItem("goatllm-firecrawl-key") || "";
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
@@ -4373,6 +4460,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             providerConfigs,
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
+            firecrawlApiKey: firecrawlKey,
             freeWebSearch,
             chatCodeExec,
             freeWebSearchToken,
@@ -4415,7 +4503,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
             notebookCells: loadNotebookCells(),
-            canvasBoard: loadCanvasBoard(),
+            notebooks: loadNotebooks(),
+            activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
             imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
             scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),

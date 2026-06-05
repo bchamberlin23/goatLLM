@@ -105,4 +105,35 @@ describe("web_search tool", () => {
 
     expect(result).toContain("SearXNG search error: 500");
   });
+
+  it("scrapes a URL with Firecrawl when configured", async () => {
+    const store = useChatStore.getState();
+    store.firecrawlApiKey = "fc-test";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          markdown: "# Example\n\nClean page body",
+          metadata: { title: "Example Page", sourceURL: "https://example.com/page" },
+        },
+      }),
+    });
+    globalThis.fetch = fetchMock;
+
+    const result = (await READ_ONLY_TOOLS.scrape_url.execute!(
+      { url: "https://example.com/page" },
+      {} as any,
+    )) as string;
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.firecrawl.dev/v2/scrape",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer fc-test" }),
+      }),
+    );
+    expect(result).toContain("Example Page");
+    expect(result).toContain("Clean page body");
+  });
 });

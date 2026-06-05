@@ -556,11 +556,19 @@ Respond with ONLY the category name, nothing else.`;
       });
 
       try {
-        const { browserFetch } = await import("./browser-fetch");
-        const fetchRes = await browserFetch({ url: target.url, mode: "text" });
-        if (!fetchRes?.content) return null;
+        const { READ_ONLY_TOOLS } = await import("./tools/registry");
+        if (!READ_ONLY_TOOLS.scrape_url.execute) {
+          throw new Error("scrape_url tool has no execute function");
+        }
+        const scrapeRes = await READ_ONLY_TOOLS.scrape_url.execute(
+          { url: target.url, maxChars: maxContentChars },
+          {} as any,
+        );
+        if (typeof scrapeRes !== "string" || !scrapeRes.trim() || scrapeRes.startsWith("scrape_url failed:")) {
+          return null;
+        }
 
-        let content = fetchRes.content;
+        let content = scrapeRes;
         if (content.length > maxContentChars) {
           const truncated = content.slice(0, maxContentChars);
           const lastPara = truncated.lastIndexOf("\n\n");
@@ -577,12 +585,12 @@ Respond with ONLY the category name, nothing else.`;
           return {
             ...parsedExtract,
             url: target.url,
-            title: target.title || fetchRes.url || target.url,
+            title: target.title || target.url,
           } as ResearchFinding;
         }
         return {
           url: target.url,
-          title: target.title || fetchRes.url || target.url,
+          title: target.title || target.url,
           rational: "Raw LLM extraction",
           evidence: extractResponse.slice(0, 3000),
           summary: extractResponse.slice(0, 500),

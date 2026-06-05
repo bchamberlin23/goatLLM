@@ -112,11 +112,10 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
-const FEATURE_LABELS: Record<keyof ProductFeatureFlags, { title: string; description: string }> = {
+const FEATURE_LABELS: Record<Exclude<keyof ProductFeatureFlags, "notebookMode">, { title: string; description: string }> = {
   costDashboard: { title: "Cost dashboard", description: "Per-conversation token, cost, budget, and alert surfaces." },
   modelComparison: { title: "Model comparison", description: "Parallel multi-model prompting with metrics and diff view." },
   browserMirror: { title: "Browser mirror", description: "Embedded panel for agent-visible browser state." },
-  notebookMode: { title: "Canvas", description: "A freeform board of documents and runnable Python with an AI assistant." },
   imageGeneration: { title: "Image generation", description: "OpenAI, Flux, Stable Diffusion, and custom image endpoints." },
   cloudSync: { title: "Cloud sync", description: "Opt-in encrypted export/import to iCloud Drive or S3-compatible storage." },
   promptLibrary: { title: "Prompt library", description: "Versioned `.goat/prompts/*.md` manager with search and stats." },
@@ -244,7 +243,7 @@ function FeatureFlagSettings() {
   return (
     <SettingsGroup title="Product modules" description="Enable or disable features across the app. Usage, comparison, browser, notebook, images, prompts, sync, memory, watcher, and schedules are integrated directly into the app.">
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {(Object.keys(FEATURE_LABELS) as (keyof ProductFeatureFlags)[]).map((key) => (
+        {(Object.keys(FEATURE_LABELS) as (keyof typeof FEATURE_LABELS)[]).map((key) => (
           <ToggleRow
             key={key}
             enabled={featureFlags[key]}

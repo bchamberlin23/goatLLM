@@ -24,6 +24,7 @@ import {
   shouldExpandTrace,
   setTracePref,
 } from "../lib/thinking-ui";
+import { shouldShowToolCall } from "../lib/tool-visibility";
 import "./MessageBubble.css";
 
 function stripMarkdown(md: string): string {
@@ -323,8 +324,12 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     useChatStore.getState().navigateToBranch(message.conversationId, nextSibling.id);
   }, [branchInfo, message.conversationId]);
 
-  const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
-  const anyToolRunning = !!message.toolCalls?.some((t) => t.state === "running" || t.state === "pending_approval");
+  const agentMode = useChatStore((s) => s.agentMode);
+  const designMode = useChatStore((s) => s.designMode);
+  const renderMode = designMode ? "design" : agentMode ? "agent" : "chat";
+  const visibleToolCalls = message.toolCalls?.filter((t) => shouldShowToolCall(t, renderMode)) ?? [];
+  const hasToolCalls = visibleToolCalls.length > 0;
+  const anyToolRunning = visibleToolCalls.some((t) => t.state === "running" || t.state === "pending_approval");
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
   const thinkingElapsed = useElapsedLabel(isWorking ? startedAt : null, isWorking);
@@ -421,6 +426,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             message={message}
             isStreaming={isStreaming}
             messageId={message.id}
+            mode={renderMode}
           />
         ) : null}
         {hasToolCalls && isAssistant && !isStreaming && (
@@ -576,8 +582,10 @@ type InterleavedSegment =
 function buildInterleavedSegments(
   message: Message,
   displayContent: string,
+  mode: "chat" | "agent" | "design",
 ): InterleavedSegment[] {
   const tcSnapshot = (message.toolCalls ?? [])
+    .filter((t) => shouldShowToolCall(t, mode))
     .map((t) => ({
       id: t.toolCallId,
       pos: t.contentAtInvocation ?? 0,
@@ -674,15 +682,17 @@ function AgentTurnView({
   message,
   isStreaming,
   messageId,
+  mode,
 }: {
   message: Message;
   isStreaming: boolean;
   messageId: string;
+  mode: "chat" | "agent" | "design";
 }) {
   const displayContent = useThrottledContent(message.content, isStreaming);
   const segments = useMemo(
-    () => buildInterleavedSegments(message, displayContent),
-    [message, displayContent],
+    () => buildInterleavedSegments(message, displayContent, mode),
+    [message, displayContent, mode],
   );
   const { traceSegments, summaryText } = useMemo(
     () => (isStreaming ? { traceSegments: segments, summaryText: "" } : splitTraceAndSummary(segments)),
@@ -884,6 +894,75 @@ const CRITIQUE_FILTER = /^(?:Self[- ]check\s*(?:pass|fail|clear)?\.?\s*(?:Philos
 // (e.g. {"expression": "1+1"} from exec_eval tool call text leakage).
 const JSON_EXPR_FILTER = /\{\s*"expression"\s*:\s*[^}]*\}/g;
 
+function isEscaped(text: string, index: number): boolean {
+  let slashCount = 0;
+  for (let i = index - 1; i >= 0 && text[i] === "\\"; i--) slashCount++;
+  return slashCount % 2 === 1;
+}
+
+function findUnmatchedMarker(text: string, marker: string): number {
+  let openIndex = -1;
+  let cursor = 0;
+  while (cursor < text.length) {
+    const index = text.indexOf(marker, cursor);
+    if (index === -1) break;
+    if (!isEscaped(text, index)) {
+      openIndex = openIndex === -1 ? index : -1;
+    }
+    cursor = index + marker.length;
+  }
+  return openIndex;
+}
+
+function findUnmatchedInlineCode(text: string): number {
+  let openIndex = -1;
+  const runs = /`+/g;
+  let match: RegExpExecArray | null;
+  while ((match = runs.exec(text))) {
+    if (match[0].length >= 3 || isEscaped(text, match.index)) continue;
+    openIndex = openIndex === -1 ? match.index : -1;
+  }
+  return openIndex;
+}
+
+function findIncompleteLink(text: string): number {
+  const destination = /!?\[[^\]\n]+\]\([^)\n]*$/.exec(text);
+  if (destination?.index != null) return destination.index;
+  const label = /!?\[[^\]\n]*$/.exec(text);
+  if (label?.index != null) return label.index;
+  return -1;
+}
+
+function findIncompleteTable(text: string): number {
+  const paragraphStart = Math.max(text.lastIndexOf("\n\n"), text.lastIndexOf("\r\n\r\n")) + 2;
+  const paragraph = text.slice(Math.max(0, paragraphStart));
+  const lines = paragraph.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return -1;
+  const looksLikeTable = lines.some((line) => {
+    const pipeCount = (line.match(/\|/g) ?? []).length;
+    return pipeCount >= 2 || /^\s*\|/.test(line) || /\|\s*$/.test(line);
+  });
+  if (!looksLikeTable) return -1;
+  const hasSeparator = lines.some((line) =>
+    /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line),
+  );
+  return hasSeparator ? -1 : Math.max(0, paragraphStart);
+}
+
+function stableStreamingMarkdown(text: string): string {
+  if (!text) return text;
+  const holdIndices = [
+    findUnmatchedInlineCode(text),
+    findUnmatchedMarker(text, "**"),
+    findUnmatchedMarker(text, "__"),
+    findIncompleteLink(text),
+    findIncompleteTable(text),
+  ].filter((index) => index >= 0);
+  if (holdIndices.length === 0) return text;
+  const holdIndex = Math.min(...holdIndices);
+  return text.slice(0, holdIndex).replace(/[ \t]+$/g, "").replace(/\n{3,}$/g, "\n\n");
+}
+
 function DesignAwareText({
   text,
   messageId,
@@ -905,11 +984,15 @@ function DesignAwareText({
     if (!showCritique) out = out.replace(CRITIQUE_FILTER, "");
     return out.trim();
   }, [designMode, showCritique, deLeaked]);
-  const segments = useMemo(
-    () => (designMode ? splitByQuestionForm(cleaned) : null),
-    [designMode, cleaned],
+  const displayText = useMemo(
+    () => (isStreaming ? stableStreamingMarkdown(cleaned) : cleaned),
+    [cleaned, isStreaming],
   );
-  if (!segments) return <MarkdownRenderer content={deLeaked} isStreaming={isStreaming} />;
+  const segments = useMemo(
+    () => (designMode ? splitByQuestionForm(displayText) : null),
+    [designMode, displayText],
+  );
+  if (!segments) return <MarkdownRenderer content={displayText} isStreaming={isStreaming} />;
   return (
     <>
       {segments.map((seg, i) => {

@@ -91,8 +91,8 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
   if (name === "web_search" || name === "remote_web_search") {
     return { runningVerb: "Searching the web", doneVerb: "Searched the web", target: query, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>) };
   }
-  if (name === "web_fetch") {
-    return { runningVerb: "Fetching", doneVerb: "Fetched", target: url, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /></>) };
+  if (name === "web_fetch" || name === "scrape_url") {
+    return { runningVerb: name === "scrape_url" ? "Scraping" : "Fetching", doneVerb: name === "scrape_url" ? "Scraped" : "Fetched", target: url, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /></>) };
   }
   if (name === "spawn_subagent") {
     const task = getInputField(tc.input, "task") || "task";
@@ -1370,6 +1370,7 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
 function WebOpView({ tc }: { tc: ToolCallEntry }) {
   const name = tc.toolName;
   const isSearch = name === "web_search" || name === "remote_web_search";
+  const isScrape = name === "scrape_url";
   const query = getInputField(tc.input, "query") || getInputField(tc.input, "url") || "(unknown query)";
   const output = String(tc.output ?? "");
 
@@ -1379,7 +1380,7 @@ function WebOpView({ tc }: { tc: ToolCallEntry }) {
         <div className="flex items-center gap-2">
           <Globe size={13} className="text-[#60a5fa]" />
           <span className="font-semibold text-[#ececec]">
-            {isSearch ? "Web Search" : "Web Fetch"}
+            {isSearch ? "Web Search" : isScrape ? "Web Scrape" : "Web Fetch"}
           </span>
         </div>
         <span className="text-[10px] text-accent font-mono truncate max-w-[200px] select-all">
@@ -1393,7 +1394,7 @@ function WebOpView({ tc }: { tc: ToolCallEntry }) {
         ) : (
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
-              Fetched Page Content
+              {isScrape ? "Scraped Page Content" : "Fetched Page Content"}
             </span>
             <div className="p-3.5 bg-black/20 border border-white/[0.05] rounded-lg max-h-[250px] overflow-auto select-text text-[#ececec]">
               <MarkdownRenderer content={output} />
@@ -1478,7 +1479,8 @@ function PersonalizedToolPanel({ tc }: { tc: ToolCallEntry }) {
   if (
     name === "web_search" ||
     name === "remote_web_search" ||
-    name === "web_fetch"
+    name === "web_fetch" ||
+    name === "scrape_url"
   ) {
     return <WebOpView tc={tc} />;
   }

@@ -295,7 +295,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       )}
       <TopBar />
       {notebookMode ? (
-        <NotebookView />
+        <NotebookView onOpenSettings={onOpenSettings} />
       ) : !showHero ? (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* Subagent panel replaces chat when active */}

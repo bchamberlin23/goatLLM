@@ -213,6 +213,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const clearResend = useChatStore((s) => s.clearResend);
   const enqueueMessage = useChatStore((s) => s.enqueueMessage);
   const dequeueMessage = useChatStore((s) => s.dequeueMessage);
+  const messageQueue = useChatStore((s) => s.messageQueue);
   const steerPayload = useChatStore((s) => s.steerPayload);
   const setSteerPayload = useChatStore((s) => s.setSteerPayload);
   // Reactive subscriptions for the skills picker so it updates when the
@@ -977,7 +978,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (useChatStore.getState().completionSound) {
           playCompletionSound();
         }
-        const next = dequeueMessage(convId!);
+        const currentActiveId = useChatStore.getState().activeId;
+        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
         if (next) {
           setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
         }
@@ -1423,7 +1425,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           playCompletionSound();
         }
         // Auto-dispatch next queued message (a normal follow-up, not a steer).
-        const next = dequeueMessage(convId!);
+        const currentActiveId = useChatStore.getState().activeId;
+        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
         if (next) {
           setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
         }
@@ -1512,11 +1515,21 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
   useEffect(() => {
     if (!steerPayload) return;
-    if (steerPayload.conversationId !== activeId) { setSteerPayload(null); return; }
+    if (steerPayload.conversationId !== activeId) return;
     const { content, steered } = steerPayload;
     setSteerPayload(null);
     handleSend({ content, fromQueue: true, steered });
   }, [steerPayload, activeId, setSteerPayload, handleSend]);
+
+  useEffect(() => {
+    if (!activeId || isStreaming || steerPayload) return;
+    const nextQueued = messageQueue[activeId]?.[0];
+    if (!nextQueued) return;
+    const next = dequeueMessage(activeId);
+    if (next) {
+      setSteerPayload({ conversationId: activeId, content: next.content, steered: false });
+    }
+  }, [activeId, isStreaming, messageQueue, steerPayload, dequeueMessage, setSteerPayload]);
 
   // Handle @ file reference selection
   const handleFileRefSelect = useCallback((path: string) => {

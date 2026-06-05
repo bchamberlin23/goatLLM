@@ -89,4 +89,46 @@ describe("agent turn smoke", () => {
 
     expect(screen.getByText("Auto-ran tools")).toBeInTheDocument();
   });
+
+  it("hides raw code while a fenced block is still streaming", () => {
+    resetChatStore();
+    const message = assistantMessage({
+      id: "msg-stream-code",
+      content: "Here is the helper:\n\n```ts\nconst total = items.length;",
+      isStreaming: true,
+    });
+
+    render(<MessageBubble message={message} />);
+
+    expect(screen.getByText("Writing code...")).toBeInTheDocument();
+    expect(screen.queryByText(/const total = items\.length/)).not.toBeInTheDocument();
+  });
+
+  it("hides raw code while syntax highlighting is warming up", () => {
+    resetChatStore();
+    const message = assistantMessage({
+      id: "msg-finished-code",
+      content: "Here is the helper:\n\n```ts\nconst total = items.length;\n```",
+      isStreaming: false,
+    });
+
+    render(<MessageBubble message={message} />);
+
+    expect(screen.getByText("Rendering code...")).toBeInTheDocument();
+    expect(screen.queryByText(/const total = items\.length/)).not.toBeInTheDocument();
+  });
+
+  it("hides incomplete markdown markup in regular chat while streaming", () => {
+    resetChatStore();
+    const message = assistantMessage({
+      id: "msg-stream-markdown",
+      content: "Here is **important",
+      isStreaming: true,
+    });
+
+    render(<MessageBubble message={message} />);
+
+    expect(screen.getByText("Here is")).toBeInTheDocument();
+    expect(screen.queryByText(/\*\*important/)).not.toBeInTheDocument();
+  });
 });

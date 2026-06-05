@@ -60,6 +60,7 @@ export const ALL_TOOLS = {
  */
 export const RESEARCH_TOOLS = {
   web_search: READ_ONLY_TOOLS.web_search,
+  scrape_url: READ_ONLY_TOOLS.scrape_url,
   browser_fetch: WRITE_TOOLS.browser_fetch,
   browser_extract: WRITE_TOOLS.browser_extract,
   read_attachment: READ_ONLY_TOOLS.read_attachment,
@@ -89,6 +90,7 @@ export const PLAN_TOOLS = {
  */
 export const CHAT_TOOLS = {
   web_search: READ_ONLY_TOOLS.web_search,
+  scrape_url: READ_ONLY_TOOLS.scrape_url,
   read_attachment: READ_ONLY_TOOLS.read_attachment,
   search_attachment: READ_ONLY_TOOLS.search_attachment,
   load_skill: READ_ONLY_TOOLS.load_skill,

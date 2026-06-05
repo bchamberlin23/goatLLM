@@ -24,6 +24,11 @@ vi.mock("../lib/tools/registry", () => {
           ])
         ),
       },
+      scrape_url: {
+        execute: vi.fn().mockResolvedValue(
+          "[Web scrape: Apple Earnings 2023]\nURL: https://example.com/apple-news\n\nApple reported strong financial results for 2023, with total revenue of $383 billion."
+        ),
+      },
     },
   };
 });
@@ -96,6 +101,9 @@ describe("runDeepResearch Orchestrator", () => {
         { url: "https://example.com/apple-news", title: "Apple Earnings 2023" },
       ])
     );
+    vi.mocked(READ_ONLY_TOOLS.scrape_url.execute!).mockResolvedValue(
+      "[Web scrape: Apple Earnings 2023]\nURL: https://example.com/apple-news\n\nApple reported strong financial results for 2023, with total revenue of $383 billion."
+    );
     vi.mocked(browserFetch).mockResolvedValue({
       url: "https://example.com/apple-news",
       status: 200,
@@ -108,6 +116,7 @@ describe("runDeepResearch Orchestrator", () => {
 
   it("runs the full research flow successfully", async () => {
     const { generateText } = await import("ai");
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
 
     // We will set up responses for each call to generateText sequentially
     let callIndex = 0;
@@ -173,9 +182,49 @@ describe("runDeepResearch Orchestrator", () => {
     expect(finalReport).toContain("revenue of $383 billion");
     expect(finalReport).toContain("Duration");
     expect(finalReport).toContain("https://example.com/apple-news");
+    expect(READ_ONLY_TOOLS.scrape_url.execute).toHaveBeenCalledWith(
+      { url: "https://example.com/apple-news", maxChars: 15000 },
+      expect.anything(),
+    );
 
     // Verify correct number of LLM calls
     expect(generateText).toHaveBeenCalledTimes(8);
+  });
+
+  it("reads discovered URLs through scrape_url", async () => {
+    const { generateText } = await import("ai");
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
+
+    const mockResponses = [
+      JSON.stringify({
+        sub_questions: ["What was Apple's 2023 revenue?"],
+        key_topics: ["finance"],
+        success_criteria: "Clear revenue figure.",
+      }),
+      "general",
+      JSON.stringify(["apple revenue 2023"]),
+      JSON.stringify({
+        rational: "Mentions revenue",
+        evidence: "revenue of $383 billion",
+        summary: "Apple's 2023 revenue was $383 billion.",
+      }),
+      "Evolving report: Apple 2023 revenue was $383 billion.",
+      "YES - We have the exact revenue figure.",
+      "## Apple Revenue\n\nApple revenue was $383 billion.",
+    ];
+    let callIndex = 0;
+    vi.mocked(generateText).mockImplementation(async () => {
+      const text = mockResponses[callIndex] ?? mockResponses[mockResponses.length - 1];
+      callIndex++;
+      return { text } as any;
+    });
+
+    await runDeepResearch("What was Apple's 2023 revenue?", dummyConfig, () => {}, undefined, 1);
+
+    expect(READ_ONLY_TOOLS.scrape_url.execute).toHaveBeenCalledWith(
+      { url: "https://example.com/apple-news", maxChars: 15000 },
+      expect.anything(),
+    );
   });
 
   it("respects abort signals during loop execution", async () => {

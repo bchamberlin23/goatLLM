@@ -422,6 +422,27 @@ button:not(:disabled):active {
   word-break: break-all;
   overflow-wrap: anywhere;
 }
+.code-block__placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  color: var(--text-3);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.code-block__placeholder-line {
+  display: block;
+  width: min(360px, 78%);
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.055);
+  animation: pulse-soft 1.6s var(--ease-out) infinite;
+}
+.code-block__placeholder-line--short {
+  width: min(240px, 52%);
+  animation-delay: 160ms;
+}
 
 /* ─── KaTeX math ─── */
 .markdown-body .katex { font-size: 1.05em; }
@@ -833,6 +854,61 @@ button:not(:disabled):active {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
+/* --- Notebook (freeform board) --- */
+
+/* The board reads as a workshop surface, not a void: a faint dot grid grounds
+   the freeform panels, with a soft amber wash from the top-left to tie it to the
+   app's ambient warmth. Tokens only — no new accent. */
+.notebook-board {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(680px 420px at 24% -8%, rgba(245, 158, 66, 0.05), transparent 72%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
+  background-size: 100% 100%, 23px 23px;
+  background-position: 0 0, -1px -1px;
+}
+
+/* Panel card — a discrete, floating surface with real depth and an inset top
+   highlight. Focus lifts the hairline and adds a faint amber ring (active = the
+   one accent), echoing the input focus treatment. */
+.notebook-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.01)),
+    var(--surface-2);
+  border: 1px solid var(--hairline);
+  box-shadow:
+    0 26px 60px -30px rgba(0, 0, 0, 0.92),
+    0 4px 14px -8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color var(--d-short) var(--ease-out), box-shadow var(--d-short) var(--ease-out);
+}
+
+.notebook-panel:focus-within {
+  border-color: var(--hairline-strong);
+  box-shadow:
+    0 30px 70px -28px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(245, 158, 66, 0.14),
+    0 0 26px -16px rgba(245, 158, 66, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.notebook-panel__header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
+}
+
+/* Assistant rail — mirrors the sidebar's layered warmth so the two flanking
+   panes feel like one crafted shell around the board. */
+.notebook-rail {
+  border-left: 1px solid rgba(255, 255, 255, 0.072);
+  background:
+    radial-gradient(360px 300px at 100% -24px, rgba(245, 158, 66, 0.1), transparent 64%),
+    linear-gradient(180deg, rgba(42, 42, 45, 0.72) 0%, rgba(32, 32, 35, 0.78) 60%, rgba(27, 27, 30, 0.82) 100%);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+}
+
 .sidebar-search:focus-within {
   border-color: rgba(245, 158, 66, 0.32);
   background:
@@ -910,4 +986,3 @@ button:not(:disabled):active {
 .dr-detail-pane {
   animation: slideIn var(--d-medium) var(--ease-out);
 }
-

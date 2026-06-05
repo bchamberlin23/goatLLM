@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { streamText, stepCountIs } from "ai";
 import {
-  LayoutGrid,
+  Notebook as NotebookIcon,
   FileText,
   Code2,
   Play,
@@ -16,50 +15,73 @@ import {
   Sparkles,
   ArrowUp,
   Wand2,
+  Plus,
+  FilePlus2,
+  PenLine,
+  Replace,
+  ListPlus,
+  Type,
+  AlertCircle,
 } from "lucide-react";
 import { useChatStore } from "../stores/chat";
 import {
+  createBoard,
   createPanel,
   createCanvasMessage,
   nextPanelPosition,
   nextZ,
-  buildCanvasSystemPrompt,
-  createCanvasTools,
+  buildNotebookSystemPrompt,
+  createNotebookTools,
+  deriveCanvasAction,
+  resolveActionResult,
+  type CanvasAction,
+  type CanvasActionKind,
   type CanvasPanel,
   type CanvasPanelKind,
   type CanvasChatMessage,
-  type CanvasToolDeps,
+  type NotebookToolDeps,
   type PanelLayout,
 } from "../lib/canvas";
 import type { LlmMessage } from "../lib/llm-types";
-import { mapMessagesForProvider } from "../lib/agentLoop";
-import { createModel } from "../lib/model-factory";
+import { agentLoop } from "../lib/agentLoop";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ModeToggle } from "./ModeToggle";
+import { ModelPicker } from "./ModelPicker";
 
 const MIN_W = 280;
 const MIN_H = 168;
-const RAIL_W = 360;
-const MAX_TOOL_STEPS = 8;
+const RAIL_W = 320;
+/** Max tool/step rounds for one notebook turn (single-call agent-loop path). */
+const MAX_NOTEBOOK_ROUNDS = 16;
 
 /**
- * Canvas — a freeform board of draggable/resizable panels (prose docs +
- * runnable Python) with one AI assistant rail beside it. The assistant reads
- * every panel through buildCanvasSystemPrompt and edits any of them via the
- * createCanvasTools tool calls. All board state lives in the chat store
- * (canvasBoard) so it survives reloads; sanitizeBoard settles mid-stream
- * panels/messages on hydrate.
+ * NotebookView — a freeform board of draggable/resizable panels (prose docs +
+ * runnable Python) with one AI assistant rail beside it, scoped to the active
+ * notebook. The assistant runs on the shared agent harness (agentLoop): panels
+ * are exposed as editable documents through createNotebookTools (list/read/
+ * create/write/edit/append/rename), so it reads large panels on demand and
+ * edits existing ones in place. All board state lives
+ * inside the active notebook in the chat store (notebooks / activeNotebookId)
+ * and is routed through getActiveNotebook() + setActiveNotebookContents(), so it
+ * survives reloads; sanitizeNotebooks settles mid-stream panels/messages on
+ * hydrate. With no notebooks at all, a full-pane empty state invites creating
+ * the first one.
  */
-export function NotebookView() {
-  const board = useChatStore((s) => s.canvasBoard);
+export function NotebookView({ onOpenSettings }: { onOpenSettings?: () => void }) {
+  const activeNotebook = useChatStore((s) => s.getActiveNotebook());
+  const createNotebook = useChatStore((s) => s.createNotebook);
 
   // ── Board mutation helpers ────────────────────────────────────────────────
-  // Each helper reads fresh store state so concurrent assistant tool edits and
-  // direct user edits never clobber each other.
+  // Each helper reads the freshest active notebook so concurrent assistant tool
+  // edits and direct user edits never clobber each other. They no-op when there
+  // is no active notebook (e.g. it was just deleted mid-gesture).
   const mutatePanels = useCallback(
     (map: (panels: CanvasPanel[]) => CanvasPanel[], persist = true) => {
-      const current = useChatStore.getState().canvasBoard;
-      useChatStore.getState().setCanvasBoard({ ...current, panels: map(current.panels) }, persist);
+      const nb = useChatStore.getState().getActiveNotebook();
+      if (!nb) return;
+      useChatStore
+        .getState()
+        .setActiveNotebookContents({ panels: map(nb.panels), chat: nb.chat }, persist);
     },
     [],
   );
@@ -84,16 +106,17 @@ export function NotebookView() {
 
   const addPanel = useCallback(
     (kind: CanvasPanelKind, title?: string, content = "") => {
-      const current = useChatStore.getState().canvasBoard;
+      const nb = useChatStore.getState().getActiveNotebook();
+      if (!nb) return "";
       const panel = createPanel(kind, {
         title,
         content,
-        layout: nextPanelPosition(current, kind),
-        z: nextZ(current),
+        layout: nextPanelPosition(nb, kind),
+        z: nextZ(nb),
       });
       useChatStore
         .getState()
-        .setCanvasBoard({ ...current, panels: [...current.panels, panel] }, true);
+        .setActiveNotebookContents({ panels: [...nb.panels, panel], chat: nb.chat }, true);
       return panel.id;
     },
     [],
@@ -108,25 +131,30 @@ export function NotebookView() {
 
   const focusPanel = useCallback(
     (id: string) => {
-      const current = useChatStore.getState().canvasBoard;
-      const top = current.panels.reduce((max, p) => Math.max(max, p.z), 0);
-      const panel = current.panels.find((p) => p.id === id);
+      const nb = useChatStore.getState().getActiveNotebook();
+      if (!nb) return;
+      const top = nb.panels.reduce((max, p) => Math.max(max, p.z), 0);
+      const panel = nb.panels.find((p) => p.id === id);
       if (!panel || panel.z === top) return; // already on top — no churn
       mutatePanels((panels) => panels.map((p) => (p.id === id ? { ...p, z: top + 1 } : p)), false);
     },
     [mutatePanels],
   );
 
-  const panelCount = board.panels.length;
+  const panels = activeNotebook?.panels ?? [];
+  const panelCount = panels.length;
   const boardBounds = useMemo(() => {
     let w = 0;
     let h = 0;
-    for (const p of board.panels) {
+    for (const p of panels) {
       w = Math.max(w, p.layout.x + p.layout.w);
       h = Math.max(h, p.layout.y + p.layout.h);
     }
-    return { w: w + 64, h: h + 64 };
-  }, [board.panels]);
+    // Trailing slack: keep it tight on the x-axis so the board doesn't show a
+    // horizontal scrollbar unless a panel genuinely sits past the viewport;
+    // a touch more on the y-axis where vertical scroll is expected.
+    return { w: w + 24, h: h + 48 };
+  }, [panels]);
 
   // ── Code execution ────────────────────────────────────────────────────────
   const runPanel = useCallback(
@@ -156,69 +184,110 @@ export function NotebookView() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-accent-soft border border-accent/20 flex items-center justify-center shrink-0">
-              <LayoutGrid size={16} className="text-accent" aria-hidden="true" />
+              <NotebookIcon size={16} className="text-accent" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-[15px] font-semibold text-text-1 leading-tight">Canvas</h1>
+              <h1 className="text-[15px] font-semibold text-text-1 leading-tight truncate">
+                {activeNotebook ? activeNotebook.name : "Notebook"}
+              </h1>
               <p className="text-[11.5px] text-text-3 tabular-nums">
-                {panelCount === 0
-                  ? "A board for documents and code, with an assistant"
-                  : `${panelCount} panel${panelCount === 1 ? "" : "s"}`}
+                {!activeNotebook
+                  ? "No notebook selected"
+                  : panelCount === 0
+                    ? "A board for documents and code, with an assistant"
+                    : `${panelCount} panel${panelCount === 1 ? "" : "s"}`}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => addPanel("doc")}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-hairline bg-white/[0.02] hover:bg-white/[0.06] hover:border-hairline-strong text-text-2 hover:text-text-1 text-[12px] font-medium transition-colors"
-              title="Add a prose document panel"
-            >
-              <FileText size={13} aria-hidden="true" />
-              Doc
-            </button>
-            <button
-              onClick={() => addPanel("code")}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-hairline bg-white/[0.02] hover:bg-white/[0.06] hover:border-hairline-strong text-text-2 hover:text-text-1 text-[12px] font-medium transition-colors"
-              title="Add a runnable Python panel"
-            >
-              <Code2 size={13} aria-hidden="true" />
-              Code
-            </button>
-            <div className="w-px h-5 bg-hairline mx-1" aria-hidden="true" />
+            {activeNotebook && (
+              <>
+                <button
+                  onClick={() => addPanel("doc")}
+                  className="control-pill flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium"
+                  title="Add a prose document panel"
+                >
+                  <FileText size={13} aria-hidden="true" />
+                  Doc
+                </button>
+                <button
+                  onClick={() => addPanel("code")}
+                  className="control-pill flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium"
+                  title="Add a runnable Python panel"
+                >
+                  <Code2 size={13} aria-hidden="true" />
+                  Code
+                </button>
+                <div className="w-px h-5 bg-hairline mx-1" aria-hidden="true" />
+              </>
+            )}
             <ModeToggle />
           </div>
         </div>
       </header>
 
       <div className="flex-1 flex min-h-0">
-        {/* Freeform board */}
-        <div className="relative flex-1 min-w-0 overflow-auto bg-bg">
-          {panelCount === 0 ? (
-            <BoardEmptyState onAdd={addPanel} />
-          ) : (
-            <div
-              className="relative"
-              style={{ width: boardBounds.w, height: boardBounds.h, minWidth: "100%", minHeight: "100%" }}
-            >
-              {board.panels.map((panel) => (
-                <PanelCard
-                  key={panel.id}
-                  panel={panel}
-                  onFocus={() => focusPanel(panel.id)}
-                  onLayoutChange={(layout, persist) => setPanelLayout(panel.id, layout, persist)}
-                  onChange={(content) => updatePanel(panel.id, { content })}
-                  onTitleChange={(title) => updatePanel(panel.id, { title })}
-                  onRun={() => runPanel(panel)}
-                  onDelete={() => removePanel(panel.id)}
-                />
-              ))}
+        {activeNotebook ? (
+          <>
+            {/* Freeform board */}
+            <div className="notebook-board relative flex-1 min-w-0 overflow-auto">
+              {panelCount === 0 ? (
+                <BoardEmptyState onAdd={addPanel} />
+              ) : (
+                <div
+                  className="relative"
+                  style={{
+                    width: boardBounds.w,
+                    height: boardBounds.h,
+                    minWidth: "100%",
+                    minHeight: "100%",
+                  }}
+                >
+                  {panels.map((panel) => (
+                    <PanelCard
+                      key={panel.id}
+                      panel={panel}
+                      onFocus={() => focusPanel(panel.id)}
+                      onLayoutChange={(layout, persist) => setPanelLayout(panel.id, layout, persist)}
+                      onChange={(content) => updatePanel(panel.id, { content })}
+                      onTitleChange={(title) => updatePanel(panel.id, { title })}
+                      onRun={() => runPanel(panel)}
+                      onDelete={() => removePanel(panel.id)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Assistant rail */}
-        <AssistantRail addPanel={addPanel} />
+            {/* Assistant rail */}
+            <AssistantRail addPanel={addPanel} onOpenSettings={onOpenSettings} />
+          </>
+        ) : (
+          <NoNotebooksEmptyState onCreate={() => createNotebook()} />
+        )}
       </div>
+    </div>
+  );
+}
+
+function NoNotebooksEmptyState({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 animate-[fadeIn_320ms_var(--ease-out)]">
+      <div className="w-14 h-14 rounded-2xl bg-accent-soft border border-accent/15 flex items-center justify-center mb-4">
+        <NotebookIcon size={26} className="text-accent" aria-hidden="true" />
+      </div>
+      <h2 className="text-[18px] font-semibold text-text-1 mb-1.5">No notebooks yet</h2>
+      <p className="text-[13px] text-text-3 max-w-[400px] mb-6 leading-relaxed">
+        A notebook is a freeform board of documents and runnable code with an assistant
+        that can read and edit every panel. Create one to get started.
+      </p>
+      <button
+        onClick={onCreate}
+        className="primary-action flex items-center gap-1.5 px-4 py-2 rounded-md text-[12.5px] font-semibold"
+      >
+        <Plus size={15} strokeWidth={2.2} aria-hidden="true" />
+        Create your first notebook
+      </button>
     </div>
   );
 }
@@ -227,9 +296,9 @@ function BoardEmptyState({ onAdd }: { onAdd: (kind: CanvasPanelKind) => void }) 
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 animate-[fadeIn_320ms_var(--ease-out)]">
       <div className="w-14 h-14 rounded-2xl bg-accent-soft border border-accent/15 flex items-center justify-center mb-4">
-        <LayoutGrid size={26} className="text-accent" aria-hidden="true" />
+        <NotebookIcon size={26} className="text-accent" aria-hidden="true" />
       </div>
-      <h2 className="text-[18px] font-semibold text-text-1 mb-1.5">An open canvas</h2>
+      <h2 className="text-[18px] font-semibold text-text-1 mb-1.5">This notebook is empty</h2>
       <p className="text-[13px] text-text-3 max-w-[380px] mb-6 leading-relaxed">
         Drop documents and runnable code anywhere on the board, then ask the assistant
         on the right to draft, edit, or refactor any of them.
@@ -237,14 +306,14 @@ function BoardEmptyState({ onAdd }: { onAdd: (kind: CanvasPanelKind) => void }) 
       <div className="flex gap-2">
         <button
           onClick={() => onAdd("doc")}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-hairline bg-white/[0.03] hover:bg-white/[0.07] hover:border-hairline-strong text-text-2 hover:text-text-1 text-[12.5px] font-medium transition-colors"
+          className="control-pill flex items-center gap-1.5 px-3.5 py-2 rounded-md text-[12.5px] font-medium"
         >
           <FileText size={14} aria-hidden="true" />
           New document
         </button>
         <button
           onClick={() => onAdd("code")}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-hairline bg-white/[0.03] hover:bg-white/[0.07] hover:border-hairline-strong text-text-2 hover:text-text-1 text-[12.5px] font-medium transition-colors"
+          className="control-pill flex items-center gap-1.5 px-3.5 py-2 rounded-md text-[12.5px] font-medium"
         >
           <Code2 size={14} aria-hidden="true" />
           New code file
@@ -292,54 +361,58 @@ function PanelCard({
     origin: PanelLayout;
   } | null>(null);
 
-  const onPointerMove = useCallback((e: PointerEvent) => {
-    const g = gesture.current;
-    if (!g) return;
-    const dx = e.clientX - g.startX;
-    const dy = e.clientY - g.startY;
-    if (g.mode === "move") {
-      setDraft({
-        ...g.origin,
-        x: Math.max(0, g.origin.x + dx),
-        y: Math.max(0, g.origin.y + dy),
-      });
-    } else {
-      setDraft({
-        ...g.origin,
-        w: Math.max(MIN_W, g.origin.w + dx),
-        h: Math.max(MIN_H, g.origin.h + dy),
-      });
-    }
-  }, []);
+  // Keep the latest commit callback in a ref so the window listeners below can
+  // be attached ONCE for the panel's lifetime. Re-binding them per render races
+  // with the onFocus() re-render inside beginGesture: the effect cleanup would
+  // remove the very pointermove/pointerup listeners we just attached, silently
+  // dropping the in-flight drag — which is why panels wouldn't move.
+  const commitLayout = useRef(onLayoutChange);
+  commitLayout.current = onLayoutChange;
 
-  const endGesture = useCallback(() => {
-    const g = gesture.current;
-    gesture.current = null;
-    window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", endGesture);
-    setDraft((d) => {
-      if (d && g) onLayoutChange(d, true); // commit + persist
-      return null;
-    });
-  }, [onPointerMove, onLayoutChange]);
+  useEffect(() => {
+    const handleMove = (e: PointerEvent) => {
+      const g = gesture.current;
+      if (!g) return;
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (g.mode === "move") {
+        setDraft({
+          ...g.origin,
+          x: Math.max(0, g.origin.x + dx),
+          y: Math.max(0, g.origin.y + dy),
+        });
+      } else {
+        setDraft({
+          ...g.origin,
+          w: Math.max(MIN_W, g.origin.w + dx),
+          h: Math.max(MIN_H, g.origin.h + dy),
+        });
+      }
+    };
+    const handleUp = () => {
+      if (!gesture.current) return;
+      gesture.current = null;
+      setDraft((d) => {
+        if (d) commitLayout.current(d, true); // commit + persist
+        return null;
+      });
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, []);
 
   const beginGesture = useCallback(
     (mode: "move" | "resize", e: React.PointerEvent) => {
       e.preventDefault();
       onFocus();
       gesture.current = { mode, startX: e.clientX, startY: e.clientY, origin: panel.layout };
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", endGesture);
     },
-    [panel.layout, onFocus, onPointerMove, endGesture],
+    [onFocus, panel.layout],
   );
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", endGesture);
-    };
-  }, [onPointerMove, endGesture]);
 
   const copyOutput = useCallback(() => {
     if (!panel.output) return;
@@ -363,20 +436,20 @@ function PanelCard({
 
   return (
     <div
-      className="absolute flex flex-col rounded-xl border border-hairline bg-surface-3 shadow-[0_18px_44px_-28px_rgba(0,0,0,0.85)] overflow-hidden focus-within:border-hairline-strong"
+      className="notebook-panel absolute flex flex-col rounded-xl overflow-hidden"
       style={{ left: layout.x, top: layout.y, width: layout.w, height: layout.h, zIndex: panel.z }}
       onPointerDown={onFocus}
     >
       {/* Header — drag handle */}
       <div
-        className="flex items-center justify-between gap-2 border-b border-hairline px-2.5 py-1.5 bg-white/[0.02] cursor-grab active:cursor-grabbing select-none"
+        className="notebook-panel__header flex items-center justify-between gap-2 border-b border-hairline px-2.5 py-2 cursor-grab active:cursor-grabbing select-none"
         onPointerDown={(e) => {
           // Ignore drags that start on an interactive control in the header.
           if ((e.target as HTMLElement).closest("button,input")) return;
           beginGesture("move", e);
         }}
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 group/title">
           <Icon size={13} className="text-text-3 shrink-0" aria-hidden="true" />
           {editingTitle ? (
             <input
@@ -393,13 +466,26 @@ function PanelCard({
               className="min-w-0 flex-1 bg-surface-1 border border-hairline-strong rounded px-1.5 py-0.5 text-[12px] text-text-1 focus:outline-none"
             />
           ) : (
-            <button
-              onClick={() => setEditingTitle(true)}
-              className="truncate text-[12px] font-medium text-text-1 hover:text-accent transition-colors"
-              title="Rename panel"
-            >
-              {panel.title}
-            </button>
+            <>
+              {/* Plain span (not a button) so the header body stays draggable —
+                  the drag handler's closest("button,input") guard would cancel a
+                  drag started on a button. Rename via double-click or the pencil. */}
+              <span
+                onDoubleClick={() => setEditingTitle(true)}
+                className="truncate text-[12px] font-medium text-text-1 select-none"
+                title="Double-click to rename"
+              >
+                {panel.title}
+              </span>
+              <button
+                onClick={() => setEditingTitle(true)}
+                className="shrink-0 p-0.5 rounded text-text-4 hover:text-accent opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100 transition-[color,opacity]"
+                aria-label="Rename panel"
+                title="Rename panel"
+              >
+                <Pencil size={11} aria-hidden="true" />
+              </button>
+            </>
           )}
           {isCode && <StatusBadge status={panel.status} />}
         </div>
@@ -484,7 +570,7 @@ function PanelCard({
 
       {/* Resize handle */}
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+        className="group/resize absolute bottom-0 right-0 w-5 h-5 cursor-se-resize"
         onPointerDown={(e) => beginGesture("resize", e)}
         title="Resize"
       >
@@ -492,10 +578,10 @@ function PanelCard({
           width="16"
           height="16"
           viewBox="0 0 16 16"
-          className="absolute bottom-0.5 right-0.5 text-text-4/60 pointer-events-none"
+          className="absolute bottom-0.5 right-0.5 text-text-4 group-hover/resize:text-accent transition-colors pointer-events-none"
           aria-hidden="true"
         >
-          <path d="M11 15L15 11M6 15L15 6" stroke="currentColor" strokeWidth="1.25" fill="none" />
+          <path d="M11 15L15 11M6 15L15 6" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" />
         </svg>
       </div>
     </div>
@@ -506,27 +592,47 @@ function PanelCard({
 
 function AssistantRail({
   addPanel,
+  onOpenSettings,
 }: {
   addPanel: (kind: CanvasPanelKind, title?: string, content?: string) => string;
+  onOpenSettings?: () => void;
 }) {
-  const chat = useChatStore((s) => s.canvasBoard.chat);
+  const chat = useChatStore((s) => s.getActiveNotebook()?.chat ?? []);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow the composer with its content up to a ceiling, then scroll. Mirrors
+  // the main InputBar so the rail input doesn't feel cramped at one line.
+  const adjustHeight = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 220)}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustHeight();
+  }, [input, adjustHeight]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat]);
 
-  // Persist a chat-message array onto the board (panels untouched). persist=false
-  // for mid-stream token updates; sanitizeBoard settles streaming flags on reload.
+  // Persist a chat-message array onto the active notebook (panels untouched).
+  // persist=false for mid-stream token updates; sanitizeNotebooks settles
+  // streaming flags on reload. No-op if the active notebook was just deleted.
   const writeChat = useCallback(
     (map: (msgs: CanvasChatMessage[]) => CanvasChatMessage[], persist: boolean) => {
-      const current = useChatStore.getState().canvasBoard;
-      useChatStore.getState().setCanvasBoard({ ...current, chat: map(current.chat) }, persist);
+      const nb = useChatStore.getState().getActiveNotebook();
+      if (!nb) return;
+      useChatStore
+        .getState()
+        .setActiveNotebookContents({ panels: nb.panels, chat: map(nb.chat) }, persist);
     },
     [],
   );
@@ -539,9 +645,11 @@ function AssistantRail({
 
     const cfg = useChatStore.getState().getActiveLlmConfig();
     if (!cfg) {
-      setError("No model selected. Pick one in the top bar.");
+      setError("No model selected. Pick one from the model menu below.");
       return;
     }
+    const activeNb = useChatStore.getState().getActiveNotebook();
+    if (!activeNb) return;
 
     setError(null);
     setInput("");
@@ -551,92 +659,138 @@ function AssistantRail({
     const assistantMsg: CanvasChatMessage = { ...createCanvasMessage("assistant", ""), streaming: true };
     writeChat((msgs) => [...msgs, userMsg, assistantMsg], true);
 
-    // Build provider messages from the prior thread plus this turn. The board
-    // contents ride along in the system prompt, not the message history.
-    const priorThread = useChatStore.getState().canvasBoard.chat.filter(
+    // Prior thread → provider messages. The board rides in the system prompt
+    // (small panels inline, large ones as previews the model can read on demand).
+    const priorThread = (useChatStore.getState().getActiveNotebook()?.chat ?? []).filter(
       (m) => m.id !== assistantMsg.id && m.content.trim().length > 0,
     );
     const llmMessages: LlmMessage[] = priorThread.map((m) => ({ role: m.role, content: m.content }));
 
-    const edits: string[] = [];
-    const deps: CanvasToolDeps = {
-      getBoard: () => useChatStore.getState().canvasBoard,
-      setPanelContent: (panelId, content) => {
-        const current = useChatStore.getState().canvasBoard;
-        useChatStore.getState().setCanvasBoard(
-          {
-            ...current,
-            panels: current.panels.map((p) =>
-              p.id === panelId ? { ...p, content, updatedAt: Date.now() } : p,
-            ),
-          },
-          true,
-        );
-      },
-      addPanel: (kind, title, content) => addPanel(kind, title, content),
-      recordEdit: (summary) => {
-        edits.push(summary);
-        writeChat(
-          (msgs) => msgs.map((m) => (m.id === assistantMsg.id ? { ...m, edits: [...edits] } : m)),
-          false,
-        );
-      },
+    // Store-backed tool deps — panels are the "files" the agent edits. No disk,
+    // no approval gate (like the artifact editor); edits flow straight to the board.
+    const updatePanelField = (panelId: string, patch: Partial<CanvasPanel>) => {
+      const nb = useChatStore.getState().getActiveNotebook();
+      if (!nb) return;
+      useChatStore.getState().setActiveNotebookContents(
+        {
+          panels: nb.panels.map((p) =>
+            p.id === panelId ? { ...p, ...patch, updatedAt: Date.now() } : p,
+          ),
+          chat: nb.chat,
+        },
+        true,
+      );
     };
+    const deps: NotebookToolDeps = {
+      getBoard: () => useChatStore.getState().getActiveNotebook() ?? createBoard(),
+      createPanel: (kind, title, content) => addPanel(kind, title, content),
+      setPanelContent: (panelId, content) => updatePanelField(panelId, { content }),
+      setPanelTitle: (panelId, title) => updatePanelField(panelId, { title }),
+    };
+
+    // Live, structured feedback. Each tool call becomes a row that shows
+    // "running" the moment the model invokes it, then flips to done/error when
+    // its result streams back. Keyed by toolCallId.
+    let acc = "";
+    const actions: CanvasAction[] = [];
+    const writeContent = (persist: boolean) =>
+      writeChat(
+        (msgs) => msgs.map((m) => (m.id === assistantMsg.id ? { ...m, content: acc } : m)),
+        persist,
+      );
+    const pushActions = () =>
+      writeChat(
+        (msgs) => msgs.map((m) => (m.id === assistantMsg.id ? { ...m, actions: [...actions] } : m)),
+        false,
+      );
 
     const controller = new AbortController();
     abortRef.current = controller;
 
-    try {
-      const model = await createModel(cfg);
-      const board = useChatStore.getState().canvasBoard;
-      const result = streamText({
-        model,
-        system: buildCanvasSystemPrompt(board),
-        messages: mapMessagesForProvider(llmMessages),
-        tools: createCanvasTools(deps),
-        toolChoice: "auto",
-        stopWhen: stepCountIs(MAX_TOOL_STEPS),
-        abortSignal: controller.signal,
-      });
-
-      let acc = "";
-      for await (const chunk of result.fullStream) {
-        if (chunk.type === "text-delta") {
-          acc += chunk.text;
-          // Mid-stream: in-memory only (persist=false) to spare localStorage.
-          writeChat(
-            (msgs) => msgs.map((m) => (m.id === assistantMsg.id ? { ...m, content: acc } : m)),
-            false,
-          );
-        } else if (chunk.type === "error") {
-          throw chunk.error instanceof Error ? chunk.error : new Error(String(chunk.error));
-        }
-      }
-
-      const finalText = acc.trim() || (edits.length ? "Done." : "(no response)");
-      writeChat(
-        (msgs) =>
-          msgs.map((m) =>
-            m.id === assistantMsg.id ? { ...m, content: finalText, edits: [...edits], streaming: false } : m,
-          ),
-        true,
-      );
-    } catch (err) {
-      const aborted = controller.signal.aborted || (err instanceof Error && /abort/i.test(err.message));
+    let finished = false;
+    const finalize = (content: string) => {
+      if (finished) return;
+      finished = true;
+      const settled = actions.map((a) => (a.status === "running" ? { ...a, status: "done" as const } : a));
+      const wasAborted = controller.signal.aborted;
+      const finalText =
+        content.trim() || (settled.length ? "" : wasAborted ? "_Stopped._" : "(no response)");
       writeChat(
         (msgs) =>
           msgs.map((m) =>
             m.id === assistantMsg.id
-              ? {
-                  ...m,
-                  streaming: false,
-                  content: m.content || (aborted ? "_Stopped._" : ""),
-                  edits: [...edits],
-                }
+              ? { ...m, content: finalText, actions: settled, streaming: false }
               : m,
           ),
         true,
       );
+    };
+
+    try {
+      const board = useChatStore.getState().getActiveNotebook() ?? createBoard();
+      await agentLoop(
+        llmMessages,
+        buildNotebookSystemPrompt(board),
+        cfg,
+        {
+          onToken: (token) => {
+            acc += token;
+            writeContent(false); // in-memory; spare localStorage mid-stream
+          },
+          onToolCall: (tc) => {
+            const boardNow = useChatStore.getState().getActiveNotebook() ?? createBoard();
+            const derived = deriveCanvasAction(
+              tc.toolName,
+              (tc.input as Record<string, unknown>) ?? {},
+              boardNow,
+            );
+            if (derived) {
+              actions.push({ id: tc.toolCallId, status: "running", ...derived });
+              pushActions();
+            }
+          },
+          onToolResult: (tr) => {
+            const i = actions.findIndex((a) => a.id === tr.toolCallId);
+            if (i === -1) return;
+            const action = actions[i];
+            if (action.kind === "read") {
+              // read_panel returns content, not a status marker — settle here.
+              const failed = typeof tr.output === "string" && /^no panel/i.test(tr.output);
+              actions[i] = { ...action, status: failed ? "error" : "done" };
+            } else {
+              const { status, detail } = resolveActionResult(tr.output);
+              actions[i] = { ...action, status, detail };
+            }
+            pushActions();
+          },
+          onToolError: (te) => {
+            const i = actions.findIndex((a) => a.id === te.toolCallId);
+            if (i !== -1) {
+              actions[i] = { ...actions[i], status: "error", detail: "Tool failed" };
+              pushActions();
+            }
+          },
+          onDone: (fullText, summary) => finalize(fullText || acc || summary || ""),
+          onError: (err) => {
+            finalize(acc);
+            setError(err instanceof Error ? err.message : String(err));
+          },
+        },
+        {
+          abortSignal: controller.signal,
+          tools: createNotebookTools(deps),
+          subagentsEnabled: false,
+          maxToolRounds: MAX_NOTEBOOK_ROUNDS,
+          sessionId: activeNb.id,
+          depth: 0,
+        },
+      );
+      // agentLoop resolves after its terminal callback; ensure we settle even if
+      // it returned without one (defensive).
+      finalize(acc);
+    } catch (err) {
+      const aborted = controller.signal.aborted || (err instanceof Error && /abort/i.test(err.message));
+      finalize(acc);
       if (!aborted) setError(err instanceof Error ? err.message : String(err));
     } finally {
       abortRef.current = null;
@@ -656,7 +810,7 @@ function AssistantRail({
 
   return (
     <aside
-      className="shrink-0 flex flex-col min-h-0 border-l border-hairline bg-surface-1/40"
+      className="notebook-rail shrink-0 flex flex-col min-h-0"
       style={{ width: RAIL_W }}
     >
       <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-hairline">
@@ -679,35 +833,39 @@ function AssistantRail({
       </div>
 
       <div className="shrink-0 border-t border-hairline p-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-hairline bg-surface-2 px-3 py-2 focus-within:border-hairline-strong focus-within:shadow-[0_0_0_3px_var(--accent-soft)] transition-[border-color,box-shadow]">
+        <div className="composer-surface flex flex-col gap-2 rounded-2xl px-3 py-2.5 transition-[border-color,box-shadow] focus-within:border-hairline-strong">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onInputKeyDown}
             rows={1}
             placeholder="Ask to draft, edit, or refactor a panel…"
-            className="selectable flex-1 min-h-[24px] max-h-[160px] resize-none bg-transparent border-0 text-[14px] leading-relaxed text-text-1 placeholder:text-text-4 focus:outline-none"
+            className="selectable w-full min-h-[44px] resize-none bg-transparent border-0 text-[14px] leading-relaxed text-text-1 placeholder:text-text-4 focus:outline-none"
           />
-          {busy ? (
-            <button
-              onClick={stop}
-              aria-label="Stop"
-              title="Stop"
-              className="shrink-0 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-2 flex items-center justify-center transition-colors"
-            >
-              <Square size={13} className="fill-current" />
-            </button>
-          ) : (
-            <button
-              onClick={send}
-              disabled={!input.trim()}
-              aria-label="Send"
-              title="Send"
-              className="shrink-0 w-8 h-8 rounded-full bg-accent text-bg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:bg-accent-hover transition-colors"
-            >
-              <ArrowUp size={16} strokeWidth={2.2} />
-            </button>
-          )}
+          <div className="flex items-center justify-between gap-2">
+            <ModelPicker onOpenSettings={onOpenSettings} />
+            {busy ? (
+              <button
+                onClick={stop}
+                aria-label="Stop"
+                title="Stop"
+                className="shrink-0 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-2 flex items-center justify-center transition-colors"
+              >
+                <Square size={13} className="fill-current" />
+              </button>
+            ) : (
+              <button
+                onClick={send}
+                disabled={!input.trim()}
+                aria-label="Send"
+                title="Send"
+                className="shrink-0 w-8 h-8 rounded-full bg-accent text-bg flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:bg-accent-hover transition-colors"
+              >
+                <ArrowUp size={16} strokeWidth={2.2} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </aside>
@@ -736,6 +894,7 @@ function RailMessage({ message }: { message: CanvasChatMessage }) {
       </div>
     );
   }
+  const hasActions = !!message.actions && message.actions.length > 0;
   return (
     <div className="self-start w-full">
       {message.content && (
@@ -743,10 +902,18 @@ function RailMessage({ message }: { message: CanvasChatMessage }) {
           <MarkdownRenderer content={message.content} isStreaming={message.streaming} />
         </div>
       )}
-      {message.streaming && !message.content && (
+      {message.streaming && !message.content && !hasActions && (
         <span className="streaming-cursor" />
       )}
-      {message.edits && message.edits.length > 0 && (
+      {hasActions && (
+        <div className={`flex flex-col gap-1.5 ${message.content ? "mt-2.5" : ""}`}>
+          {message.actions!.map((action) => (
+            <ActionRow key={action.id} action={action} />
+          ))}
+        </div>
+      )}
+      {/* Legacy plain-text edit chips (messages saved before structured actions). */}
+      {!hasActions && message.edits && message.edits.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {message.edits.map((edit, i) => (
             <span
@@ -759,6 +926,64 @@ function RailMessage({ message }: { message: CanvasChatMessage }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const ACTION_META: Record<
+  CanvasActionKind,
+  { Icon: typeof FilePlus2; running: string; done: string; error: string }
+> = {
+  create: { Icon: FilePlus2, running: "Creating", done: "Created", error: "Couldn't create" },
+  rewrite: { Icon: PenLine, running: "Rewriting", done: "Rewrote", error: "Couldn't rewrite" },
+  replace: { Icon: Replace, running: "Editing", done: "Edited", error: "Couldn't edit" },
+  append: { Icon: ListPlus, running: "Appending to", done: "Appended to", error: "Couldn't append to" },
+  rename: { Icon: Type, running: "Renaming", done: "Renamed", error: "Couldn't rename" },
+  read: { Icon: Eye, running: "Reading", done: "Read", error: "Couldn't read" },
+};
+
+function ActionRow({ action }: { action: CanvasAction }) {
+  const meta = ACTION_META[action.kind];
+  const Icon = meta.Icon;
+  const running = action.status === "running";
+  const errored = action.status === "error";
+  const verb = running ? meta.running : errored ? meta.error : meta.done;
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors animate-[fadeIn_200ms_var(--ease-out)] ${
+        errored ? "border-error/25 bg-error/[0.06]" : "border-hairline bg-white/[0.025]"
+      }`}
+    >
+      <div
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+          errored
+            ? "bg-error/10 text-error"
+            : running
+              ? "bg-accent-soft text-accent"
+              : "bg-white/[0.05] text-text-2"
+        }`}
+      >
+        <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
+      </div>
+
+      <div className="min-w-0 flex-1 leading-tight">
+        <span className="text-[12px] text-text-3">{verb} </span>
+        <span className="text-[12px] font-medium text-text-1 break-words">{action.title}</span>
+        {action.detail && !running && (
+          <span className="ml-1 text-[11px] text-text-4 tabular-nums">· {action.detail}</span>
+        )}
+      </div>
+
+      <div className="shrink-0">
+        {running ? (
+          <Loader2 size={13} className="animate-spin text-accent" aria-label="Working" />
+        ) : errored ? (
+          <AlertCircle size={13} className="text-error" aria-label="Failed" />
+        ) : (
+          <Check size={13} className="text-success" aria-label="Done" />
+        )}
+      </div>
     </div>
   );
 }

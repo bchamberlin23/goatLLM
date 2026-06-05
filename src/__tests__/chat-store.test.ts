@@ -3,10 +3,13 @@ import { useChatStore } from "../stores/chat";
 
 function freshStore() {
   // Reset store state between tests
+  localStorage.clear();
   useChatStore.setState({
     conversations: [],
     activeId: null,
     messages: {},
+    messageQueue: {},
+    steerPayload: null,
     selectedModelId: null,
     isStreaming: false,
     searchQuery: "",
@@ -310,6 +313,40 @@ describe("ChatStore", () => {
 
       useChatStore.getState().clearResend();
       expect(useChatStore.getState().resendPayload).toBeNull();
+    });
+  });
+
+  describe("messageQueue", () => {
+    it("queues messages per conversation and removes empty queues on dequeue", () => {
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      useChatStore.getState().enqueueMessage(convId, "follow up");
+
+      expect(useChatStore.getState().messageQueue[convId]).toEqual([{ content: "follow up" }]);
+      expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({
+        [convId]: [{ content: "follow up" }],
+      });
+
+      expect(useChatStore.getState().dequeueMessage(convId)).toEqual({ content: "follow up" });
+      expect(useChatStore.getState().messageQueue[convId]).toBeUndefined();
+      expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({});
+    });
+
+    it("removes a queued message when steering it", () => {
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      useChatStore.getState().enqueueMessage(convId, "revise this");
+      useChatStore.getState().steerMessage(convId, "revise this");
+
+      expect(useChatStore.getState().messageQueue[convId]).toBeUndefined();
+      expect(useChatStore.getState().steerPayload).toEqual({
+        conversationId: convId,
+        content: "revise this",
+        steered: true,
+      });
+      expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({});
     });
   });
 });

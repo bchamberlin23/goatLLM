@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useChatStore } from "../stores/chat";
 import { presentTool } from "./InlineToolCall";
 import { Shimmer } from "./ThinkingIndicator";
+import { shouldShowToolCall } from "../lib/tool-visibility";
 
 /** Stable empty array reference to avoid re-renders. */
 const EMPTY_ARRAY: never[] = [];
@@ -29,6 +30,7 @@ export function ToolActivityIndicator() {
   const activity = useMemo(() => {
     if (!isStreaming || !activeId || messageCount === 0) return null;
     if (!agentMode && !designMode) return null;
+    const renderMode = designMode ? "design" : agentMode ? "agent" : "chat";
 
     // Read directly from store to avoid stale closure
     const msgs = useChatStore.getState().messages[activeId] ?? EMPTY_ARRAY;
@@ -41,7 +43,7 @@ export function ToolActivityIndicator() {
       // Check tool calls in reverse order (most recent first)
       for (let j = msg.toolCalls.length - 1; j >= 0; j--) {
         const tc = msg.toolCalls[j];
-        if (tc.state === "running") {
+        if (tc.state === "running" && shouldShowToolCall(tc, renderMode)) {
           const pres = presentTool(tc);
           const label = pres.target
             ? `${pres.runningVerb} ${pres.target}`

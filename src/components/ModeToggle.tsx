@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useChatStore } from "../stores/chat";
-import { MessageCircle, Bot, Palette, LayoutGrid } from "lucide-react";
+import { MessageCircle, Bot, Palette, Notebook as NotebookIcon } from "lucide-react";
 
 /**
- * Four side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ] [ Canvas ]
+ * Four side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ] [ Notebook ]
  *
  * Pure mode switch — the per-mode permission picker (Agent) and the
  * design-system / direction pickers (Design) live elsewhere in the
@@ -14,6 +14,7 @@ export function ModeToggle() {
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
   const notebookMode = useChatStore((s) => s.notebookMode);
+  const notebookEnabled = useChatStore((s) => s.featureFlags.notebookMode);
   const setAgentMode = useChatStore((s) => s.setAgentMode);
   const setDesignMode = useChatStore((s) => s.setDesignMode);
   const setNotebookMode = useChatStore((s) => s.setNotebookMode);
@@ -74,17 +75,19 @@ export function ModeToggle() {
         <Palette size={12} strokeWidth={2} aria-hidden="true" />
         <span>Design</span>
       </button>
-      <button
-        type="button"
-        role="radio"
-        aria-checked={notebookMode}
-        onClick={handleNotebook}
-        title="Canvas mode — a freeform board of documents and runnable code with an AI assistant."
-        className={optionClass(notebookMode)}
-      >
-        <LayoutGrid size={12} strokeWidth={2} aria-hidden="true" />
-        <span>Canvas</span>
-      </button>
+      {notebookEnabled && (
+        <button
+          type="button"
+          role="radio"
+          aria-checked={notebookMode}
+          onClick={handleNotebook}
+          title="Notebook mode (WIP) — a freeform board of documents and runnable code with an AI assistant."
+          className={optionClass(notebookMode)}
+        >
+          <NotebookIcon size={12} strokeWidth={2} aria-hidden="true" />
+          <span>Notebook</span>
+        </button>
+      )}
     </div>
   );
 }

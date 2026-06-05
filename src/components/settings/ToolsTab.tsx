@@ -30,6 +30,8 @@ interface SearxngStatus {
 export function ToolsTab() {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const setTavilyApiKey = useChatStore((s) => s.setTavilyApiKey);
+  const firecrawlApiKey = useChatStore((s) => s.firecrawlApiKey);
+  const setFirecrawlApiKey = useChatStore((s) => s.setFirecrawlApiKey);
   const chatCodeExec = useChatStore((s) => s.chatCodeExec);
   const setChatCodeExec = useChatStore((s) => s.setChatCodeExec);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
@@ -242,6 +244,15 @@ export function ToolsTab() {
             onRemove={() => setTavilyApiKey("")}
           />
         )}
+
+        <TavilyKeyRow
+          apiKey={firecrawlApiKey}
+          onSave={setFirecrawlApiKey}
+          onRemove={() => setFirecrawlApiKey("")}
+          serviceName="Firecrawl Scrape"
+          host="api.firecrawl.dev"
+          placeholder="fc-..."
+        />
 
         {searchBackend === "searxng" && (
           <div className="flex flex-col gap-3 p-3.5 bg-[#212122] border border-white/5 rounded-xl transition-colors">

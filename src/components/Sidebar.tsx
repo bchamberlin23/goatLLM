@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useChatStore, type Conversation } from "../stores/chat";
+import type { Notebook } from "../lib/canvas";
 import { downloadExport } from "../lib/export";
 import {
   SquarePen,
@@ -18,6 +19,8 @@ import {
   FileDown,
   ExternalLink,
   Copy,
+  NotebookPen,
+  Notebook as NotebookIcon,
 } from "lucide-react";
 
 function formatTimestamp(ts: number): string {
@@ -107,12 +110,14 @@ interface DesignWorkspaceCtx {
 export function Sidebar({ onOpenSettings }: SidebarProps) {
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
+  const notebookMode = useChatStore((s) => s.notebookMode);
 
   // Agent workspaces use the Tauri backend; design workspaces use localStorage
   // so the two modes never cross-contaminate their folders.
   const agentCtx = useWorkspaces();
   const designCtx = useDesignWorkspaces();
 
+  if (notebookMode) return <NotebookSidebar onOpenSettings={onOpenSettings} />;
   if (agentMode) return <AgentSidebar onOpenSettings={onOpenSettings} workspaceCtx={agentCtx} />;
   if (designMode) return <DesignSidebar onOpenSettings={onOpenSettings} designCtx={designCtx} />;
   return <ChatSidebar onOpenSettings={onOpenSettings} />;
@@ -1531,6 +1536,255 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
 
 
 // ── Chat Mode Sidebar ──
+
+interface NotebookMenuState {
+  x: number;
+  y: number;
+  notebookId: string;
+}
+
+function NotebookSidebar({ onOpenSettings }: SidebarProps) {
+  const notebooks = useChatStore((s) => s.notebooks);
+  const activeNotebookId = useChatStore((s) => s.activeNotebookId);
+  const createNotebook = useChatStore((s) => s.createNotebook);
+  const renameNotebook = useChatStore((s) => s.renameNotebook);
+  const deleteNotebook = useChatStore((s) => s.deleteNotebook);
+  const setActiveNotebook = useChatStore((s) => s.setActiveNotebook);
+
+  const [contextMenu, setContextMenu] = useState<NotebookMenuState | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Most-recently-updated first so the notebook you're working in floats up.
+  const sorted = useMemo(
+    () => [...notebooks].sort((a, b) => b.updatedAt - a.updatedAt),
+    [notebooks],
+  );
+
+  const handleNew = useCallback(() => {
+    createNotebook();
+  }, [createNotebook]);
+
+  // ⌘N creates a notebook in this mode (mirrors New chat in ChatSidebar).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        createNotebook();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [createNotebook]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    const menuW = 180;
+    const menuH = 100;
+    const x = Math.min(e.clientX, window.innerWidth - menuW - 8);
+    const y = Math.min(e.clientY, window.innerHeight - menuH - 8);
+    setContextMenu({ x, y, notebookId: id });
+  }, []);
+
+  const handleMenuClick = useCallback((e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const menuW = 180;
+    const menuH = 100;
+    const x = Math.min(rect.left, window.innerWidth - menuW - 8);
+    const y = Math.min(rect.bottom + 4, window.innerHeight - menuH - 8);
+    setContextMenu({ x, y, notebookId: id });
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleRenameStart = useCallback(
+    (id: string) => {
+      const nb = notebooks.find((n) => n.id === id);
+      if (!nb) return;
+      setRenaming({ id, value: nb.name });
+      setContextMenu(null);
+      setTimeout(() => renameInputRef.current?.select(), 0);
+    },
+    [notebooks],
+  );
+
+  const handleRenameCommit = useCallback(() => {
+    if (!renaming) return;
+    renameNotebook(renaming.id, renaming.value);
+    setRenaming(null);
+  }, [renaming, renameNotebook]);
+
+  const handleRenameKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") handleRenameCommit();
+      if (e.key === "Escape") setRenaming(null);
+    },
+    [handleRenameCommit],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      deleteNotebook(id);
+      setContextMenu(null);
+    },
+    [deleteNotebook],
+  );
+
+  const renderNotebookItem = (nb: Notebook) => {
+    if (renaming?.id === nb.id) {
+      return (
+        <div key={nb.id} className="px-2 py-1">
+          <input
+            ref={renameInputRef}
+            className="w-full bg-[#1f1f1f] border border-white/10 rounded-md text-[13px] text-[#ececec] px-2 py-1.5 outline-none"
+            value={renaming.value}
+            onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+            onBlur={handleRenameCommit}
+            onKeyDown={handleRenameKeyDown}
+            autoFocus
+          />
+        </div>
+      );
+    }
+
+    const isActive = activeNotebookId === nb.id;
+    const panelCount = nb.panels.length;
+
+    return (
+      <div
+        key={nb.id}
+        role="button"
+        tabIndex={0}
+        className={`sidebar-action group relative flex items-center justify-between w-full pl-6 pr-2 py-1.5 rounded-md text-[13px] transition-all duration-150 text-left cursor-pointer ${
+          isActive ? "sidebar-action-active" : "text-[#d5d5d5] hover:text-[#ececec]"
+        }`}
+        onClick={() => setActiveNotebook(nb.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setActiveNotebook(nb.id);
+          }
+        }}
+        onContextMenu={(e) => handleContextMenu(e, nb.id)}
+      >
+        {isActive && (
+          <span
+            aria-hidden
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-[2px] rounded-full bg-[#f59e42]"
+          />
+        )}
+        <span className="truncate flex-1">{nb.name}</span>
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <span className="text-[11px] text-[#a0a0a0] group-hover:hidden tabular-nums">
+            {panelCount === 0 ? formatTimestamp(nb.updatedAt) : `${panelCount} panel${panelCount === 1 ? "" : "s"}`}
+          </span>
+          <button
+            className="control-icon hidden group-hover:flex p-1 rounded transition-colors"
+            onClick={(e) => handleMenuClick(e, nb.id)}
+            aria-label="Notebook actions"
+          >
+            <MoreHorizontal size={14} strokeWidth={2} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <aside className="sidebar-surface w-[244px] h-full flex flex-col relative shrink-0">
+        {/* Native macOS traffic lights overlay this top area */}
+        <div className="h-[46px] shrink-0" data-tauri-drag-region />
+
+        {/* New notebook */}
+        <div className="flex flex-col gap-[1px] px-2">
+          <button
+            onClick={handleNew}
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[#ececec] transition-all"
+            aria-label="New notebook"
+          >
+            <NotebookPen size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] transition-colors" aria-hidden="true" />
+            <span className="text-[13px] flex-1 text-left">New notebook</span>
+            <span className="text-[10.5px] text-[#9a9a9a] font-medium tracking-wide">⌘N</span>
+          </button>
+        </div>
+
+        {/* Notebook list */}
+        <div className="flex flex-col mt-3 px-2 overflow-y-auto flex-1 min-h-0">
+          {sorted.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10 px-3 text-center">
+              <div className="w-9 h-9 rounded-full bg-white/[0.04] flex items-center justify-center">
+                <NotebookIcon size={15} strokeWidth={1.5} className="text-[#9a9a9a]" />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-[12.5px] text-[#a8a8a8] font-medium">No notebooks yet</p>
+                <p className="text-[11px] text-[#a0a0a0] leading-relaxed">
+                  Create one to start a board
+                </p>
+              </div>
+              <button
+                onClick={handleNew}
+                className="control-pill mt-1 px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors"
+              >
+                Create notebook
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <div className="px-2.5 py-1">
+                <span className="text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">Notebooks</span>
+              </div>
+              {sorted.map((nb) => renderNotebookItem(nb))}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom settings */}
+        <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
+          <button
+            onClick={onOpenSettings}
+            className="sidebar-action group flex items-center gap-2.5 px-2.5 py-[7px] rounded-md w-full text-[#ececec] transition-all"
+            aria-label="Open settings"
+          >
+            <Settings size={15} strokeWidth={1.75} className="text-[#c9c9c9] group-hover:text-[#ececec] group-hover:rotate-45 transition-all duration-300" aria-hidden="true" />
+            <span className="text-[13px]">Settings</span>
+          </button>
+        </div>
+      </aside>
+
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[100]"
+            onClick={closeContextMenu}
+            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
+          />
+          <div
+            className="popover-surface fixed z-[101] min-w-[160px] rounded-xl p-1.5 animate-[contextMenuIn_110ms_ease]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
+              onClick={() => handleRenameStart(contextMenu.notebookId)}
+            >
+              <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+              Rename
+            </button>
+            <div className="h-px bg-white/5 mx-1 my-1" />
+            <button
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] text-[#b4b4b4] hover:bg-red-500/10 hover:text-[#f87171] transition-colors"
+              onClick={() => handleDelete(contextMenu.notebookId)}
+            >
+              <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
 
 function ChatSidebar({ onOpenSettings }: SidebarProps) {
   const activeId = useChatStore((s) => s.activeId);

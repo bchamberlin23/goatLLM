@@ -171,12 +171,12 @@ function stripJsonFromRegion(region: string): string {
  */
 /** Bare tool-call syntax some models leak as visible text. */
 const LEAKED_TOOL_CALL_RE =
-  /\b(?:read_attachment|search_attachment|web_search|load_skill)\s*(?:\{\s*\}|\(\s*\))/gi;
+  /\b(?:read_attachment|search_attachment|web_search|scrape_url|load_skill)\s*(?:\{\s*\}|\(\s*\))/gi;
 const LEAKED_TOOL_CALL_OPEN_RE =
-  /\b(?:read_attachment|search_attachment|web_search|load_skill)\s*(?:\{\s*|\(\s*)/gi;
+  /\b(?:read_attachment|search_attachment|web_search|scrape_url|load_skill)\s*(?:\{\s*|\(\s*)/gi;
 /** Bare snake_case tool names (avoid matching English words like "done"). */
 const LEAKED_TOOL_NAME_RE =
-  /\b(?:read_attachment|search_attachment|web_search|load_skill)\b/gi;
+  /\b(?:read_attachment|search_attachment|web_search|scrape_url|load_skill)\b/gi;
 
 function stripLeakedToolInvocations(region: string): string {
   return region

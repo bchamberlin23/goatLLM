@@ -63,16 +63,22 @@ interface CodeBlockProps {
 
 const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = false }: CodeBlockProps) {
   const [html, setHtml] = useState<string>("");
+  const [highlightState, setHighlightState] = useState<"loading" | "ready" | "failed" | "deferred">(
+    deferHighlight ? "deferred" : "loading",
+  );
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (deferHighlight) {
       setHtml("");
+      setHighlightState("deferred");
       return;
     }
 
     let cancelled = false;
+    setHtml("");
+    setHighlightState("loading");
     const timer = window.setTimeout(() => {
       getHighlighter()
         .then((highlighter) => {
@@ -83,10 +89,16 @@ const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = fal
             lang,
             theme: "github-dark-dimmed",
           });
-          if (!cancelled) setHtml(highlighted);
+          if (!cancelled) {
+            setHtml(highlighted);
+            setHighlightState("ready");
+          }
         })
         .catch(() => {
-          if (!cancelled) setHtml("");
+          if (!cancelled) {
+            setHtml("");
+            setHighlightState("failed");
+          }
         });
     }, 500);
 
@@ -137,10 +149,16 @@ const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = fal
           )}
         </button>
       </div>
-      {html ? (
+      {html && highlightState === "ready" ? (
         <div className="code-block__content" dangerouslySetInnerHTML={{ __html: html }} />
-      ) : (
+      ) : highlightState === "failed" ? (
         <pre className="code-block__content code-block__content--plain"><code>{code}</code></pre>
+      ) : (
+        <div className="code-block__content code-block__placeholder" aria-live="polite">
+          <span>{highlightState === "deferred" ? "Writing code..." : "Rendering code..."}</span>
+          <span className="code-block__placeholder-line" aria-hidden="true" />
+          <span className="code-block__placeholder-line code-block__placeholder-line--short" aria-hidden="true" />
+        </div>
       )}
     </div>
   );

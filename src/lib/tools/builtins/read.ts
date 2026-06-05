@@ -382,6 +382,28 @@ export const READ_ONLY_TOOLS = {
     },
   }),
 
+  scrape_url: tool({
+    description:
+      "Read the full content of a specific web page as clean markdown/text. Use this after web_search returns a URL whose page body you need, or whenever the user asks to summarize/read a specific link. Uses Firecrawl when configured, otherwise falls back to the built-in browser text fetch.",
+    inputSchema: z.object({
+      url: z.string().describe("The http(s) URL to scrape/read"),
+      maxChars: z.number().optional().describe("Maximum characters to return (default 60000)"),
+    }),
+    execute: async ({ url, maxChars }) => {
+      const state = useChatStore.getState();
+      try {
+        const { scrapeUrl, formatScrapedPage } = await import("../../firecrawl");
+        const page = await scrapeUrl(url, {
+          apiKey: state.firecrawlApiKey,
+          maxChars: maxChars ?? 60_000,
+        });
+        return formatScrapedPage(page);
+      } catch (e) {
+        return `scrape_url failed: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    },
+  }),
+
   load_skill: tool({
     description:
       "Load the full instructions for one of the skills listed in <available_skills>. Call this the moment the user's request matches a skill's description — it returns the complete SKILL.md body so you can follow it for the rest of the conversation. Pass the exact skill name.",
