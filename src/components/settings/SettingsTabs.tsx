@@ -303,33 +303,95 @@ function VoiceSettings() {
 function ImageSettings() {
   const imageGenSettings = useChatStore((s) => s.imageGenSettings);
   const setImageGenSettings = useChatStore((s) => s.setImageGenSettings);
+
+  const ollamaModels = [
+    { name: "flux2-klein:4b", size: "5.7 GB", rec: true },
+    { name: "flux2-klein:9b", size: "12 GB", rec: false },
+  ];
+
+  const showSizeSelector = imageGenSettings.provider === "openai" || imageGenSettings.provider === "ollama";
+  const showCustomEndpoint = imageGenSettings.provider === "flux" || imageGenSettings.provider === "stable-diffusion" || imageGenSettings.provider === "custom";
+  const showOllamaInfo = imageGenSettings.provider === "ollama";
+
   return (
     <SettingsGroup title="Image generation" description="Configure provider, model, and endpoint for the image generation button in the input bar.">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Provider">
-          <Select value={imageGenSettings.provider} onChange={(e) => setImageGenSettings({ ...imageGenSettings, provider: e.target.value as ImageGenSettings["provider"] })}>
+          <Select value={imageGenSettings.provider} onChange={(e) => {
+            const provider = e.target.value as ImageGenSettings["provider"];
+            const defaults: Record<string, string> = {
+              openai: "gpt-image-1.5",
+              ollama: "flux2-klein:4b",
+              flux: "flux-schnell",
+              "stable-diffusion": "sd3-medium",
+              custom: "",
+            };
+            setImageGenSettings({ ...imageGenSettings, provider, model: defaults[provider] || "" });
+          }}>
             <option value="openai">OpenAI</option>
+            <option value="ollama">Ollama (local)</option>
             <option value="flux">Flux</option>
             <option value="stable-diffusion">Stable Diffusion</option>
             <option value="custom">Custom endpoint</option>
           </Select>
         </Field>
-        <Field label="Model">
-          <TextInput value={imageGenSettings.model} onChange={(e) => setImageGenSettings({ ...imageGenSettings, model: e.target.value })} placeholder="gpt-image-1.5" />
-        </Field>
-        <Field label="Size">
-          <Select value={imageGenSettings.size} onChange={(e) => setImageGenSettings({ ...imageGenSettings, size: e.target.value })}>
-            <option value="1024x1024">1024×1024</option>
-            <option value="1792x1024">1792×1024</option>
-            <option value="1024x1792">1024×1792</option>
-          </Select>
-        </Field>
-        {(imageGenSettings.provider === "flux" || imageGenSettings.provider === "stable-diffusion" || imageGenSettings.provider === "custom") && (
+        {showOllamaInfo ? (
+          <Field label="Model">
+            <Select value={imageGenSettings.model} onChange={(e) => setImageGenSettings({ ...imageGenSettings, model: e.target.value })}>
+              {ollamaModels.map((m) => (
+                <option key={m.name} value={m.name}>{m.name} ({m.size})</option>
+              ))}
+            </Select>
+          </Field>
+        ) : (
+          <Field label="Model">
+            <TextInput value={imageGenSettings.model} onChange={(e) => setImageGenSettings({ ...imageGenSettings, model: e.target.value })} placeholder={imageGenSettings.provider === "openai" ? "gpt-image-1.5" : "model-name"} />
+          </Field>
+        )}
+        {showSizeSelector && (
+          <Field label="Size">
+            <Select value={imageGenSettings.size} onChange={(e) => setImageGenSettings({ ...imageGenSettings, size: e.target.value })}>
+              <option value="1024x1024">1024×1024</option>
+              <option value="1792x1024">1792×1024</option>
+              <option value="1024x1792">1024×1792</option>
+            </Select>
+          </Field>
+        )}
+        {showCustomEndpoint && (
           <Field label="Custom endpoint URL">
             <TextInput value={imageGenSettings.customEndpoint} onChange={(e) => setImageGenSettings({ ...imageGenSettings, customEndpoint: e.target.value })} placeholder="https://..." />
           </Field>
         )}
       </div>
+
+      {showOllamaInfo && (
+        <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="text-[12px] font-medium text-text-1">Recommended Ollama image models</div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {ollamaModels.map((m) => (
+                  <div key={m.name} className={`rounded-lg border px-3 py-2 text-[12px] ${m.rec ? "border-accent/25 bg-accent/[0.04]" : "border-white/[0.06]"}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-text-1">{m.name}</span>
+                      {m.rec && <span className="text-[10px] text-accent font-medium">Recommended</span>}
+                    </div>
+                    <div className="mt-0.5 text-text-3">{m.size}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-[#f59e42]/20 bg-[#f59e42]/[0.05] px-3 py-2">
+              <p className="text-[11.5px] text-[#d4944a] leading-relaxed">
+                <strong>Memory warning:</strong> Running an image model alongside an LLM can consume significant VRAM.
+                The 4B model uses ~5.7 GB and the 9B uses ~12 GB. Make sure you have enough GPU memory free,
+                especially if you already have a large LLM loaded in Ollama. On limited hardware, consider
+                unloading your LLM before generating images (<code className="text-[10.5px] font-mono">ollama stop &lt;model&gt;</code>).
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </SettingsGroup>
   );
 }

@@ -1591,6 +1591,28 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (activeId) {
           addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
         }
+      } else if (provider === "ollama") {
+        const cfg = providerConfigs.ollama;
+        const baseUrl = (cfg?.baseUrl || "http://localhost:11434").replace(/\/+$/, "");
+        const res = await fetch(`${baseUrl}/api/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: imageGenSettings.model || "flux2-klein:4b",
+            prompt,
+            stream: false,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || `Ollama request failed (${res.status}).`);
+        // Flux models return base64 images in the response
+        const imageData = json?.images?.[0] ?? json?.image;
+        if (!imageData) throw new Error("Ollama response did not contain image data. Make sure flux2-klein is installed (ollama pull flux2-klein:4b).");
+        const dataUrl = `data:image/png;base64,${imageData}`;
+        setImageGenResult(dataUrl);
+        if (activeId) {
+          addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
+        }
       } else {
         const endpoint = imageGenSettings.customEndpoint;
         if (!endpoint) throw new Error("Configure a custom endpoint URL in Settings for this provider.");

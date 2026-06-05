@@ -539,7 +539,7 @@ export interface ImageGenerationJob {
 }
 
 export interface ImageGenSettings {
-  provider: "openai" | "flux" | "stable-diffusion" | "custom";
+  provider: "openai" | "ollama" | "flux" | "stable-diffusion" | "custom";
   model: string;
   customEndpoint: string;
   size: string;
