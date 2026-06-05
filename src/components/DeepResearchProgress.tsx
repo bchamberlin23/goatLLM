@@ -11,8 +11,16 @@ import {
   Globe,
 } from "lucide-react";
 import type { DeepResearchPhase, DeepResearchState } from "../stores/chat";
-import { Shimmer, useElapsedLabel } from "./ThinkingIndicator";
+import { useElapsedLabel } from "./ThinkingIndicator";
 import { DeepResearchDetailPane } from "./DeepResearchDetailPane";
+
+function TextShimmer({ text, className = "" }: { text: string; className?: string }) {
+  return (
+    <span className={`dr-text-shimmer ${className}`} aria-live="polite">
+      {text}
+    </span>
+  );
+}
 
 const PHASE_LABEL: Record<DeepResearchPhase, string> = {
   planning: "Planning strategy",

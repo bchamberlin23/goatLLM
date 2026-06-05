@@ -1,0 +1,256 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/components/input-bar/SkillPicker.tsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../prettify.css" />
+    <link rel="stylesheet" href="../../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../../index.html">All files</a> / <a href="index.html">src/components/input-bar</a> SkillPicker.tsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">10.52% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>2/19</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">20% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>6/30</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">8.33% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/12</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">20% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>2/10</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { Check, Wand2, X } from "lucide-react";
+import type { Skill } from "../../lib/skills";
+&nbsp;
+interface SkillPickerProps {
+  open: boolean;
+  activeId: string | null;
+  activeSkillNames: string[];
+  pendingSkills: string[];
+  skillsForCurrentMode: Skill[];
+  discoveredSkillCount: number;
+  disabledSkills: Set&lt;string&gt;;
+  agentMode: boolean;
+  showChips?: boolean;
+  onPendingSkillsChange: (next: string[] | ((current: string[]) =&gt; string[])) =&gt; void;
+  onConversationSkillsChange: (conversationId: string, skillNames: string[]) =&gt; void;
+  onClose: () =&gt; void;
+}
+&nbsp;
+export function SkillPicker({ open, activeId, activeSkillNames, pendingSkills, skillsForCurrentMode, discoveredSkillCount, disabledSkills, agentMode, showChips = true, onPendingSkillsChange, onConversationSkillsChange, onClose }: SkillPickerProps) {
+  const displayedSkills = activeId ? activeSkillNames : pendingSkills;
+&nbsp;
+  return (
+    &lt;&gt;
+      {showChips &amp;&amp; displayedSkills.length &gt; 0 &amp;&amp; (
+<span class="branch-2 cbranch-no" title="branch not covered" >        &lt;div className="mb-2 flex items-center gap-1.5 flex-wrap"&gt;</span>
+          {displayedSkills.map(<span class="fstat-no" title="function not covered" >(n</span>ame) =&gt; (
+<span class="cstat-no" title="statement not covered" >            &lt;span key={name} className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(245,158,66,0.08)]"&gt;</span>
+              &lt;Wand2 size={10} strokeWidth={1.75} className="shrink-0 opacity-80" aria-hidden="true" /&gt;
+              &lt;span&gt;{name}&lt;/span&gt;
+              &lt;button onClick={<span class="fstat-no" title="function not covered" >() =&gt; {</span> <span class="cstat-no" title="statement not covered" >if (activeId) <span class="cstat-no" title="statement not covered" >onConversationSkillsChange(activeId, activeSkillNames.filter(<span class="fstat-no" title="function not covered" >(s</span>killName) =&gt; <span class="cstat-no" title="statement not covered" >skillName !== name)</span>); else <span class="cstat-no" title="statement not covered" >o</span>nPendingSkillsChange(<span class="fstat-no" title="function not covered" >(c</span>urrent) =&gt; <span class="cstat-no" title="statement not covered" >current.filter(<span class="fstat-no" title="function not covered" >(s</span>killName) =&gt; <span class="cstat-no" title="statement not covered" >skillName !== name)</span>)</span>; }</span></span>} className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent/20 transition-colors text-[#d4944a]/60 hover:text-[#d4944a]" aria-label={"Remove " + name + " skill"} type="button"&gt;&lt;X size={9} strokeWidth={2.5} /&gt;&lt;/button&gt;
+            &lt;/span&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+      {open &amp;&amp; (
+<span class="branch-1 cbranch-no" title="branch not covered" >        &lt;&gt;</span>
+          &lt;div className="fixed inset-0 z-[80]" onClick={onClose} /&gt;
+          &lt;div className="popover-surface motion-popover-in absolute bottom-full left-0 mb-2 w-72 rounded-xl p-1.5 z-[90] origin-bottom-left"&gt;
+            &lt;div className="flex items-center gap-2 px-2.5 py-2 mb-0.5"&gt;&lt;Wand2 size={13} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden="true" /&gt;&lt;span className="text-[12px] font-semibold text-text-1"&gt;Choose skills&lt;/span&gt;&lt;/div&gt;
+            {skillsForCurrentMode.filter(<span class="fstat-no" title="function not covered" >(s</span>kill) =&gt; <span class="cstat-no" title="statement not covered" >!disabledSkills.has(skill.name))</span>.map(<span class="fstat-no" title="function not covered" >(s</span>kill) =&gt; {
+              const selected = <span class="cstat-no" title="statement not covered" >pendingSkills.includes(skill.name);</span>
+              const modeColor = <span class="cstat-no" title="statement not covered" >skill.mode === "agent" ? "text-[#d4944a] bg-[#f59e42]/10 border-[#f59e42]/20" : skill.mode === "chat" ? "text-[#7eb8f7] bg-[#3b82f6]/10 border-[#3b82f6]/20" : "text-[#b4a0f7] bg-[#8b5cf6]/10 border-[#8b5cf6]/20";</span>
+<span class="cstat-no" title="statement not covered" >              return (</span>
+                &lt;button key={skill.name} onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >o</span>nPendingSkillsChange(<span class="fstat-no" title="function not covered" >(c</span>urrent) =&gt; <span class="cstat-no" title="statement not covered" >selected ? current.filter(<span class="fstat-no" title="function not covered" >(n</span>ame) =&gt; <span class="cstat-no" title="statement not covered" >name !== skill.name)</span> : [...current, skill.name])</span>} c</span>lassName={["motion-row flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left", selected ? "bg-white/[0.06] text-text-1" : "text-[#ececec] hover:bg-white/[0.065]"].join(" ")} type="button"&gt;
+                  &lt;span className={["shrink-0 mt-0.5 w-3.5 h-3.5 rounded flex items-center justify-center transition-all duration-150", selected ? "bg-accent border border-accent/60" : "border border-white/20"].join(" ")}&gt;{selected &amp;&amp; &lt;Check size={9} strokeWidth={3} className="motion-pop-in text-[#1a1a1c]" /&gt;}&lt;/span&gt;
+                  &lt;div className="flex-1 min-w-0"&gt;&lt;div className="flex items-center gap-1.5 truncate"&gt;&lt;span className="truncate"&gt;{skill.name}&lt;/span&gt;&lt;span className={["shrink-0 text-[9px] px-1 py-0.5 rounded border font-medium", modeColor].join(" ")}&gt;{skill.mode}&lt;/span&gt;&lt;/div&gt;&lt;div className="text-[11px] text-[#b4b4b4] truncate leading-tight mt-0.5"&gt;{skill.description.slice(0, 80)}&lt;/div&gt;&lt;/div&gt;
+                &lt;/button&gt;
+              );
+            })}
+            {skillsForCurrentMode.length === 0 &amp;&amp; &lt;div className="px-2.5 py-3 text-[13px] text-[#a0a0a0]"&gt;{discoveredSkillCount &gt; 0 ? "No skills available in " + (agentMode ? "agent" : "chat") + " mode. Switch modes to see other skills." : "No skills discovered. Add skills in Settings."}&lt;/div&gt;}
+            &lt;div className="border-t border-white/[0.06] mt-1 pt-1"&gt;&lt;button onClick={<span class="fstat-no" title="function not covered" >() =&gt; {</span> <span class="cstat-no" title="statement not covered" >if (activeId) <span class="cstat-no" title="statement not covered" >onConversationSkillsChange(activeId, pendingSkills); <span class="cstat-no" title="statement not covered" >o</span></span>nClose(); }</span>} className="flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-colors bg-accent/15 hover:bg-accent/25 border border-accent/30 text-[#d4944a]" type="button"&gt;&lt;Check size={13} strokeWidth={2.5} /&gt;Done&lt;/button&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/&gt;
+      )}
+    &lt;/&gt;
+  );
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-06-05T15:55:52.799Z
+            </div>
+        <script src="../../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../../sorter.js"></script>
+        <script src="../../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -230,7 +230,7 @@ export function formatFormSubmission(
   }
   if (!filled) {
     lines.push("");
-    lines.push("[All fields left blank — the user trusts your judgment. Pick sensible defaults, state your assumptions in one line, then proceed directly to the artifact.]");
+    lines.push("[All fields left blank — the user trusts your judgment. Pick sensible defaults, state your assumptions in one line, then proceed directly to writing the files.]");
   }
   return lines.join("\n");
 }

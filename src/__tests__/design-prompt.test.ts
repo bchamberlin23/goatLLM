@@ -13,7 +13,7 @@ describe("buildDesignSystemPrompt", () => {
     expect(prompt).toContain("<identity>");
     expect(prompt).toContain("<voice>");
     expect(prompt).toContain("<anti_slop>");
-    expect(prompt).toContain("<artifact_contract>");
+    expect(prompt).not.toContain("<artifact_contract>");
 
     expect(prompt).toContain('<active_skill id="web-prototype"');
     expect(prompt).toContain("<seed_template>");
