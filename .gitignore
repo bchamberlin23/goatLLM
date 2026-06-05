@@ -10,3 +10,12 @@ CLAUDE.md
 DESIGN.md
 DESIGN_MODE_PLAN.md
 .commandcode/
+
+# TypeScript declaration output emitted by `tsc -b` for the Vite config.
+# The source is vite.config.ts; the .d.ts/.d.ts.map twins are build artifacts.
+vite.config.d.ts
+vite.config.d.ts.map
+
+# Empty scratch directory checked in as a placeholder for a future
+# odysseus-clone import experiment. Keep it local-only; see docs/odysseus-clone.md.
+odysseus-clone/
