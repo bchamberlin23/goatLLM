@@ -26,48 +26,131 @@ function getActiveConvId(): string | null {
 
 export const todo_create = tool({
   description:
-    "Create a new task in the todo list. Tasks track work to be done with status tracking " +
+    "Create one or more new tasks in the todo list. Tasks track work to be done with status tracking " +
     "(pending → in_progress → completed) and optional dependency blocking.",
   inputSchema: z.object({
-    title: z.string().describe("Short task title (required)"),
-    description: z.string().optional().describe("Optional longer description"),
+    id: z
+      .string()
+      .optional()
+      .describe("Optional custom ID for the task (if creating a single task)"),
+    title: z
+      .string()
+      .optional()
+      .describe("Short task title (if creating a single task)"),
+    description: z
+      .string()
+      .optional()
+      .describe("Optional longer description (if creating a single task)"),
     blockedBy: z
       .array(z.string())
       .optional()
-      .describe("Task IDs that must be completed before this one"),
+      .describe("Task IDs that must be completed before this one (if creating a single task)"),
+    tasks: z
+      .array(
+        z.object({
+          id: z
+            .string()
+            .optional()
+            .describe("Optional custom ID for this task (useful for referencing in blockedBy)"),
+          title: z.string().describe("Short task title (required)"),
+          description: z.string().optional().describe("Optional longer description"),
+          blockedBy: z
+            .array(z.string())
+            .optional()
+            .describe("Task IDs that must be completed before this one"),
+        }),
+      )
+      .optional()
+      .describe("Optional array of tasks to create multiple tasks at once. Prefer this for planning the whole list of tasks upfront."),
   }),
-  execute: async ({ title, description, blockedBy }) => {
+  execute: async ({ id, title, description, blockedBy, tasks }) => {
     const convId = getActiveConvId();
     if (!convId) return "Error: no active conversation";
 
     const board = getBoardForConversation(convId);
-    const deps = blockedBy ?? [];
+
+    // Normalize to tasks to create
+    interface TaskInput {
+      id?: string;
+      title: string;
+      description?: string;
+      blockedBy?: string[];
+    }
+
+    const tasksToCreate: TaskInput[] = [];
+    if (tasks && tasks.length > 0) {
+      tasksToCreate.push(...tasks);
+    } else if (title) {
+      tasksToCreate.push({ id, title, description, blockedBy });
+    } else {
+      return "Error: either 'title' or 'tasks' must be provided";
+    }
+
+    const processedTasks: Array<Omit<Task, "createdAt" | "updatedAt">> = [];
+    const tempTasksMap = new Map<string, Task>();
+    for (const [tid, t] of board.tasks) {
+      tempTasksMap.set(tid, t);
+    }
+
+    const nowStr = Date.now().toString(36);
+    for (let i = 0; i < tasksToCreate.length; i++) {
+      const tc = tasksToCreate[i];
+      const taskId = tc.id || `task-${nowStr}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+
+      const t: Omit<Task, "createdAt" | "updatedAt"> = {
+        id: taskId,
+        title: tc.title,
+        description: tc.description,
+        status: "pending",
+        blockedBy: tc.blockedBy ?? [],
+      };
+      processedTasks.push(t);
+
+      // Temporarily add to tempTasksMap for reference validation
+      tempTasksMap.set(taskId, {
+        ...t,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
 
     // Validate blockedBy refs
-    for (const dep of deps) {
-      const depTask = board.tasks.get(dep);
-      if (!depTask) return `Error: blockedBy task "${dep}" not found`;
-      if (depTask.status === "deleted")
-        return `Error: blockedBy task "${dep}" has been deleted`;
+    for (const pt of processedTasks) {
+      for (const dep of pt.blockedBy) {
+        if (dep === pt.id) {
+          return `Error: task "${pt.id}" cannot block itself`;
+        }
+        const depTask = tempTasksMap.get(dep);
+        if (!depTask) {
+          return `Error: blockedBy task "${dep}" not found`;
+        }
+        if (depTask.status === "deleted") {
+          return `Error: blockedBy task "${dep}" has been deleted`;
+        }
+      }
     }
 
     // Cycle detection
-    const tempId = `__new_${Date.now()}`;
-    const cycle = detectCycle(board.tasks, tempId, deps);
-    if (cycle) return `Error: blockedBy creates a dependency cycle: ${cycle.join(" --> ")}`;
+    for (const pt of processedTasks) {
+      const cycle = detectCycle(tempTasksMap, pt.id, pt.blockedBy);
+      if (cycle) {
+        return `Error: blockedBy creates a dependency cycle: ${cycle.join(" --> ")}`;
+      }
+    }
 
-    const task: Omit<Task, "createdAt" | "updatedAt"> = {
-      title,
-      description,
-      status: "pending",
-      blockedBy: deps,
-      id: `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-    };
-
-    const newBoard = applyAction(convId, { type: "create", task });
+    // Apply creations
+    let lastBoard = board;
+    for (const pt of processedTasks) {
+      lastBoard = applyAction(convId, { type: "create", task: pt });
+    }
     bumpStore(convId);
 
-    return formatBoardForToolOutput(newBoard, `Created task: ${task.id} (${task.title})`);
+    const createdSummary =
+      processedTasks.length === 1
+        ? `Created task: ${processedTasks[0].id} (${processedTasks[0].title})`
+        : `Created ${processedTasks.length} tasks: ${processedTasks.map((t) => t.id).join(", ")}`;
+
+    return formatBoardForToolOutput(lastBoard, createdSummary);
   },
 });
 

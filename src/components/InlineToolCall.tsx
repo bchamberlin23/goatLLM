@@ -104,8 +104,11 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
     };
   }
   if (name === "todo_create") {
-    const title = getInputField(tc.input, "title") || "task";
-    return { runningVerb: "Creating", doneVerb: "Created", target: `task: ${title}`, icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
+    const tasks = (tc.input && typeof tc.input === "object" && (tc.input as any).tasks) || null;
+    const target = Array.isArray(tasks)
+      ? `${tasks.length} tasks`
+      : `task: ${getInputField(tc.input, "title") || "task"}`;
+    return { runningVerb: "Creating", doneVerb: "Created", target, icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
   }
   if (name === "todo_update") {
     const id = getInputField(tc.input, "id") || "task";

@@ -433,6 +433,23 @@ function replayAction(
 
   switch (toolName) {
     case "todo_create": {
+      if (Array.isArray(params.tasks)) {
+        let currentBoard = board;
+        for (let i = 0; i < params.tasks.length; i++) {
+          const t = params.tasks[i];
+          const task: Task = {
+            id: (t.id as string) || `replay-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            title: (t.title as string) || "Untitled",
+            description: t.description as string | undefined,
+            status: "pending",
+            blockedBy: (t.blockedBy as string[]) ?? [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          currentBoard = reduceBoard(currentBoard, { type: "create", task });
+        }
+        return currentBoard;
+      }
       const task: Task = {
         id: (params.id as string) || `replay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         title: (params.title as string) || "Untitled",

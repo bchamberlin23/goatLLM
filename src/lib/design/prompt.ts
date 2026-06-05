@@ -148,9 +148,9 @@ Skip directly to RULE 3. Do **not** emit any second direction-picking form. If a
 
 ---
 
-## RULE 3 — Create a task plan with todo_create, then live updates
+## RULE 3 — Create a task plan with a single todo_create call, then live updates
 
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task — the schema is unbounded and complex briefs legitimately need more than ten steps.
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with the \`tasks\` array containing the entire list of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. You MUST create all tasks at the beginning using a single batch \`todo_create\` call. Do not make multiple sequential \`todo_create\` calls or create tasks one-by-one. You may specify custom \`id\` strings for each task in the batch to reference them in \`blockedBy\` dependencies if needed.
 
 The standard plan template (adapt the middle steps to the brief):
 
@@ -254,7 +254,7 @@ Each accepts \`?screen=<path>\` and embeds that path inside the device chrome.
 </discovery>`;
 
 const PLANNING_DIRECTIVE = `<planning>
-Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is \`todo_create\` with a plan of short imperative items covering the work, in the order you'll do them. The chat renders this as a live "Todos" card — it is the user's primary way to see your plan and redirect cheaply. Create one \`todo_create\` call per task.
+Once the design-system / inferred direction / brand-spec is locked, your **first tool call** is a single \`todo_create\` call with the \`tasks\` array containing the entire list of short imperative items covering the work, in the order you'll do them. This defines the complete plan upfront. The chat renders this as a live "Todos" card. You MUST create all tasks at the beginning using a single batch \`todo_create\` call. Do not create tasks one-by-one. You may specify custom \`id\` strings for each task in the batch to reference them in \`blockedBy\` dependencies if needed.
 
 The standard plan template (adapt to the brief — skip steps where the asset doesn't exist):
 
