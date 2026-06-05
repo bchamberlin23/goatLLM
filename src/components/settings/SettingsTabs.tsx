@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  BarChart3,
   Brain,
   CalendarClock,
   Cloud,
@@ -29,6 +30,7 @@ export type SettingsTabId =
   | "features"
   | "voice"
   | "images"
+  | "cost"
   | "sync"
   | "memory"
   | "schedules"
@@ -41,6 +43,7 @@ const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; 
   { id: "features", label: "Feature Flags", hint: "Product modules", icon: Flag, keywords: "flags beta toggles modules pursue goal" },
   { id: "voice", label: "Voice", hint: "Speak and dictate", icon: Mic2, keywords: "voice text to speech tts dictate microphone hands free" },
   { id: "images", label: "Images", hint: "Generation settings", icon: ImageIcon, keywords: "image generation flux stable diffusion openai endpoint" },
+  { id: "cost", label: "Cost & Budget", hint: "Spending controls", icon: BarChart3, keywords: "cost usage tokens budget spending alerts price" },
   { id: "sync", label: "Sync", hint: "iCloud and S3", icon: Cloud, keywords: "cloud sync icloud s3 encrypted cross device" },
   { id: "memory", label: "Memory/RAG", hint: "Retrieval controls", icon: Brain, keywords: "memory rag embeddings retrieval provenance documents source" },
   { id: "schedules", label: "Scheduled Agents", hint: "Recurring runs", icon: CalendarClock, keywords: "scheduled agents cron recurring daily nightly digest" },
@@ -200,6 +203,7 @@ export function SettingsTabs() {
         {activeTab === "features" && <FeatureFlagSettings />}
         {activeTab === "voice" && <VoiceSettings />}
         {activeTab === "images" && <ImageSettings />}
+        {activeTab === "cost" && <CostSettings />}
         {activeTab === "sync" && <SyncSettings />}
         {activeTab === "memory" && <MemorySettings />}
         {activeTab === "schedules" && <ScheduleSettings />}
@@ -311,6 +315,57 @@ function ImageSettings() {
         )}
       </div>
     </SettingsGroup>
+  );
+}
+
+function CostSettings() {
+  const usageSettings = useChatStore((s) => s.usageSettings);
+  const setUsageSettings = useChatStore((s) => s.setUsageSettings);
+  return (
+    <>
+      <SettingsGroup title="Budget" description="Controls the conversation cost tracking in the context meter and inline alerts.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Monthly budget (USD)">
+            <TextInput
+              type="number"
+              min={0}
+              step={1}
+              value={usageSettings.monthlyBudgetUsd}
+              onChange={(e) => setUsageSettings({ ...usageSettings, monthlyBudgetUsd: Number(e.target.value) || 0 })}
+            />
+          </Field>
+          <Field label="Expensive-session alert (USD)">
+            <TextInput
+              type="number"
+              min={0}
+              step={0.1}
+              value={usageSettings.expensiveSessionUsd}
+              onChange={(e) => setUsageSettings({ ...usageSettings, expensiveSessionUsd: Number(e.target.value) || 0 })}
+            />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <ToggleRow
+            enabled={usageSettings.showInlineAlerts}
+            onToggle={(enabled) => setUsageSettings({ ...usageSettings, showInlineAlerts: enabled })}
+            title="Inline budget alerts"
+            description="Surface cost warnings when a conversation crosses configured thresholds."
+          />
+        </div>
+      </SettingsGroup>
+      <SettingsGroup title="Price overrides" description="Custom per-model pricing as JSON. Keys are model IDs, values have inputPerMillion and outputPerMillion.">
+        <textarea
+          value={JSON.stringify(usageSettings.priceOverrides, null, 2)}
+          onChange={(e) => {
+            try {
+              setUsageSettings({ ...usageSettings, priceOverrides: JSON.parse(e.target.value) });
+            } catch { /* keep typing until valid JSON */ }
+          }}
+          className="min-h-[160px] w-full rounded-xl border border-white/[0.08] bg-black/20 p-3 font-mono text-[11.5px] text-text-1 outline-none focus:border-accent/45"
+          placeholder='{"openai:gpt-4o": {"inputPerMillion": 2.50, "outputPerMillion": 10.00}}'
+        />
+      </SettingsGroup>
+    </>
   );
 }
 
