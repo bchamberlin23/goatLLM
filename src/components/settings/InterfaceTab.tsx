@@ -26,6 +26,8 @@ export function InterfaceTab() {
   const setAutoArtifacts = useChatStore((s) => s.setAutoArtifacts);
   const officeArtifacts = useChatStore((s) => s.officeArtifacts);
   const setOfficeArtifacts = useChatStore((s) => s.setOfficeArtifacts);
+  const advancedArtifacts = useChatStore((s) => s.advancedArtifacts);
+  const setAdvancedArtifacts = useChatStore((s) => s.setAdvancedArtifacts);
   const showDesignCritique = useChatStore((s) => s.showDesignCritique);
   const setShowDesignCritique = useChatStore((s) => s.setShowDesignCritique);
   const completionSound = useChatStore((s) => s.completionSound);
@@ -40,7 +42,7 @@ export function InterfaceTab() {
 
   return (
     <>
-      <SettingsGroup title="Artifacts" description="Side-panel canvas for substantial outputs.">
+      <SettingsGroup title="Artifacts" description="Side-panel canvas and live inline widgets for richer outputs.">
         <ToggleRow
           enabled={autoArtifacts}
           onToggle={setAutoArtifacts}
@@ -54,6 +56,12 @@ export function InterfaceTab() {
           description="Render docx, pptx, and xlsx as downloadable documents."
           dimmedWhen={!autoArtifacts}
           dimmedHint={!autoArtifacts ? "Auto-render is off — office formats stay inline." : undefined}
+        />
+        <ToggleRow
+          enabled={advancedArtifacts}
+          onToggle={setAdvancedArtifacts}
+          title="Advanced inline artifacts"
+          description="Let the model render live HTML/CSS/JS widgets — charts, diagrams, animations, interactive demos — right inside the reply. Runs sandboxed, isolated from the app."
         />
       </SettingsGroup>
 

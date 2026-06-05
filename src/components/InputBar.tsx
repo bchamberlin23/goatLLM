@@ -1130,9 +1130,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
           const autoArtifacts = useChatStore.getState().autoArtifacts;
           const officeArtifacts = useChatStore.getState().officeArtifacts;
+          const advancedArtifacts = useChatStore.getState().advancedArtifacts;
           const base = buildChatSystemPrompt(userPrompt, isResearchMode, hasWebSearch && !isResearchMode, {
             autoArtifacts,
             officeArtifacts,
+            advancedArtifacts,
             existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
           });
           let out = base;

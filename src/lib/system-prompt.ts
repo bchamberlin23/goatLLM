@@ -202,10 +202,11 @@ export function buildChatSystemPrompt(
   userPrompt?: string,
   researchMode?: boolean,
   hasWebSearch?: boolean,
-  options?: { autoArtifacts?: boolean; officeArtifacts?: boolean; existingArtifacts?: { kind: string; title: string }[] },
+  options?: { autoArtifacts?: boolean; officeArtifacts?: boolean; advancedArtifacts?: boolean; existingArtifacts?: { kind: string; title: string }[] },
 ): string {
   const autoArtifacts = options?.autoArtifacts ?? true;
   const officeArtifacts = options?.officeArtifacts ?? true;
+  const advancedArtifacts = options?.advancedArtifacts ?? true;
   // Models trained months ago don't know what year/month it is, so they
   // confidently answer "current" questions with stale data. Always pin the
   // real date at the top of the system prompt so they can either answer
@@ -228,6 +229,12 @@ export function buildChatSystemPrompt(
   const inlineOnlyGuide =
     "\n\nWhen showing code, keep it inline in the chat as a normal fenced code block (```html, ```python, ```js, etc.). The user has turned off the side-panel canvas, so do not assume artifacts will render anywhere else.";
 
+  // Inline widgets render LIVE in the reply (sandboxed iframe), independent of
+  // the side-panel canvas — so this guidance is appended regardless of the
+  // autoArtifacts toggle.
+  const widgetGuide =
+    "\n\n# Inline widgets (live in the reply)\n\nYou can embed a small, self-contained interactive or visual element that renders LIVE right inside your reply — not in the side panel. Use a ```widget fence:\n\n### Sales by quarter\n```widget\n<canvas id=\"c\" width=\"520\" height=\"260\"></canvas>\n<script>\n  const ctx = document.getElementById('c').getContext('2d');\n  const data = [12, 19, 8, 25];\n  const max = Math.max(...data);\n  data.forEach((v, i) => {\n    ctx.fillStyle = '#f59e42';\n    const h = (v / max) * 220;\n    ctx.fillRect(40 + i * 120, 240 - h, 80, h);\n  });\n</script>\n```\n\nHow widgets work:\n- The fence body is ONE self-contained HTML document fragment. Put all markup, `<style>`, and `<script>` inline in the same block. It runs in a sandboxed frame that auto-sizes to its content.\n- The heading on the line directly above the fence becomes the widget's title.\n- External libraries are fine via an https CDN `<script src=\"…\">` (e.g. a charting or animation library). Relative file paths and local imports will NOT resolve — keep everything inline or CDN-loaded.\n- The frame is isolated from the app: no access to your conversation, storage, or the page around it.\n\nGreat uses: data visualizations and charts, SVG/diagram drawings, animations, physics or math simulations, small calculators, interactive explainers, color/typography demos, anything that's clearer when the reader can see or poke at it rather than read a description.\n\nWhen NOT to use a widget:\n- For a full standalone web page, site, or app the user wants to open/edit/download — use an `html` artifact (the side-panel canvas) instead.\n- For plain data the reader just needs to scan — a Markdown table is lighter than a widget.\n- For code the user wants to read or copy — a normal fenced code block.\n\nKeep widgets focused and reasonably sized; tall content scrolls inside the frame. Write a short sentence of context around the widget, and never paste the same code again outside the fence.";
+
   const artifactGuide = autoArtifacts
     ? artifactCoreGuide + (officeArtifacts ? officeGuide : "") + formatArtifactInventory(options?.existingArtifacts)
     : inlineOnlyGuide;
@@ -235,7 +242,7 @@ export function buildChatSystemPrompt(
   const webSearchGuide = hasWebSearch
     ? "\n\nA web_search tool is available. Use it whenever the user asks about current events, recent updates, prices, scores, releases, or any fact that may have changed after your training cutoff — or when you simply don't know. If a search result's snippet is not enough, call scrape_url on the specific URL to read the page. Don't announce that you'll search; just call the tool, then answer with the result.\n\nCRITICAL: You only get ONE search per turn. Read the user's request carefully, figure out exactly what they need, and craft a single optimized query. Do NOT search multiple angles or do follow-up searches — the tool will fail if you exceed the limit. Answer with whatever the one result gives you."
     : "";
-  let body = base + artifactGuide + webSearchGuide;
+  let body = base + artifactGuide + (advancedArtifacts ? widgetGuide : "") + webSearchGuide;
   if (userPrompt) {
     body = `${body}\n\n<user_instructions>\n${userPrompt}\n</user_instructions>`;
   }

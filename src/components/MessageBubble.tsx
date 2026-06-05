@@ -3,7 +3,8 @@ import { Message, useChatStore, normalizeTitle, type ArtifactKind, type ToolCall
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
-import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-segments";
+import { InlineWidget, InlineWidgetPlaceholder } from "./InlineWidget";
+import { splitContentByArtifacts, type ContentSegment, type InlineWidgetKind } from "../lib/artifact-segments";
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
@@ -1041,14 +1042,27 @@ function SegmentedAssistantText({
   const artifacts = useChatStore((s) => (activeId ? s.artifacts[activeId] : undefined));
   const autoArtifacts = useChatStore((s) => s.autoArtifacts);
   const officeArtifacts = useChatStore((s) => s.officeArtifacts);
+  const advancedArtifacts = useChatStore((s) => s.advancedArtifacts);
 
   const parts = useMemo(() => {
     // Hide the literal BUILD-PLAN-COMPLETE marker from the rendered text —
     // it's a control signal for the Build CTA, not user-facing copy.
     const stripped = content.replace(/\n*BUILD-PLAN-COMPLETE\s*\.?\s*$/m, "").replace(/\s+$/, "");
+    // Inline widgets are an independent surface from the side-panel canvas, so
+    // they're gated by their own toggle and split out regardless of autoArtifacts.
+    const inlineWidgetKinds = advancedArtifacts
+      ? new Set<InlineWidgetKind>(["widget"])
+      : undefined;
     if (!autoArtifacts) {
-      // User opted out — keep every fence inline as a regular code block.
-      return [{ type: "text" as const, text: stripped }];
+      // User opted out of the canvas — keep every artifact fence inline as a
+      // regular code block, but still render live widgets when enabled.
+      if (!inlineWidgetKinds) {
+        return [{ type: "text" as const, text: stripped }];
+      }
+      return splitContentByArtifacts(stripped, {
+        enabledKinds: new Set<ArtifactKind>(),
+        inlineWidgetKinds,
+      });
     }
     const enabledKinds = new Set<ArtifactKind>([
       "html", "latex", "python",
@@ -1061,8 +1075,8 @@ function SegmentedAssistantText({
       enabledKinds.add("pptx");
       enabledKinds.add("xlsx");
     }
-    return splitContentByArtifacts(stripped, { enabledKinds });
-  }, [content, autoArtifacts, officeArtifacts]);
+    return splitContentByArtifacts(stripped, { enabledKinds, inlineWidgetKinds });
+  }, [content, autoArtifacts, officeArtifacts, advancedArtifacts]);
 
   // Build a lookup so the inline placeholder slots can resolve to a real
   // artifact once detection runs after the stream finishes. We match on
@@ -1093,22 +1107,30 @@ function SegmentedAssistantText({
             />
           );
         }
-        const real = findArtifact(p.kind, p.title);
-        if (real) {
+        if (p.type === "artifact") {
+          const real = findArtifact(p.kind, p.title);
+          if (real) {
+            return (
+              <div key={`a-${i}`} className="my-2">
+                <ArtifactCard artifact={real} />
+              </div>
+            );
+          }
+          // No artifact in the store yet — either still streaming, or the
+          // closing fence is missing. Show the placeholder so the user has
+          // something to look at.
           return (
             <div key={`a-${i}`} className="my-2">
-              <ArtifactCard artifact={real} />
+              <ArtifactPlaceholderCard kind={p.kind} title={p.title} />
             </div>
           );
         }
-        // No artifact in the store yet — either still streaming, or the
-        // closing fence is missing. Show the placeholder so the user has
-        // something to look at.
-        return (
-          <div key={`a-${i}`} className="my-2">
-            <ArtifactPlaceholderCard kind={p.kind} title={p.title} />
-          </div>
-        );
+        // Live inline widget — sandboxed, auto-sizing render in the reply
+        // flow. Hold partial HTML behind a placeholder so layout doesn't flash.
+        if (!p.complete) {
+          return <InlineWidgetPlaceholder key={`w-${i}`} title={p.title} />;
+        }
+        return <InlineWidget key={`w-${i}`} code={p.code} title={p.title} />;
       })}
       {/* If the bubble is mid-stream and the last segment is an open fence,
           add a subtle "writing" hint below the placeholder. */}

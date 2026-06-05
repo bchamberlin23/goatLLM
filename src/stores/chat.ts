@@ -1294,6 +1294,15 @@ interface ChatStore {
   officeArtifacts: boolean;
   setOfficeArtifacts: (enabled: boolean) => void;
 
+  /** When true (default), the model may author inline widgets — self-contained
+   *  HTML/CSS/JS in a ```widget fence — that render live inside the reply as a
+   *  sandboxed, auto-sizing frame (charts, diagrams, animations, interactive
+   *  demos). When false, widget fences fall back to plain code blocks and the
+   *  capability is omitted from the system prompt. Independent of the
+   *  side-panel canvas (autoArtifacts). */
+  advancedArtifacts: boolean;
+  setAdvancedArtifacts: (enabled: boolean) => void;
+
   /** When true, the 5-dim critique scores are shown in design mode messages.
    *  When false (default), they are stripped from the UI. */
   showDesignCritique: boolean;
@@ -1595,6 +1604,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       webSearchCount: 0,
       autoArtifacts: true,
       officeArtifacts: true,
+      advancedArtifacts: true,
       showDesignCritique: false,
       glowBackgroundEnabled: false,
       glowBackgroundMode: "blocky",
@@ -3696,6 +3706,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-office-artifacts", enabled ? "true" : "false"); } catch {}
       },
 
+      setAdvancedArtifacts: (enabled) => {
+        set({ advancedArtifacts: enabled });
+        try { localStorage.setItem("goatllm-advanced-artifacts", enabled ? "true" : "false"); } catch {}
+      },
+
       setShowDesignCritique: (enabled) => {
         set({ showDesignCritique: enabled });
         try { localStorage.setItem("goatllm-show-design-critique", enabled ? "true" : "false"); } catch {}
@@ -4147,6 +4162,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // Artifact toggles: default on. Only an explicit "false" disables them.
         const autoArtifacts = localStorage.getItem("goatllm-auto-artifacts") !== "false";
         const officeArtifacts = localStorage.getItem("goatllm-office-artifacts") !== "false";
+        const advancedArtifacts = localStorage.getItem("goatllm-advanced-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
         const glowBackgroundEnabled = localStorage.getItem("goatllm-glow-bg-enabled") === "true";
         const glowBackgroundMode = (localStorage.getItem("goatllm-glow-bg-mode") as any) || "blocky";
@@ -4362,6 +4378,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             projectCheckMemory: loadProjectCheckMemory(),
             autoApprove: savedMode === "yolo",
             artifacts: restoredArtifacts,
+            advancedArtifacts,
             agentMode,
             designMode,
             jjagent,
@@ -4492,6 +4509,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             embeddingModel,
             researchMode: false,
             planMode: false,
+            advancedArtifacts,
             autoApprove: savedMode === "yolo",
             workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,

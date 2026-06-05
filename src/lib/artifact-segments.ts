@@ -30,6 +30,31 @@ const ARTIFACT_LANG_MAP: Record<string, ArtifactKind> = {
   spreadsheet: "xlsx",
 };
 
+/**
+ * Inline widgets are a *different* surface from side-panel artifacts: their
+ * body is rendered live, right in the flow of the reply, as a sandboxed
+ * auto-sizing iframe — not a reference card that opens the canvas. A single
+ * "widget" kind (self-contained HTML/CSS/JS) covers charts, diagrams,
+ * animations, simulations, and small interactive demos. These fence tags are
+ * deliberately distinct from the artifact tags so the two systems never
+ * collide.
+ */
+export type InlineWidgetKind = "widget";
+
+const WIDGET_LANG_MAP: Record<string, InlineWidgetKind> = {
+  widget: "widget",
+  "inline-html": "widget",
+  inlinehtml: "widget",
+  live: "widget",
+  livehtml: "widget",
+  "live-html": "widget",
+  demo: "widget",
+  viz: "widget",
+  embed: "widget",
+};
+
+const EMPTY_WIDGET_KINDS: ReadonlySet<InlineWidgetKind> = new Set();
+
 export type ContentSegment =
   | { type: "text"; text: string }
   | {
@@ -42,6 +67,17 @@ export type ContentSegment =
       /** Body collected so far. Defined for both complete and in-progress
        *  fences so the canvas can stream the partial code live. */
       code: string;
+    }
+  | {
+      type: "inline-widget";
+      widgetKind: InlineWidgetKind;
+      /** Heading on the line immediately preceding the fence, if any. */
+      title: string;
+      /** True when we saw the closing ``` for this fence. */
+      complete: boolean;
+      /** Body collected so far. Only rendered live once `complete` is true —
+       *  partial HTML would flash broken layouts mid-stream. */
+      code: string;
     };
 
 export interface SplitOptions {
@@ -49,6 +85,10 @@ export interface SplitOptions {
    *  falls through to plain markdown so the fence renders inline as a
    *  regular code block. Defaults to all six kinds. */
   enabledKinds?: ReadonlySet<ArtifactKind>;
+  /** Which inline-widget kinds render live in the chat flow. Defaults to an
+   *  empty set, so widgets only activate when the caller opts in (the
+   *  "Advanced inline artifacts" toggle). */
+  inlineWidgetKinds?: ReadonlySet<InlineWidgetKind>;
 }
 
 const DEFAULT_KINDS: ReadonlySet<ArtifactKind> = new Set<ArtifactKind>([
@@ -65,11 +105,13 @@ export function splitContentByArtifacts(
   options?: SplitOptions,
 ): ContentSegment[] {
   const enabled = options?.enabledKinds ?? DEFAULT_KINDS;
+  const widgetEnabled = options?.inlineWidgetKinds ?? EMPTY_WIDGET_KINDS;
   const segments: ContentSegment[] = [];
   const lines = content.split("\n");
   let textBuf: string[] = [];
   let inFence = false;
   let fenceKind: ArtifactKind | null = null;
+  let fenceWidgetKind: InlineWidgetKind | null = null;
   let fenceTitle = "";
 
   const flushText = () => {
@@ -103,10 +145,22 @@ export function splitContentByArtifacts(
     const line = lines[i];
 
     if (!inFence) {
-      const fenceOpen = /^[ \t]*```(\w+)[ \t]*$/.exec(line);
+      const fenceOpen = /^[ \t]*```([\w-]+)[ \t]*$/.exec(line);
       if (fenceOpen) {
         const lang = fenceOpen[1].toLowerCase();
+        const widgetKind = WIDGET_LANG_MAP[lang];
         const kind = ARTIFACT_LANG_MAP[lang];
+        if (widgetKind && widgetEnabled.has(widgetKind)) {
+          // Inline widget fence — rendered live in the chat flow. Swallow the
+          // body so the raw code never reaches the markdown renderer.
+          fenceTitle = popTrailingHeading();
+          flushText();
+          inFence = true;
+          fenceWidgetKind = widgetKind;
+          fenceKind = null;
+          codeBuf = [];
+          continue;
+        }
         if (kind && enabled.has(kind)) {
           // It's an artifact fence — don't pass the raw code through to
           // the markdown renderer.
@@ -114,6 +168,7 @@ export function splitContentByArtifacts(
           flushText();
           inFence = true;
           fenceKind = kind;
+          fenceWidgetKind = null;
           codeBuf = [];
           continue;
         }
@@ -123,15 +178,26 @@ export function splitContentByArtifacts(
       // We're inside an artifact fence. Swallow code until the closing fence.
       const fenceClose = /^[ \t]*```[ \t]*$/.test(line);
       if (fenceClose) {
-        segments.push({
-          type: "artifact",
-          kind: fenceKind!,
-          title: fenceTitle,
-          complete: true,
-          code: codeBuf.join("\n"),
-        });
+        segments.push(
+          fenceWidgetKind
+            ? {
+                type: "inline-widget",
+                widgetKind: fenceWidgetKind,
+                title: fenceTitle,
+                complete: true,
+                code: codeBuf.join("\n"),
+              }
+            : {
+                type: "artifact",
+                kind: fenceKind!,
+                title: fenceTitle,
+                complete: true,
+                code: codeBuf.join("\n"),
+              },
+        );
         inFence = false;
         fenceKind = null;
+        fenceWidgetKind = null;
         fenceTitle = "";
         codeBuf = [];
       } else {
@@ -146,13 +212,23 @@ export function splitContentByArtifacts(
     // Stream still in progress — emit an incomplete card so the user sees
     // a "Writing…" placeholder instead of nothing, and expose the partial
     // body so the canvas can render it.
-    segments.push({
-      type: "artifact",
-      kind: fenceKind!,
-      title: fenceTitle,
-      complete: false,
-      code: codeBuf.join("\n"),
-    });
+    segments.push(
+      fenceWidgetKind
+        ? {
+            type: "inline-widget",
+            widgetKind: fenceWidgetKind,
+            title: fenceTitle,
+            complete: false,
+            code: codeBuf.join("\n"),
+          }
+        : {
+            type: "artifact",
+            kind: fenceKind!,
+            title: fenceTitle,
+            complete: false,
+            code: codeBuf.join("\n"),
+          },
+    );
   } else {
     flushText();
   }
