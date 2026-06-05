@@ -6,6 +6,7 @@ import {
   Cpu,
   Eye,
   Flag,
+  Image as ImageIcon,
   Layout,
   Mic2,
   Search,
@@ -18,7 +19,7 @@ import { InterfaceTab } from "./InterfaceTab";
 import { AdvancedTab } from "./AdvancedTab";
 import { SettingsGroup } from "./SettingsGroup";
 import { ToggleRow } from "./ToggleRow";
-import { useChatStore, type ProductFeatureFlags, type ScheduledAgent } from "../../stores/chat";
+import { useChatStore, type ProductFeatureFlags, type ScheduledAgent, type ImageGenSettings } from "../../stores/chat";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
 
@@ -27,6 +28,7 @@ export type SettingsTabId =
   | "appearance"
   | "features"
   | "voice"
+  | "images"
   | "sync"
   | "memory"
   | "schedules"
@@ -38,6 +40,7 @@ const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; 
   { id: "appearance", label: "Appearance", hint: "Canvas and polish", icon: Layout, keywords: "appearance interface artifacts design theme liquid glass" },
   { id: "features", label: "Feature Flags", hint: "Product modules", icon: Flag, keywords: "flags beta toggles modules pursue goal" },
   { id: "voice", label: "Voice", hint: "Speak and dictate", icon: Mic2, keywords: "voice text to speech tts dictate microphone hands free" },
+  { id: "images", label: "Images", hint: "Generation settings", icon: ImageIcon, keywords: "image generation flux stable diffusion openai endpoint" },
   { id: "sync", label: "Sync", hint: "iCloud and S3", icon: Cloud, keywords: "cloud sync icloud s3 encrypted cross device" },
   { id: "memory", label: "Memory/RAG", hint: "Retrieval controls", icon: Brain, keywords: "memory rag embeddings retrieval provenance documents source" },
   { id: "schedules", label: "Scheduled Agents", hint: "Recurring runs", icon: CalendarClock, keywords: "scheduled agents cron recurring daily nightly digest" },
@@ -196,6 +199,7 @@ export function SettingsTabs() {
         {activeTab === "appearance" && <AppearanceSettings />}
         {activeTab === "features" && <FeatureFlagSettings />}
         {activeTab === "voice" && <VoiceSettings />}
+        {activeTab === "images" && <ImageSettings />}
         {activeTab === "sync" && <SyncSettings />}
         {activeTab === "memory" && <MemorySettings />}
         {activeTab === "schedules" && <ScheduleSettings />}
@@ -273,6 +277,40 @@ function VoiceSettings() {
         </div>
       </SettingsGroup>
     </>
+  );
+}
+
+function ImageSettings() {
+  const imageGenSettings = useChatStore((s) => s.imageGenSettings);
+  const setImageGenSettings = useChatStore((s) => s.setImageGenSettings);
+  return (
+    <SettingsGroup title="Image generation" description="Configure provider, model, and endpoint for the image generation button in the input bar.">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Provider">
+          <Select value={imageGenSettings.provider} onChange={(e) => setImageGenSettings({ ...imageGenSettings, provider: e.target.value as ImageGenSettings["provider"] })}>
+            <option value="openai">OpenAI</option>
+            <option value="flux">Flux</option>
+            <option value="stable-diffusion">Stable Diffusion</option>
+            <option value="custom">Custom endpoint</option>
+          </Select>
+        </Field>
+        <Field label="Model">
+          <TextInput value={imageGenSettings.model} onChange={(e) => setImageGenSettings({ ...imageGenSettings, model: e.target.value })} placeholder="gpt-image-1.5" />
+        </Field>
+        <Field label="Size">
+          <Select value={imageGenSettings.size} onChange={(e) => setImageGenSettings({ ...imageGenSettings, size: e.target.value })}>
+            <option value="1024x1024">1024×1024</option>
+            <option value="1792x1024">1792×1024</option>
+            <option value="1024x1792">1024×1792</option>
+          </Select>
+        </Field>
+        {(imageGenSettings.provider === "flux" || imageGenSettings.provider === "stable-diffusion" || imageGenSettings.provider === "custom") && (
+          <Field label="Custom endpoint URL">
+            <TextInput value={imageGenSettings.customEndpoint} onChange={(e) => setImageGenSettings({ ...imageGenSettings, customEndpoint: e.target.value })} placeholder="https://..." />
+          </Field>
+        )}
+      </div>
+    </SettingsGroup>
   );
 }
 

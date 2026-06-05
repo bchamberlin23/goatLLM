@@ -31,6 +31,7 @@ const PRODUCT_WORKSPACE_STATE_KEY = "goatllm-product-workspace-state";
 const USAGE_SETTINGS_KEY = "goatllm-usage-settings";
 const VOICE_SETTINGS_KEY = "goatllm-voice-settings";
 const SYNC_SETTINGS_KEY = "goatllm-sync-settings";
+const IMAGE_GEN_SETTINGS_KEY = "goatllm-image-gen-settings";
 const FEATURE_FLAGS_KEY = "goatllm-feature-flags";
 const PLUS_MENU_VISIBILITY_KEY = "goatllm-plus-menu-visibility";
 const NOTEBOOK_CELLS_KEY = "goatllm-notebook-cells";
@@ -86,6 +87,13 @@ const DEFAULT_SYNC_SETTINGS: SyncConfig = {
   prefix: "goatllm",
   encryptionKeyHint: "",
   remoteLabel: "iCloud Drive",
+};
+
+const DEFAULT_IMAGE_GEN_SETTINGS: ImageGenSettings = {
+  provider: "openai",
+  model: "gpt-image-1.5",
+  customEndpoint: "",
+  size: "1024x1024",
 };
 
 const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
@@ -528,6 +536,13 @@ export interface ImageGenerationJob {
   imageDataUrl?: string;
   artifactId?: string;
   error?: string;
+}
+
+export interface ImageGenSettings {
+  provider: "openai" | "flux" | "stable-diffusion" | "custom";
+  model: string;
+  customEndpoint: string;
+  size: string;
 }
 
 export interface ScheduledAgent {
@@ -1103,6 +1118,8 @@ interface ChatStore {
   imageJobs: ImageGenerationJob[];
   addImageJob: (job: ImageGenerationJob) => void;
   updateImageJob: (jobId: string, updates: Partial<ImageGenerationJob>) => void;
+  imageGenSettings: ImageGenSettings;
+  setImageGenSettings: (settings: ImageGenSettings) => void;
   scheduledAgents: ScheduledAgent[];
   setScheduledAgents: (agents: ScheduledAgent[]) => void;
   watcherEvents: WatcherEventSummaryInput[];
@@ -1523,6 +1540,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
       voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
       syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+      imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
       featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
       plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
       browserMirror: DEFAULT_BROWSER_MIRROR,
@@ -3197,6 +3215,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(SYNC_SETTINGS_KEY, settings);
       },
 
+      setImageGenSettings: (settings) => {
+        set({ imageGenSettings: settings });
+        saveJsonSetting(IMAGE_GEN_SETTINGS_KEY, settings);
+      },
+
       setFeatureFlag: (key, enabled) => {
         const next = { ...get().featureFlags, [key]: enabled };
         set({ featureFlags: next });
@@ -4240,6 +4263,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+            imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
@@ -4348,6 +4372,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
+            imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),

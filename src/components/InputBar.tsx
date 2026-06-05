@@ -1554,6 +1554,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
   // ── Image generation ──
   const providerConfigs = useChatStore((s) => s.providerConfigs);
+  const imageGenSettings = useChatStore((s) => s.imageGenSettings);
   const addImageArtifact = useChatStore((s) => s.addImageArtifact);
   const handleGenerateImage = useCallback(async () => {
     const prompt = imagePrompt.trim();
@@ -1562,39 +1563,58 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     setImageGenError(null);
     setImageGenResult(null);
     try {
-      const cfg = providerConfigs.openai;
-      if (!cfg?.apiKey) throw new Error("Configure an OpenAI API key in Settings first.");
-      const baseUrl = (cfg.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
-      const res = await fetch(`${baseUrl}/images/generations`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${cfg.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-image-1.5",
-          prompt,
-          size: "1024x1024",
-          quality: "auto",
-          background: "auto",
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
-      const first = json?.data?.[0];
-      const base64 = first?.b64_json ?? first?.url;
-      const dataUrl = base64?.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
-      setImageGenResult(dataUrl);
-      // Add image as artifact to conversation
-      if (activeId) {
-        addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
+      const provider = imageGenSettings.provider;
+      if (provider === "openai") {
+        const cfg = providerConfigs.openai;
+        if (!cfg?.apiKey) throw new Error("Configure an OpenAI API key in Settings first.");
+        const baseUrl = (cfg.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+        const res = await fetch(`${baseUrl}/images/generations`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${cfg.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: imageGenSettings.model || "gpt-image-1.5",
+            prompt,
+            size: imageGenSettings.size || "1024x1024",
+            quality: "auto",
+            background: "auto",
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
+        const first = json?.data?.[0];
+        const base64 = first?.b64_json ?? first?.url;
+        const dataUrl = base64?.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
+        setImageGenResult(dataUrl);
+        if (activeId) {
+          addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
+        }
+      } else {
+        const endpoint = imageGenSettings.customEndpoint;
+        if (!endpoint) throw new Error("Configure a custom endpoint URL in Settings for this provider.");
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, provider, model: imageGenSettings.model }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
+        const first = json?.data?.[0] ?? json?.images?.[0] ?? json;
+        const base64 = first?.b64_json ?? first?.b64 ?? first?.image ?? first?.url ?? first?.data;
+        const dataUrl = base64?.startsWith("data:") ? base64 : typeof base64 === "string" ? `data:image/png;base64,${base64}` : JSON.stringify(json);
+        setImageGenResult(dataUrl);
+        if (activeId) {
+          addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
+        }
       }
     } catch (error) {
       setImageGenError(error instanceof Error ? error.message : String(error));
     } finally {
       setImageGenLoading(false);
     }
-  }, [imagePrompt, imageGenLoading, providerConfigs, activeId, addImageArtifact]);
+  }, [imagePrompt, imageGenLoading, providerConfigs, imageGenSettings, activeId, addImageArtifact]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Don't handle Enter if file picker is open (let the picker handle it)
