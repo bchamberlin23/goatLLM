@@ -11,11 +11,12 @@
  * - Per-server allowed-subdirs enforcement.
  * - Per-server trusted toggle + readOnlyHint (T12).
  */
-import type { ToolSet } from "ai";
+import { jsonSchema, type Tool, type ToolSet } from "ai";
 import type { McpServerConfig, MCPClient, McpToolInfo } from "./client";
 import { withApproval } from "../tools/approval";
 
 const MCP_SERVERS_KEY = "goatllm-mcp-servers";
+type JsonSchemaInput = Parameters<typeof jsonSchema<Record<string, unknown>>>[0];
 
 interface ActiveServer {
   config: McpServerConfig;
@@ -54,13 +55,14 @@ export function buildMcpToolSet(): ToolSet {
 
     for (const mcpTool of filtered) {
       const fullName = `mcp_${serverId}_${mcpTool.name}`;
-      tools[fullName] = {
+      const aiTool: Tool<Record<string, unknown>, unknown> = {
         description: mcpTool.description ?? `MCP tool: ${mcpTool.name}`,
-        parameters: mcpTool.inputSchema,
-        execute: async (args: any) => {
+        inputSchema: jsonSchema<Record<string, unknown>>(mcpTool.inputSchema as JsonSchemaInput),
+        execute: async (args) => {
           return executeMcpTool(serverId, mcpTool.name, args, server.config);
         },
-      } as any;
+      };
+      tools[fullName] = aiTool;
     }
   }
   return tools;

@@ -32,6 +32,7 @@ import { SettingsGroup } from "./SettingsGroup";
 import { ToggleRow } from "./ToggleRow";
 import { useChatStore, type ProductFeatureFlags, type ScheduledAgent, type ImageGenSettings } from "../../stores/chat";
 import { loadPromptTemplates } from "../../lib/prompt-templates";
+import type { Memory } from "../../lib/memory";
 import { createPromptVersion, filterPromptDocuments, type PromptDocument } from "../../lib/product-workspace";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -616,7 +617,7 @@ function SyncSettings() {
         conversations: state.conversations,
         messages: state.messages,
       });
-      const result = await invoke<string>("sync_export_state", { config: syncSettings, payload }).catch((e: any) => {
+      const result = await invoke<string>("sync_export_state", { config: syncSettings, payload }).catch((e) => {
         throw new Error(e instanceof Error ? e.message : String(e));
       });
       setStatus(result || "Exported.");
@@ -684,7 +685,7 @@ function MemorySettings() {
   const [memText, setMemText] = useState("");
   const [memCategory, setMemCategory] = useState("fact");
   const [memQuery, setMemQuery] = useState("");
-  const [memList, setMemList] = useState<any[]>([]);
+  const [memList, setMemList] = useState<Memory[]>([]);
   const [memStatus, setMemStatus] = useState("");
 
   const refreshMemories = useCallback(async () => {
@@ -768,7 +769,7 @@ function MemorySettings() {
           </div>
           {memStatus && <p className="text-[11px] text-text-3">{memStatus}</p>}
           <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
-            {memList.map((mem: any) => (
+            {memList.map((mem) => (
               <div key={mem.id} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">

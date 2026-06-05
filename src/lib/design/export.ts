@@ -113,18 +113,32 @@ export function printToPdf(html: string): Window | null {
 // Lazy-load JSZip to keep the bundle small until the user actually
 // exports something. The dynamic import tree-shakes out of the main
 // bundle.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _JSZip: any = null;
+interface JSZipArchive {
+  file(name: string, data: string): void;
+  generateAsync(options: { type: "blob" }): Promise<Blob>;
+}
+
+interface JSZipModule {
+  default: new () => JSZipArchive;
+}
+
+let _JSZip: JSZipModule | null = null;
 let _JSZipLoadAttempted = false;
 
-async function getJSZip(): Promise<any> {
+function isJSZipModule(value: unknown): value is JSZipModule {
+  if (!value || typeof value !== "object" || !("default" in value)) return false;
+  return typeof (value as { default?: unknown }).default === "function";
+}
+
+async function getJSZip(): Promise<JSZipModule | null> {
   if (_JSZipLoadAttempted) return _JSZip;
   _JSZipLoadAttempted = true;
   try {
     // Dynamic import — jszip is an optional dependency not listed in
     // package.json. Using a variable bypasses TS module resolution.
     const modName = "jszip";
-    _JSZip = await import(/* @vite-ignore */ modName);
+    const mod: unknown = await import(/* @vite-ignore */ modName);
+    _JSZip = isJSZipModule(mod) ? mod : null;
     return _JSZip;
   } catch {
     return null;

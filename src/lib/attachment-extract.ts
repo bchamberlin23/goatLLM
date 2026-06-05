@@ -147,37 +147,46 @@ async function dataUrlToText(dataUrl: string): Promise<string> {
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function notebookText(value: unknown): string {
+  return Array.isArray(value) ? value.map(String).join("") : String(value ?? "");
+}
+
 /** Notebook → plain text. Keeps cell ordering, marks code vs markdown,
  *  drops base64 image outputs so a 5MB plot doesn't poison the prompt. */
 function ipynbToText(raw: string): string {
-  let nb: any;
+  let nb: unknown;
   try {
     nb = JSON.parse(raw);
   } catch {
     return raw; // not valid JSON — let the model see the bytes.
   }
   const parts: string[] = [];
-  const cells = Array.isArray(nb?.cells) ? nb.cells : [];
+  const cells = isRecord(nb) && Array.isArray(nb.cells) ? nb.cells : [];
   for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i] ?? {};
+    const cell = isRecord(cells[i]) ? cells[i] : {};
     const cellType = String(cell.cell_type || "code");
-    const src = Array.isArray(cell.source) ? cell.source.join("") : String(cell.source ?? "");
+    const src = notebookText(cell.source);
     if (cellType === "markdown") {
       parts.push(`### Markdown cell ${i + 1}\n${src.trim()}`);
     } else if (cellType === "code") {
       parts.push(`### Code cell ${i + 1}\n\`\`\`\n${src}\n\`\`\``);
       const outputs = Array.isArray(cell.outputs) ? cell.outputs : [];
       const textOutputs: string[] = [];
-      for (const o of outputs) {
-        if (o?.output_type === "stream" && typeof o.text !== "undefined") {
-          textOutputs.push(Array.isArray(o.text) ? o.text.join("") : String(o.text));
-        } else if (o?.data) {
-          const td = o.data["text/plain"];
+      for (const rawOutput of outputs) {
+        const output = isRecord(rawOutput) ? rawOutput : {};
+        if (output.output_type === "stream" && typeof output.text !== "undefined") {
+          textOutputs.push(notebookText(output.text));
+        } else if (isRecord(output.data)) {
+          const td = output.data["text/plain"];
           if (typeof td !== "undefined") {
-            textOutputs.push(Array.isArray(td) ? td.join("") : String(td));
+            textOutputs.push(notebookText(td));
           }
-        } else if (o?.output_type === "error" && Array.isArray(o.traceback)) {
-          textOutputs.push(o.traceback.join("\n"));
+        } else if (output.output_type === "error" && Array.isArray(output.traceback)) {
+          textOutputs.push(output.traceback.map(String).join("\n"));
         }
       }
       if (textOutputs.length > 0) {

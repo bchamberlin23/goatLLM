@@ -1,6 +1,7 @@
-import { generateText } from "ai";
+import { generateText, type ToolExecutionOptions } from "ai";
 import { createModel } from "./model-factory";
 import type { LlmConfig } from "./llm-types";
+import { log, withError } from "./logger";
 
 export interface ResearchProgress {
   phase: "planning" | "searching" | "reading" | "analyzing" | "writing" | "done" | "error" | "warning";
@@ -34,6 +35,34 @@ interface ResearchFinding {
   rational?: string;
   evidence?: string;
   summary?: string;
+  [key: string]: unknown;
+}
+
+interface SearchResultItem {
+  url: string;
+  title?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.map(String) : undefined;
+}
+
+function isSearchResultItem(value: unknown): value is SearchResultItem {
+  return isRecord(value) && typeof value.url === "string";
+}
+
+function toolExecutionOptions(toolCallId: string, abortSignal?: AbortSignal): ToolExecutionOptions {
+  const options: ToolExecutionOptions = { toolCallId, messages: [] };
+  if (abortSignal) options.abortSignal = abortSignal;
+  return options;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +306,7 @@ export function parseJsonArray(text: string): string[] {
   return [];
 }
 
-export function parseJsonObject(text: string): any {
+export function parseJsonObject(text: string): unknown {
   const cleaned = cleanCodeBlock(text);
   try {
     return JSON.parse(cleaned);
@@ -401,17 +430,20 @@ export async function runDeepResearch(
     const planPrompt = currentDateContext() + RESEARCH_PLAN_PROMPT.replace("{question}", question);
     const planResponse = await callLlm([{ role: "user", content: planPrompt }], config, 0.3, 1024, abortSignal);
     const parsedPlan = parseJsonObject(planResponse);
-    if (parsedPlan) {
+    if (isRecord(parsedPlan)) {
       const parts: string[] = [];
-      if (parsedPlan.sub_questions) parts.push("Sub-questions: " + parsedPlan.sub_questions.join("; "));
-      if (parsedPlan.key_topics) parts.push("Key topics: " + parsedPlan.key_topics.join(", "));
-      if (parsedPlan.success_criteria) parts.push("Success: " + parsedPlan.success_criteria);
+      const subQuestions = stringArray(parsedPlan.sub_questions);
+      const keyTopics = stringArray(parsedPlan.key_topics);
+      const successCriteria = optionalString(parsedPlan.success_criteria);
+      if (subQuestions?.length) parts.push("Sub-questions: " + subQuestions.join("; "));
+      if (keyTopics?.length) parts.push("Key topics: " + keyTopics.join(", "));
+      if (successCriteria) parts.push("Success: " + successCriteria);
       researchPlan = parts.join("\n") || planResponse;
     } else {
       researchPlan = planResponse;
     }
   } catch (e) {
-    console.warn("Planning failed:", e);
+    log.warn("Planning failed", withError("deep-research", undefined, e));
     onProgress({ phase: "warning", message: "Planning step failed, proceeding to direct search." });
     researchPlan = "(No plan - search broadly.)";
   }
@@ -439,7 +471,7 @@ Respond with ONLY the category name, nothing else.`;
       }
     }
   } catch (e) {
-    console.warn("Classification failed:", e);
+    log.warn("Classification failed", withError("deep-research", undefined, e));
   }
 
   // 3. ITERATIVE ROUNDS LOOP
@@ -466,7 +498,7 @@ Respond with ONLY the category name, nothing else.`;
       const queryResponse = await callLlm([{ role: "user", content: queryPrompt }], config, 0.5, 2048, abortSignal);
       queries = parseJsonArray(queryResponse).map((q) => q.trim()).filter(Boolean);
     } catch (e) {
-      console.error("Query generation failed:", e);
+      log.error("Query generation failed", withError("deep-research", { round: roundNum }, e));
       onProgress({ phase: "warning", message: `Query generation failed in round ${roundNum}.` });
     }
 
@@ -494,24 +526,28 @@ Respond with ONLY the category name, nothing else.`;
       total_findings: findings.length,
     });
 
-    const searchResults = await Promise.all(newQueries.map(async (query) => {
+    const searchResults = await Promise.all(newQueries.map(async (query, queryIndex) => {
       try {
         const { READ_ONLY_TOOLS } = await import("./tools/registry");
         if (!READ_ONLY_TOOLS.web_search.execute) {
           throw new Error("web_search tool has no execute function");
         }
-        const resultsJson = await READ_ONLY_TOOLS.web_search.execute({ query, maxResults: 10 }, {} as any);
+        const resultsJson = await READ_ONLY_TOOLS.web_search.execute(
+          { query, maxResults: 10 },
+          toolExecutionOptions(`deep-research-web-search-${roundNum}-${queryIndex}`, abortSignal),
+        );
         if (typeof resultsJson !== "string") {
           throw new Error("Expected string response from web_search");
         }
-        const parsed = JSON.parse(resultsJson);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        const parsed: unknown = JSON.parse(resultsJson);
+        const results = Array.isArray(parsed) ? parsed.filter(isSearchResultItem) : [];
+        if (results.length > 0) return results;
         lastSearchError = `no results for "${query}"`;
         return [];
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
         lastSearchError = `${query}: ${detail}`;
-        console.warn(`Search failed for query "${query}":`, e);
+        log.warn(`Search failed for query "${query}"`, withError("deep-research", { query }, e));
         return [];
       }
     }));
@@ -542,7 +578,10 @@ Respond with ONLY the category name, nothing else.`;
     }
 
     const activeFindings: ResearchFinding[] = [];
-    const extracted = await mapWithConcurrency(targets, extractionConcurrency, async (target) => {
+    const extracted = await mapWithConcurrency<typeof targets[number], ResearchFinding | null>(
+      targets,
+      extractionConcurrency,
+      async (target): Promise<ResearchFinding | null> => {
       if (abortSignal?.aborted) return null;
       const displayTitle = target.title || target.url;
       onProgress({
@@ -562,7 +601,7 @@ Respond with ONLY the category name, nothing else.`;
         }
         const scrapeRes = await READ_ONLY_TOOLS.scrape_url.execute(
           { url: target.url, maxChars: maxContentChars },
-          {} as any,
+          toolExecutionOptions(`deep-research-scrape-${roundNum}-${target.url}`, abortSignal),
         );
         if (typeof scrapeRes !== "string" || !scrapeRes.trim() || scrapeRes.startsWith("scrape_url failed:")) {
           return null;
@@ -581,7 +620,7 @@ Respond with ONLY the category name, nothing else.`;
 
         const extractResponse = await callLlm([{ role: "user", content: extractPrompt }], config, 0.2, 2048, abortSignal);
         const parsedExtract = parseJsonObject(extractResponse);
-        if (parsedExtract) {
+        if (isRecord(parsedExtract)) {
           return {
             ...parsedExtract,
             url: target.url,
@@ -596,7 +635,7 @@ Respond with ONLY the category name, nothing else.`;
           summary: extractResponse.slice(0, 500),
         };
       } catch (e) {
-        console.warn(`Extraction failed for ${target.url}:`, e);
+        log.warn(`Extraction failed for ${target.url}`, withError("deep-research", { url: target.url }, e));
         return null;
       }
     });
@@ -646,7 +685,7 @@ Respond with ONLY the category name, nothing else.`;
         const nextReport = await callLlm([{ role: "user", content: synthPrompt }], config, 0.3, maxReportTokens, abortSignal);
         if (nextReport.trim()) report = nextReport;
       } catch (e) {
-        console.error("Synthesis failed:", e);
+        log.error("Synthesis failed", withError("deep-research", { round: roundNum }, e));
         onProgress({ phase: "warning", round: roundNum, message: "Synthesis failed, keeping gathered findings." });
       }
     }
@@ -661,11 +700,11 @@ Respond with ONLY the category name, nothing else.`;
         const stopResponse = await callLlm([{ role: "user", content: stopPrompt }], config, 0.1, 128, abortSignal);
         const decisionClean = stopResponse.trim().toUpperCase().replace(/^[\s*_`"\'>#\-]+/, "");
         if (decisionClean.startsWith("YES")) {
-          console.log(`LLM decided to stop after round ${roundNum}: ${decisionClean}`);
+          log.info(`LLM decided to stop after round ${roundNum}: ${decisionClean}`, { tag: "deep-research", data: { round: roundNum, decision: decisionClean } });
           break;
         }
       } catch (e) {
-        console.warn("Stop decision prompt failed:", e);
+        log.warn("Stop decision prompt failed", withError("deep-research", undefined, e));
       }
     }
   }
@@ -712,7 +751,7 @@ Respond with ONLY the category name, nothing else.`;
       ], config, 0.4, maxReportTokens, abortSignal);
     }
   } catch (e) {
-    console.error("Final report generation failed:", e);
+    log.error("Final report generation failed", withError("deep-research", undefined, e));
     finalReport = report || "Failed to generate Deep Research report.";
   }
 

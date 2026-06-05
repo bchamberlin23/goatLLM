@@ -1,7 +1,9 @@
 import { useChatStore } from "../stores/chat";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { CheckSquare, Pencil, Trash2, Plus } from "lucide-react";
-import type { Task } from "../lib/tools/todo";
+import type { Task, TaskBoard } from "../lib/tools/todo";
+
+type UpdateManualTodoBoard = (conversationId: string, board: TaskBoard) => void;
 
 export function TodoWidget() {
   const activeId = useChatStore((s) => s.activeId);
@@ -11,7 +13,7 @@ export function TodoWidget() {
   const isStreaming = useChatStore((s) =>
     s.activeId ? s.isConversationStreaming(s.activeId) : false,
   );
-  const [board, setBoard] = useState<any>(null);
+  const [board, setBoard] = useState<TaskBoard | null>(null);
   const [boardEmpty, setBoardEmpty] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -35,13 +37,13 @@ export function TodoWidget() {
   const visibleTasks = useMemo(() => {
     if (!board) return [];
     return board.order
-      .map((id: string) => board.tasks.get(id))
-      .filter((t: any) => t && t.status !== "deleted");
+      .map((id) => board.tasks.get(id))
+      .filter((task): task is Task => !!task && task.status !== "deleted");
   }, [board]);
 
-  const completedCount = visibleTasks.filter((t: any) => t.status === "completed").length;
+  const completedCount = visibleTasks.filter((task) => task.status === "completed").length;
   const allDone = completedCount === visibleTasks.length;
-  const inProgressCount = visibleTasks.filter((t: any) => t.status === "in_progress").length;
+  const inProgressCount = visibleTasks.filter((task) => task.status === "in_progress").length;
 
   // When every task is done and the agent turn has finished, clear the board
   // so a new todo_create batch doesn't stack under old completed rows.
@@ -149,11 +151,11 @@ export function TodoWidget() {
             {/* Task list */}
             {visibleTasks.length > 0 ? (
               <div className="flex flex-col max-h-[260px] overflow-y-auto p-2 gap-0.5">
-                {visibleTasks.map((task: any) => (
+                {visibleTasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
-                    board={board}
+                    board={board!}
                     activeId={activeId}
                     manualTasksEnabled={manualTasksEnabled}
                     updateManualTodoBoard={updateManualTodoBoard}
@@ -204,11 +206,11 @@ function TaskRow({
   manualTasksEnabled,
   updateManualTodoBoard,
 }: {
-  task: any;
-  board: any;
+  task: Task;
+  board: TaskBoard;
   activeId: string;
   manualTasksEnabled: boolean;
-  updateManualTodoBoard: any;
+  updateManualTodoBoard: UpdateManualTodoBoard;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
@@ -237,9 +239,9 @@ function TaskRow({
 
   const handleToggleStatus = () => {
     if (!manualTasksEnabled) return;
-    const nextStatus = task.status === "completed" ? "pending" : "completed";
+    const nextStatus: Task["status"] = task.status === "completed" ? "pending" : "completed";
     const nextTasks = new Map<string, Task>(board.tasks);
-    const updatedTask = {
+    const updatedTask: Task = {
       ...task,
       status: nextStatus,
       updatedAt: Date.now(),
@@ -287,7 +289,7 @@ function TaskRow({
 
   const handleDelete = () => {
     const nextTasks = new Map<string, Task>(board.tasks);
-    const updatedTask = {
+    const updatedTask: Task = {
       ...task,
       status: "deleted",
       deletedAt: Date.now(),

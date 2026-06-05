@@ -38,6 +38,19 @@ const SpeechRecognitionCtor: SpeechRecognitionCtor | null =
     (window.SpeechRecognition || window.webkitSpeechRecognition)) ||
   null;
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorName(error: unknown): string | undefined {
+  if (error instanceof Error) return error.name;
+  if (error && typeof error === "object" && "name" in error) {
+    const name = (error as { name?: unknown }).name;
+    return typeof name === "string" ? name : undefined;
+  }
+  return undefined;
+}
+
 export function isSpeechRecognitionSupported(): boolean {
   return SpeechRecognitionCtor !== null;
 }
@@ -145,16 +158,17 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
       const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Immediately stop the stream — SpeechRecognition manages its own input
       permStream.getTracks().forEach((t) => t.stop());
-    } catch (permErr: any) {
-      const msg = permErr?.message ?? String(permErr);
-      if (msg.includes("Permission") || msg.includes("NotAllowed") || permErr.name === "NotAllowedError") {
+    } catch (permErr) {
+      const msg = errorMessage(permErr);
+      const name = errorName(permErr);
+      if (msg.includes("Permission") || msg.includes("NotAllowed") || name === "NotAllowedError") {
         setError("Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable access for this app, then try again.");
-      } else if (msg.includes("NotFound") || permErr.name === "NotFoundError") {
+      } else if (msg.includes("NotFound") || name === "NotFoundError") {
         setError("No microphone found. Connect a microphone and try again.");
       } else {
         setError(`Microphone error: ${msg}`);
       }
-      optsRef.current.onError?.(permErr.message ?? String(permErr));
+      optsRef.current.onError?.(msg);
       return;
     }
 
@@ -221,8 +235,8 @@ export function useSpeechToText(opts: UseSpeechToTextOptions): UseSpeechToTextRe
       recognitionRef.current = recognition;
       recognition.start();
       setListening(true);
-    } catch (err: any) {
-      const msg = err?.message ?? String(err);
+    } catch (err) {
+      const msg = errorMessage(err);
       setError(`Microphone error: ${msg}`);
       optsRef.current.onError?.(msg);
     }

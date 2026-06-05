@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import type { Components } from "react-markdown";
 import type { HighlighterCore } from "shiki/core";
 import type { LanguageRegistration, ThemeRegistration } from "shiki/types";
 
@@ -164,28 +165,29 @@ const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = fal
   );
 });
 
-interface MarkdownComponents {
-  [key: string]: (props: any) => ReactNode;
-}
+type MarkdownCodeProps = React.ComponentPropsWithoutRef<"code"> & {
+  node?: unknown;
+  inline?: boolean;
+  children?: ReactNode;
+};
 
-const createComponents = (deferHighlight: boolean): MarkdownComponents => ({
-  code({ node, inline, className, children, ...props }: {
-    node?: any; inline?: boolean; className?: string; children?: ReactNode; [key: string]: any;
-  }) {
+const createComponents = (deferHighlight: boolean): Components => ({
+  code(props) {
+    const { inline, className, children, ...codeProps } = props as MarkdownCodeProps;
     const match = /language-(\w+)/.exec(className || "");
     const language = match ? match[1] : "";
     const code = String(children).replace(/\n$/, "");
     if (!inline && (match || code.includes("\n"))) {
       return <CodeBlock language={language} code={code} deferHighlight={deferHighlight} />;
     }
-    return <code className="inline-code" {...props}>{children}</code>;
+    return <code className="inline-code" {...codeProps}>{children}</code>;
   },
 
   pre({ children }: { children?: ReactNode }) {
     return <>{children}</>;
   },
 
-  a({ href, children, ...props }: { href?: string; children?: ReactNode; [key: string]: any }) {
+  a({ href, children, ...props }) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className="md-link" {...props}>
         {children}
@@ -193,7 +195,7 @@ const createComponents = (deferHighlight: boolean): MarkdownComponents => ({
     );
   },
 
-  table({ children, ...props }: { children?: ReactNode; [key: string]: any }) {
+  table({ children, ...props }) {
     return (
       <div className="md-table-wrapper">
         <table className="md-table" {...props}>{children}</table>
@@ -201,7 +203,7 @@ const createComponents = (deferHighlight: boolean): MarkdownComponents => ({
     );
   },
 
-  blockquote({ children, ...props }: { children?: ReactNode; [key: string]: any }) {
+  blockquote({ children, ...props }) {
     return <blockquote className="md-blockquote" {...props}>{children}</blockquote>;
   },
 });

@@ -37,6 +37,20 @@ const FOLDER_SKIP_EXTS = new Set([
 
 const FOLDER_DROP_MAX_FILES = 100;
 
+function isWebkitFileEntry(entry: FileSystemEntry): entry is FileSystemFileEntry {
+  return entry.isFile;
+}
+
+function isWebkitDirectoryEntry(entry: FileSystemEntry): entry is FileSystemDirectoryEntry {
+  return entry.isDirectory;
+}
+
+function hasWebkitGetAsEntry(
+  item: DataTransferItem,
+): item is DataTransferItem & { webkitGetAsEntry: () => FileSystemEntry | null } {
+  return typeof (item as { webkitGetAsEntry?: unknown }).webkitGetAsEntry === "function";
+}
+
 /** Small bar showing active skills for the current conversation. */
 function ActiveSkillsBar() {
   const activeId = useChatStore((s) => s.activeId);
@@ -82,13 +96,13 @@ function ActiveSkillsBar() {
  *  folder doesn't yield 5,000 useless attachments. Caps at 100 files; the
  *  caller surfaces a notice if we hit the cap. */
 async function entryToFiles(
-  entry: any,
+  entry: FileSystemEntry,
   bucket: File[],
   maxFiles: number,
   pathPrefix = "",
 ): Promise<{ truncated: boolean }> {
   if (bucket.length >= maxFiles) return { truncated: true };
-  if (entry?.isFile) {
+  if (isWebkitFileEntry(entry)) {
     return new Promise<{ truncated: boolean }>((resolve) => {
       entry.file((f: File) => {
         if (bucket.length >= maxFiles) return resolve({ truncated: true });
@@ -110,14 +124,14 @@ async function entryToFiles(
       }, () => resolve({ truncated: false }));
     });
   }
-  if (entry?.isDirectory) {
+  if (isWebkitDirectoryEntry(entry)) {
     if (FOLDER_SKIP_DIRS.has(entry.name)) return { truncated: false };
     const reader = entry.createReader();
     let truncated = false;
     // readEntries returns batches; loop until empty.
     while (true) {
-      const batch: any[] = await new Promise((resolve) =>
-        reader.readEntries((entries: any[]) => resolve(entries), () => resolve([])),
+      const batch: FileSystemEntry[] = await new Promise((resolve) =>
+        reader.readEntries((entries) => resolve(entries), () => resolve([])),
       );
       if (!batch.length) break;
       for (const child of batch) {
@@ -241,12 +255,13 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     // the runtime lacks the entry API (older Edge / non-Webkit shells).
     const collected: File[] = [];
     let truncated = false;
-    if (items && items.length > 0 && "webkitGetAsEntry" in items[0]) {
+    if (items && items.length > 0 && hasWebkitGetAsEntry(items[0])) {
       const entries = Array.from(items)
-        .map((it) => (it as DataTransferItem & { webkitGetAsEntry?: () => unknown }).webkitGetAsEntry?.())
-        .filter(Boolean);
+        .filter(hasWebkitGetAsEntry)
+        .map((it) => it.webkitGetAsEntry())
+        .filter((entry): entry is FileSystemEntry => entry !== null);
       for (const entry of entries) {
-        const r = await entryToFiles(entry as any, collected, FOLDER_DROP_MAX_FILES);
+        const r = await entryToFiles(entry, collected, FOLDER_DROP_MAX_FILES);
         if (r.truncated) truncated = true;
         if (collected.length >= FOLDER_DROP_MAX_FILES) {
           truncated = true;

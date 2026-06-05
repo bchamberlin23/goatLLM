@@ -23,20 +23,27 @@ function titleFromContent(content: string, fallback: string): string {
   return firstLine && firstLine.length <= 200 ? firstLine.replace(/^#+\s*/, "") : fallback;
 }
 
-function extractFirecrawlData(body: any, fallbackUrl: string): ScrapedPage | null {
-  const data = body?.data ?? body;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function extractFirecrawlData(body: unknown, fallbackUrl: string): ScrapedPage | null {
+  const root = isRecord(body) ? body : {};
+  const data = isRecord(root.data) ? root.data : root;
   const content =
-    typeof data?.markdown === "string"
-      ? data.markdown
-      : typeof data?.content === "string"
-        ? data.content
-        : typeof data?.html === "string"
-          ? data.html
-          : "";
+    stringField(data, "markdown")
+      ?? stringField(data, "content")
+      ?? stringField(data, "html")
+      ?? "";
   if (!content.trim()) return null;
-  const metadata = data?.metadata ?? {};
-  const url = String(metadata.sourceURL ?? metadata.url ?? data?.url ?? fallbackUrl);
-  const title = String(metadata.title ?? data?.title ?? titleFromContent(content, url));
+  const metadata = isRecord(data.metadata) ? data.metadata : {};
+  const url = String(metadata.sourceURL ?? metadata.url ?? data.url ?? fallbackUrl);
+  const title = String(metadata.title ?? data.title ?? titleFromContent(content, url));
   return { url, title, content, source: "firecrawl" };
 }
 
@@ -66,7 +73,7 @@ export async function scrapeUrl(url: string, options: ScrapeOptions = {}): Promi
       const err = await resp.text().catch(() => "");
       throw new Error(`Firecrawl scrape error: ${resp.status}${err ? ` — ${err}` : ""}`);
     }
-    const body = await resp.json();
+    const body: unknown = await resp.json();
     const scraped = extractFirecrawlData(body, url);
     if (!scraped) throw new Error("Firecrawl returned no markdown content.");
     return { ...scraped, content: truncateContent(scraped.content, maxChars) };

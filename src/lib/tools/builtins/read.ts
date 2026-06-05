@@ -23,6 +23,15 @@ import {
 } from "../../attachment-cache";
 import { getWorkspace, normalizePath, invoke } from "../_helpers";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function textField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
 export const READ_ONLY_TOOLS = {
   read_file: tool({
     description:
@@ -322,12 +331,16 @@ export const READ_ONLY_TOOLS = {
           if (!resp.ok) {
             return `SearXNG search error: ${resp.status}. Please make sure local SearXNG is running.`;
           }
-          const data = await resp.json();
-          const results = (data.results || []).slice(0, limit).map((r: any) => ({
-            title: r.title || "",
-            url: r.url || "",
-            content: r.content || "",
-          }));
+          const data: unknown = await resp.json();
+          const rawResults = isRecord(data) && Array.isArray(data.results) ? data.results : [];
+          const results = rawResults.slice(0, limit).map((result) => {
+            const record = isRecord(result) ? result : {};
+            return {
+              title: textField(record, "title"),
+              url: textField(record, "url"),
+              content: textField(record, "content"),
+            };
+          });
 
           if (results.length === 0) {
             return `No results found for "${query}" via SearXNG.`;

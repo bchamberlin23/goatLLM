@@ -515,25 +515,26 @@ export async function summarizeWithLlm(
     const { initFetch, getFetch } = await import("./fetch-adapter");
     await initFetch();
     const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
-    let model: any;
+    type SummaryModelFactory =
+      | ReturnType<typeof createAnthropic>
+      | ReturnType<typeof createOpenAICompatible>
+      | ReturnType<typeof createOpenAI>;
+    let modelFactory: SummaryModelFactory;
     if (config.provider === "anthropic") {
-      model = createAnthropic({ apiKey: config.apiKey ?? "", fetch: customFetch }).languageModel(
-        config.modelId,
-      );
+      modelFactory = createAnthropic({ apiKey: config.apiKey ?? "", fetch: customFetch });
     } else if (
       ["opencode-go", "opencode-go-free", "groq", "deepseek", "openrouter", "ollama", "lmstudio"].includes(config.provider)
     ) {
-      model = createOpenAICompatible({
+      modelFactory = createOpenAICompatible({
         name: config.provider,
         baseURL: config.baseUrl ?? "http://localhost:1234/v1",
         apiKey: config.apiKey ?? "not-needed",
         fetch: customFetch,
-      }).languageModel(config.modelId);
+      });
     } else {
-      model = createOpenAI({ apiKey: config.apiKey ?? "", fetch: customFetch }).languageModel(
-        config.modelId,
-      );
+      modelFactory = createOpenAI({ apiKey: config.apiKey ?? "", fetch: customFetch });
     }
+    const model = modelFactory.languageModel(config.modelId);
     const userPrompt = customInstructions
       ? `Summarize the following conversation slice, focusing especially on: ${customInstructions}\n\n${trimmed}`
       : `Summarize the following conversation slice:\n\n${trimmed}`;

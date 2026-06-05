@@ -13,6 +13,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { CallToolResult, Tool as McpSdkTool } from "@modelcontextprotocol/sdk/types.js";
 import { createStdioTransport } from "./transports";
 
 export interface McpServerConfig {
@@ -34,14 +35,11 @@ export interface McpServerConfig {
 export interface McpToolInfo {
   name: string;
   description?: string;
-  inputSchema: Record<string, unknown>;
-  annotations?: { title?: string; readOnlyHint?: boolean; destructiveHint?: boolean };
+  inputSchema: McpSdkTool["inputSchema"];
+  annotations?: McpSdkTool["annotations"];
 }
 
-export interface McpToolCallResult {
-  content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
-  isError?: boolean;
-}
+export type McpToolCallResult = Pick<CallToolResult, "content" | "isError">;
 
 export interface MCPClient {
   serverId: string;
@@ -49,8 +47,8 @@ export interface MCPClient {
   listTools(): Promise<McpToolInfo[]>;
   callTool(name: string, args: Record<string, unknown>): Promise<McpToolCallResult>;
   disconnect(): Promise<void>;
-  on(event: McpClientEvent, cb: (...args: any[]) => void): void;
-  off(event: McpClientEvent, cb: (...args: any[]) => void): void;
+  on(event: McpClientEvent, cb: (...args: unknown[]) => void): void;
+  off(event: McpClientEvent, cb: (...args: unknown[]) => void): void;
 }
 
 export type McpClientEvent = "error" | "close";
@@ -63,7 +61,7 @@ class HttpMCPClient implements MCPClient {
   serverId: string;
   private client: Client;
   private transport: StreamableHTTPClientTransport;
-  private listeners: Map<McpClientEvent, Set<(...args: any[]) => void>> = new Map();
+  private listeners: Map<McpClientEvent, Set<(...args: unknown[]) => void>> = new Map();
 
   constructor(config: McpServerConfig) {
     this.serverId = config.id;
@@ -91,19 +89,19 @@ class HttpMCPClient implements MCPClient {
 
   async listTools(): Promise<McpToolInfo[]> {
     const result = await this.client.listTools();
-    return result.tools.map((t: any) => ({
+    return result.tools.map((t) => ({
       name: t.name,
       description: t.description,
-      inputSchema: t.inputSchema as Record<string, unknown>,
+      inputSchema: t.inputSchema,
       annotations: t.annotations,
     }));
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<McpToolCallResult> {
-    const result = await this.client.callTool({ name, arguments: args });
+    const result = (await this.client.callTool({ name, arguments: args })) as CallToolResult;
     return {
-      content: result.content as McpToolCallResult["content"],
-      isError: result.isError as boolean | undefined,
+      content: result.content,
+      isError: result.isError,
     };
   }
 
@@ -111,16 +109,16 @@ class HttpMCPClient implements MCPClient {
     await this.client.close();
   }
 
-  on(event: McpClientEvent, cb: (...args: any[]) => void): void {
+  on(event: McpClientEvent, cb: (...args: unknown[]) => void): void {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event)!.add(cb);
   }
 
-  off(event: McpClientEvent, cb: (...args: any[]) => void): void {
+  off(event: McpClientEvent, cb: (...args: unknown[]) => void): void {
     this.listeners.get(event)?.delete(cb);
   }
 
-  private emit(event: McpClientEvent, ...args: any[]): void {
+  private emit(event: McpClientEvent, ...args: unknown[]): void {
     this.listeners.get(event)?.forEach((cb) => cb(...args));
   }
 }
@@ -133,7 +131,7 @@ class StdioMCPClient implements MCPClient {
   serverId: string;
   private client: Client;
   private transport: Transport;
-  private listeners: Map<McpClientEvent, Set<(...args: any[]) => void>> = new Map();
+  private listeners: Map<McpClientEvent, Set<(...args: unknown[]) => void>> = new Map();
 
   constructor(config: McpServerConfig) {
     this.serverId = config.id;
@@ -153,19 +151,19 @@ class StdioMCPClient implements MCPClient {
 
   async listTools(): Promise<McpToolInfo[]> {
     const result = await this.client.listTools();
-    return result.tools.map((t: any) => ({
+    return result.tools.map((t) => ({
       name: t.name,
       description: t.description,
-      inputSchema: t.inputSchema as Record<string, unknown>,
+      inputSchema: t.inputSchema,
       annotations: t.annotations,
     }));
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<McpToolCallResult> {
-    const result = await this.client.callTool({ name, arguments: args });
+    const result = (await this.client.callTool({ name, arguments: args })) as CallToolResult;
     return {
-      content: result.content as McpToolCallResult["content"],
-      isError: result.isError as boolean | undefined,
+      content: result.content,
+      isError: result.isError,
     };
   }
 
@@ -173,16 +171,16 @@ class StdioMCPClient implements MCPClient {
     await this.client.close();
   }
 
-  on(event: McpClientEvent, cb: (...args: any[]) => void): void {
+  on(event: McpClientEvent, cb: (...args: unknown[]) => void): void {
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event)!.add(cb);
   }
 
-  off(event: McpClientEvent, cb: (...args: any[]) => void): void {
+  off(event: McpClientEvent, cb: (...args: unknown[]) => void): void {
     this.listeners.get(event)?.delete(cb);
   }
 
-  private emit(event: McpClientEvent, ...args: any[]): void {
+  private emit(event: McpClientEvent, ...args: unknown[]): void {
     this.listeners.get(event)?.forEach((cb) => cb(...args));
   }
 }

@@ -27,9 +27,16 @@
  * streamChat is now a thin wrapper that calls agentLoop with depth=0 and
  * no parentSignal — preserving every existing import-site contract.
  */
-import { streamText, stepCountIs, type ToolSet, type ModelMessage } from "ai";
+import {
+  streamText,
+  stepCountIs,
+  type LanguageModelUsage,
+  type ModelMessage,
+  type ToolSet,
+} from "ai";
 import { createModel } from "./model-factory";
 import { getContextWindow } from "./context-window";
+import { log } from "./logger";
 import type {
   LlmConfig,
   LlmMessage,
@@ -38,6 +45,9 @@ import type {
   ToolResultInfo,
   ToolErrorInfo,
 } from "./llm-types";
+
+type StreamTextOptions = Parameters<typeof streamText>[0];
+type ProviderOptions = NonNullable<StreamTextOptions["providerOptions"]>;
 
 export interface AgentLoopOptions {
   abortSignal?: AbortSignal;
@@ -90,6 +100,40 @@ function isDoneResultAllowed(output: unknown): boolean {
   if (!output || typeof output !== "object") return true;
   const result = output as { done?: unknown; blocked?: unknown };
   return result.done !== false && result.blocked !== true;
+}
+
+interface TextSummaryPart {
+  type: "text";
+  text: string;
+}
+
+interface ToolCallSummaryPart {
+  type: "tool-call";
+  toolName: string;
+}
+
+function isTextSummaryPart(part: unknown): part is TextSummaryPart {
+  return (
+    !!part &&
+    typeof part === "object" &&
+    (part as { type?: unknown }).type === "text" &&
+    typeof (part as { text?: unknown }).text === "string"
+  );
+}
+
+function isToolCallSummaryPart(part: unknown): part is ToolCallSummaryPart {
+  return (
+    !!part &&
+    typeof part === "object" &&
+    (part as { type?: unknown }).type === "tool-call" &&
+    typeof (part as { toolName?: unknown }).toolName === "string"
+  );
+}
+
+function originalMessagesFromError(error: unknown): ModelMessage[] | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const originalMessages = (error as { __originalMessages?: unknown }).__originalMessages;
+  return Array.isArray(originalMessages) ? (originalMessages as ModelMessage[]) : undefined;
 }
 
 
@@ -188,13 +232,15 @@ function summarizeResponseMessages(msgs: ModelMessage[]): string {
         parts.push(`Assistant: ${msg.content.slice(0, 150)}${msg.content.length > 150 ? "…" : ""}`);
       } else if (Array.isArray(msg.content)) {
         const texts = msg.content
-          .filter((p: any) => p.type === "text")
-          .map((p: any) => p.text)
+          .filter(isTextSummaryPart)
+          .map((p) => p.text)
           .join(" ");
-        const toolCalls = msg.content.filter((p: any) => p.type === "tool-call");
+        const toolNames = msg.content.flatMap((part) =>
+          isToolCallSummaryPart(part) ? [part.toolName] : [],
+        );
         if (texts) parts.push(`Assistant: ${texts.slice(0, 150)}${texts.length > 150 ? "…" : ""}`);
-        if (toolCalls.length > 0) {
-          const names = toolCalls.map((tc: any) => tc.toolName).join(", ");
+        if (toolNames.length > 0) {
+          const names = toolNames.join(", ");
           parts.push(`  [Used tools: ${names}]`);
         }
       }
@@ -271,7 +317,7 @@ export async function agentLoop(
 
   // Build provider-specific reasoning/thinking options from the user's
   // reasoningEffort override (set via the gear icon in the model picker).
-  let providerOptions: Record<string, Record<string, unknown>> | undefined;
+  let providerOptions: ProviderOptions | undefined;
   const effort = config.reasoningEffort;
   if (effort && effort !== "off") {
     const providerKey = config.provider;
@@ -374,13 +420,15 @@ export async function agentLoop(
       if (isOpenAICompatible && cacheRetention !== "none" && sessionId) {
         const providerKey = config.provider;
         const promptCacheKey = clampCacheKey(sessionId);
-        const promptCacheRetention = cacheRetention === "long" ? "24h" : undefined;
+        const promptCacheOptions =
+          cacheRetention === "long"
+            ? { promptCacheKey, promptCacheRetention: "24h" }
+            : { promptCacheKey };
         batchedProviderOptions = {
           ...(batchedProviderOptions ?? {}),
           [providerKey]: {
             ...(batchedProviderOptions?.[providerKey] ?? {}),
-            promptCacheKey,
-            promptCacheRetention,
+            ...promptCacheOptions,
           },
         };
       }
@@ -406,15 +454,15 @@ export async function agentLoop(
       }
 
       // Track latest usage across batches for the final emitUsage call.
-      let lastBatchUsage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number } | undefined;
+      let lastBatchUsage: LanguageModelUsage | undefined;
 
       function emitUsage() {
         if (totalOutputTokens > 0 || totalGenerationMs > 0) {
           callbacks.onUsage?.({
             inputTokens: lastBatchUsage?.inputTokens ?? 0,
             outputTokens: totalOutputTokens,
-            cacheRead: lastBatchUsage?.cacheReadTokens ?? undefined,
-            cacheWrite: lastBatchUsage?.cacheWriteTokens ?? undefined,
+            cacheRead: lastBatchUsage?.inputTokenDetails.cacheReadTokens ?? undefined,
+            cacheWrite: lastBatchUsage?.inputTokenDetails.cacheWriteTokens ?? undefined,
             generationMs: totalGenerationMs,
           });
         }
@@ -431,13 +479,13 @@ export async function agentLoop(
         const result = streamText({
           model,
           system: systemPrompt ?? undefined,
-          messages: workingMessages as any,
+          messages: workingMessages,
           tools: effectiveTools,
           toolChoice: "auto" as const,
           stopWhen: stepCountIs(BATCH_SIZE),
           abortSignal: effectiveSignal,
           ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-          ...(batchedProviderOptions ? { providerOptions: batchedProviderOptions as any } : {}),
+          ...(batchedProviderOptions ? { providerOptions: batchedProviderOptions } : {}),
         });
 
         let batchText = "";
@@ -542,7 +590,7 @@ export async function agentLoop(
         // ── Context pressure check ──
         // Use actual token usage from the provider if available.
         const usage = await result.usage;
-        lastBatchUsage = usage as typeof lastBatchUsage;
+        lastBatchUsage = usage;
         const inputTokens = usage?.inputTokens ?? estimateMessageTokens(workingMessages);
         if (usage?.outputTokens) totalOutputTokens += usage.outputTokens;
 
@@ -552,9 +600,10 @@ export async function agentLoop(
           workingMessages = compactModelMessages(workingMessages, compactionTarget);
           const dropped = before - workingMessages.length;
           if (dropped > 0) {
-            console.log(
-              `[agentLoop] Context compaction: ${before} → ${workingMessages.length} messages ` +
-              `(~${inputTokens} tokens → target ${compactionTarget})`
+            log.info(
+              `Context compaction: ${before} → ${workingMessages.length} messages ` +
+              `(~${inputTokens} tokens → target ${compactionTarget})`,
+              { tag: "agentLoop", data: { before, after: workingMessages.length, inputTokens, target: compactionTarget } }
             );
           }
         }
@@ -640,13 +689,15 @@ export async function agentLoop(
       if (isOpenAICompatible && cacheRetention !== "none" && sessionId) {
         const providerKey = config.provider;
         const promptCacheKey = clampCacheKey(sessionId);
-        const promptCacheRetention = cacheRetention === "long" ? "24h" : undefined;
+        const promptCacheOptions =
+          cacheRetention === "long"
+            ? { promptCacheKey, promptCacheRetention: "24h" }
+            : { promptCacheKey };
         mergedProviderOptions = {
           ...(mergedProviderOptions ?? {}),
           [providerKey]: {
             ...(mergedProviderOptions?.[providerKey] ?? {}),
-            promptCacheKey,
-            promptCacheRetention,
+            ...promptCacheOptions,
           },
         };
       }
@@ -654,7 +705,7 @@ export async function agentLoop(
       const result = streamText({
         model,
         system: systemPrompt ?? undefined,
-        messages: messagesForStream as any,
+        messages: messagesForStream,
         ...(effectiveTools ? { tools: effectiveTools, toolChoice: "auto" as const } : {}),
         ...(hasExplicitCap
           ? { stopWhen: stepCountIs(options!.maxToolRounds!) }
@@ -663,7 +714,7 @@ export async function agentLoop(
             : { stopWhen: stepCountIs(1) }),
         abortSignal: effectiveSignal,
         ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-        ...(mergedProviderOptions ? { providerOptions: mergedProviderOptions as any } : {}),
+        ...(mergedProviderOptions ? { providerOptions: mergedProviderOptions } : {}),
       });
 
       let fullText = "";
@@ -734,8 +785,8 @@ export async function agentLoop(
                 callbacks.onUsage?.({
                   inputTokens: usage.inputTokens ?? 0,
                   outputTokens: usage.outputTokens ?? 0,
-                  cacheRead: (usage as any).cacheReadTokens ?? undefined,
-                  cacheWrite: (usage as any).cacheWriteTokens ?? undefined,
+                  cacheRead: usage.inputTokenDetails.cacheReadTokens ?? undefined,
+                  cacheWrite: usage.inputTokenDetails.cacheWriteTokens ?? undefined,
                 });
               }
             } catch { /* usage not available */ }
@@ -771,22 +822,22 @@ export async function agentLoop(
       // Auto-retry with compaction: if we have the original messages,
       // compact them and retry once. This mirrors pi's auto-compaction
       // on context overflow.
-      const originalMsgs = (error as any).__originalMessages as ModelMessage[] | undefined;
+      const originalMsgs = originalMessagesFromError(error);
       if (originalMsgs && originalMsgs.length > 4) {
         const contextWindow = getContextWindow(config.provider, config.modelId);
         const target = contextWindow > 0 ? Math.floor(contextWindow * 0.45) : 40_000;
         const compacted = compactModelMessages(originalMsgs, target);
         if (compacted.length < originalMsgs.length) {
-          console.log(`[agentLoop] Auto-compacting on overflow: ${originalMsgs.length} → ${compacted.length} messages`);
+          log.info(`Auto-compacting on overflow: ${originalMsgs.length} → ${compacted.length} messages`, { tag: "agentLoop", data: { before: originalMsgs.length, after: compacted.length } });
           // Retry once with compacted messages
           try {
             const retryResult = streamText({
               model,
               system: systemPrompt ?? undefined,
-              messages: compacted as any,
+              messages: compacted,
               abortSignal: effectiveSignal,
               ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
-              ...(providerOptions ? { providerOptions: providerOptions as any } : {}),
+              ...(providerOptions ? { providerOptions } : {}),
             });
             let retryText = "";
             for await (const chunk of retryResult.fullStream) {
