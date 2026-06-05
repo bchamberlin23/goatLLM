@@ -1049,6 +1049,13 @@ interface ChatStore {
   setDesignMode: (enabled: boolean) => void;
   toggleDesignMode: () => void;
 
+  // Notebook mode — fourth tab next to Chat, Agent, and Design. Provides a
+  // Jupyter-like interface with text, code, and AI cells for iterative
+  // experimentation and documentation.
+  notebookMode: boolean;
+  setNotebookMode: (enabled: boolean) => void;
+  toggleNotebookMode: () => void;
+
   // jjagent — isolate agent file edits into their own jj change per turn.
   // Toggleable via Settings. Requires jj to be installed and the workspace
   // to be a jj repo. When off (default), agent edits land in the working copy
@@ -1465,6 +1472,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       _hydrated: false,
       agentMode: false,
       designMode: false,
+      notebookMode: false,
       jjagent: false,
       jjagentChangeId: null,
       pendingFormSubmission: null,
@@ -3026,6 +3034,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           set({ designMode: false });
           try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
         }
+        // Mutual exclusion with notebook mode.
+        if (enabled && get().notebookMode) {
+          set({ notebookMode: false });
+          try { localStorage.setItem("goatllm-notebook-mode", "false"); } catch {}
+        }
       },
 
       toggleAgentMode: () => {
@@ -3041,6 +3054,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           set({ designMode: false });
           try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
         }
+        if (next && get().notebookMode) {
+          set({ notebookMode: false });
+          try { localStorage.setItem("goatllm-notebook-mode", "false"); } catch {}
+        }
       },
 
       setDesignMode: (enabled) => {
@@ -3054,6 +3071,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             localStorage.setItem("goatllm-plan-mode", "false");
           } catch {}
         }
+        // Mutual exclusion with notebook mode.
+        if (enabled && get().notebookMode) {
+          set({ notebookMode: false });
+          try { localStorage.setItem("goatllm-notebook-mode", "false"); } catch {}
+        }
       },
 
       toggleDesignMode: () => {
@@ -3066,6 +3088,45 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             localStorage.setItem("goatllm-agent-mode", "false");
             localStorage.setItem("goatllm-plan-mode", "false");
           } catch {}
+        }
+        if (next && get().notebookMode) {
+          set({ notebookMode: false });
+          try { localStorage.setItem("goatllm-notebook-mode", "false"); } catch {}
+        }
+      },
+
+      setNotebookMode: (enabled) => {
+        set({ notebookMode: enabled });
+        try { localStorage.setItem("goatllm-notebook-mode", String(enabled)); } catch {}
+        // Mutual exclusion with agent mode (and therefore plan mode).
+        if (enabled && get().agentMode) {
+          set({ agentMode: false, planMode: false });
+          try {
+            localStorage.setItem("goatllm-agent-mode", "false");
+            localStorage.setItem("goatllm-plan-mode", "false");
+          } catch {}
+        }
+        // Mutual exclusion with design mode.
+        if (enabled && get().designMode) {
+          set({ designMode: false });
+          try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
+        }
+      },
+
+      toggleNotebookMode: () => {
+        const next = !get().notebookMode;
+        set({ notebookMode: next });
+        try { localStorage.setItem("goatllm-notebook-mode", String(next)); } catch {}
+        if (next && get().agentMode) {
+          set({ agentMode: false, planMode: false });
+          try {
+            localStorage.setItem("goatllm-agent-mode", "false");
+            localStorage.setItem("goatllm-plan-mode", "false");
+          } catch {}
+        }
+        if (next && get().designMode) {
+          set({ designMode: false });
+          try { localStorage.setItem("goatllm-design-mode", "false"); } catch {}
         }
       },
 

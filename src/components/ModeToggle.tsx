@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import { useChatStore } from "../stores/chat";
-import { MessageCircle, Bot, Palette } from "lucide-react";
+import { MessageCircle, Bot, Palette, BookOpen } from "lucide-react";
 
 /**
- * Three side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ]
+ * Four side-by-side toggle buttons:  [ Chat ] [ Agent ] [ Design ] [ Notebook ]
  *
  * Pure mode switch — the per-mode permission picker (Agent) and the
  * design-system / direction pickers (Design) live elsewhere in the
@@ -13,17 +13,21 @@ import { MessageCircle, Bot, Palette } from "lucide-react";
 export function ModeToggle() {
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
+  const notebookMode = useChatStore((s) => s.notebookMode);
   const setAgentMode = useChatStore((s) => s.setAgentMode);
   const setDesignMode = useChatStore((s) => s.setDesignMode);
+  const setNotebookMode = useChatStore((s) => s.setNotebookMode);
 
   const handleChat = useCallback(() => {
     setAgentMode(false);
     setDesignMode(false);
-  }, [setAgentMode, setDesignMode]);
+    setNotebookMode(false);
+  }, [setAgentMode, setDesignMode, setNotebookMode]);
   const handleAgent = useCallback(() => setAgentMode(true), [setAgentMode]);
   const handleDesign = useCallback(() => setDesignMode(true), [setDesignMode]);
+  const handleNotebook = useCallback(() => setNotebookMode(true), [setNotebookMode]);
 
-  const chatActive = !agentMode && !designMode;
+  const chatActive = !agentMode && !designMode && !notebookMode;
   const optionClass = (active: boolean) =>
     `flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[12px] font-medium transition-[background,border-color,color,box-shadow] ${
       active
@@ -69,6 +73,17 @@ export function ModeToggle() {
       >
         <Palette size={12} strokeWidth={2} aria-hidden="true" />
         <span>Design</span>
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={notebookMode}
+        onClick={handleNotebook}
+        title="Notebook mode — Jupyter-like interface with text, code, and AI cells."
+        className={optionClass(notebookMode)}
+      >
+        <BookOpen size={12} strokeWidth={2} aria-hidden="true" />
+        <span>Notebook</span>
       </button>
     </div>
   );

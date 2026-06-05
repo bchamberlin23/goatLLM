@@ -13,6 +13,7 @@ import { SubagentPanel } from "./SubagentPanel";
 import { ToolActivityIndicator } from "./ToolActivityIndicator";
 import { ApprovalQueue } from "./ApprovalQueue";
 import { WorkspaceHealthPanel } from "./WorkspaceHealthPanel";
+import { NotebookView } from "./NotebookView";
 import { useState, useRef, useCallback, useEffect, DragEvent } from "react";
 import { getWelcomeMessage, type WelcomeMessageResult } from "../lib/welcome-messages";
 
@@ -155,6 +156,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const activeId = useChatStore((s) => s.activeId);
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
+  const notebookMode = useChatStore((s) => s.notebookMode);
   const workspaceHealthEnabled = useChatStore((s) => s.workspaceHealthEnabled);
   const workspacePath = useChatStore((s) => s.workspacePath);
   const designWorkspacePath = useChatStore((s) => s.designWorkspacePath);
@@ -196,7 +198,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const showHero = !activeId && !sidePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
-  const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;
+  const heroWorkspacePath = notebookMode ? null : agentMode ? workspacePath : designMode ? designWorkspacePath : null;
   const heroWorkspaceName = heroWorkspacePath?.split("/").pop() || heroWorkspacePath;
 
   // ── Window-level drag and drop ──
@@ -292,7 +294,9 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       )}
       <TopBar />
-      {!showHero ? (
+      {notebookMode ? (
+        <NotebookView />
+      ) : !showHero ? (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* Subagent panel replaces chat when active */}
           {subagentPanelOpen ? (
@@ -362,7 +366,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
               <div className="liquid-surface mb-8 inline-flex max-w-[min(520px,calc(100vw-48px))] items-center gap-2 rounded-full px-4 py-1.5 text-[13px] text-[#c9c9c9]">
                 <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" aria-hidden="true" />
                 <span className="text-[#a0a0a0]">
-                  {agentMode ? "Working on" : "Designing"}
+                  {agentMode ? "Working on" : designMode ? "Designing" : "Notebook"}
                 </span>
                 <span className="min-w-0 truncate font-medium text-[#ececec]">
                   {heroWorkspaceName}
