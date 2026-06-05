@@ -21,6 +21,7 @@ import {
   Redo2,
   History,
   Image as ImageIcon,
+  Globe,
 } from "lucide-react";
 import {
   renderDocxPreview,
@@ -948,7 +949,10 @@ export function ArtifactPanel() {
     s.designMode ? s.designWorkspacePath : s.workspacePath
   );
 
-  const [view, setView] = useState<"preview" | "code">("preview");
+  const [view, setView] = useState<"preview" | "code" | "browser">("preview");
+  const [browserUrl, setBrowserUrl] = useState("");
+  const [browserHistory, setBrowserHistory] = useState<string[]>([]);
+  const [browserHistoryIndex, setBrowserHistoryIndex] = useState(-1);
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1112,6 +1116,35 @@ export function ArtifactPanel() {
     setPreviewReloadKey((k) => k + 1);
   };
 
+  const handleBrowserNavigate = useCallback((url: string) => {
+    if (!url.trim()) return;
+    
+    // Add protocol if missing
+    const normalizedUrl = url.match(/^https?:\/\//) ? url : `https://${url}`;
+    setBrowserUrl(normalizedUrl);
+    
+    // Add to history
+    const newHistory = [...browserHistory.slice(0, browserHistoryIndex + 1), normalizedUrl];
+    setBrowserHistory(newHistory);
+    setBrowserHistoryIndex(newHistory.length - 1);
+  }, [browserHistory, browserHistoryIndex]);
+
+  const handleBrowserBack = useCallback(() => {
+    if (browserHistoryIndex > 0) {
+      const newIndex = browserHistoryIndex - 1;
+      setBrowserHistoryIndex(newIndex);
+      setBrowserUrl(browserHistory[newIndex]);
+    }
+  }, [browserHistory, browserHistoryIndex]);
+
+  const handleBrowserForward = useCallback(() => {
+    if (browserHistoryIndex < browserHistory.length - 1) {
+      const newIndex = browserHistoryIndex + 1;
+      setBrowserHistoryIndex(newIndex);
+      setBrowserUrl(browserHistory[newIndex]);
+    }
+  }, [browserHistory, browserHistoryIndex]);
+
   const handleCopy = () => {
     if (!activeArtifact) return;
     flash("copy");
@@ -1256,6 +1289,18 @@ export function ArtifactPanel() {
 
         <div className="flex-1" />
 
+        {/* Browser button */}
+        <button
+          onClick={() => setView(view === "browser" ? "preview" : "browser")}
+          aria-label="Toggle browser view"
+          title="Browser view"
+          className={`control-icon p-1 rounded transition-colors ${
+            view === "browser" ? "bg-[#f59e42]/20 text-[#f59e42]" : ""
+          }`}
+        >
+          <Globe size={13} strokeWidth={2} aria-hidden="true" />
+        </button>
+
         {/* Artifact-specific controls (hidden when viewing a workspace file) */}
         {activeArtifact && (<>
         <div className="flex items-center gap-0.5">
@@ -1300,14 +1345,16 @@ export function ArtifactPanel() {
           )}
         </div>
 
-        {/* Code/Preview toggle */}
-        <ViewToggle
-          view={view}
-          onChange={(v) => {
-            userPickedView.current = activeArtifactId;
-            setView(v);
-          }}
-        />
+        {/* Code/Preview toggle - only show when not in browser mode */}
+        {view !== "browser" && (
+          <ViewToggle
+            view={view}
+            onChange={(v) => {
+              userPickedView.current = activeArtifactId;
+              setView(v);
+            }}
+          />
+        )}
 
         {/* Refresh preview (HTML, LaTeX PDF, office, deck, etc.) */}
         {view === "preview" && activeArtifact.kind !== "python" && (
@@ -1401,7 +1448,73 @@ export function ArtifactPanel() {
 
         {/* Content area */}
         <div className="flex-1 min-h-0 flex flex-col">
-          {wsFile ? (
+          {view === "browser" ? (
+            <div className="flex-1 min-h-0 flex flex-col">
+              {/* Browser URL bar */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-[#181819]/42 shrink-0">
+                <button
+                  onClick={handleBrowserBack}
+                  disabled={browserHistoryIndex <= 0}
+                  className="control-icon p-1 rounded transition-colors disabled:opacity-30"
+                  aria-label="Back"
+                >
+                  <ChevronLeft size={14} strokeWidth={2} />
+                </button>
+                <button
+                  onClick={handleBrowserForward}
+                  disabled={browserHistoryIndex >= browserHistory.length - 1}
+                  className="control-icon p-1 rounded transition-colors disabled:opacity-30"
+                  aria-label="Forward"
+                >
+                  <ChevronRight size={14} strokeWidth={2} />
+                </button>
+                <button
+                  onClick={() => setBrowserUrl(browserHistory[browserHistoryIndex] || "")}
+                  disabled={!browserUrl}
+                  className="control-icon p-1 rounded transition-colors disabled:opacity-30"
+                  aria-label="Reload"
+                >
+                  <RotateCw size={13} strokeWidth={2} />
+                </button>
+                <input
+                  type="text"
+                  value={browserUrl}
+                  onChange={(e) => setBrowserUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleBrowserNavigate(browserUrl);
+                    }
+                  }}
+                  placeholder="Enter URL or search..."
+                  className="flex-1 px-3 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-md text-[13px] text-[#ececec] placeholder:text-[#666] focus:outline-none focus:border-[#f59e42]/40"
+                />
+                <button
+                  onClick={() => handleBrowserNavigate(browserUrl)}
+                  disabled={!browserUrl.trim()}
+                  className="px-3 py-1.5 bg-[#f59e42]/20 hover:bg-[#f59e42]/30 text-[#f59e42] rounded-md text-[12px] font-medium transition-colors disabled:opacity-30"
+                >
+                  Go
+                </button>
+              </div>
+
+              {/* Browser iframe */}
+              {browserHistory[browserHistoryIndex] ? (
+                <iframe
+                  src={browserHistory[browserHistoryIndex]}
+                  className="flex-1 w-full bg-white"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  title="Browser view"
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center bg-[#1c1c1e]">
+                  <div className="text-center text-[#666]">
+                    <Globe size={48} strokeWidth={1.5} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-[13px]">Enter a URL to browse</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : wsFile ? (
             <div className="flex-1 min-h-0 flex flex-col">
               <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04] shrink-0">
                 <FileCode size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />

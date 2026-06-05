@@ -5,6 +5,7 @@ import {
   getContextWindow,
   formatTokens,
 } from "../lib/context-window";
+import { buildConversationUsage } from "../lib/product-workspace";
 
 /**
  * Tiny circular meter that lives in the top bar and shows how full the
@@ -30,6 +31,7 @@ export function ContextMeter() {
   const selectedModelId = useChatStore((s) => s.selectedModelId);
   const getModels = useChatStore((s) => s.getModels);
   const modelOverrides = useChatStore((s) => s.modelOverrides);
+  const usageSettings = useChatStore((s) => s.usageSettings);
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -123,6 +125,21 @@ export function ContextMeter() {
     activeModel?.name ??
     selectedModelId?.split(":").slice(1).join(":") ??
     null;
+
+  // Calculate cost information
+  const usage = useMemo(() => {
+    if (!messages?.length) return null;
+    return buildConversationUsage(messages, {
+      monthlyBudgetUsd: usageSettings.monthlyBudgetUsd,
+      expensiveSessionUsd: usageSettings.expensiveSessionUsd,
+      priceOverrides: usageSettings.priceOverrides,
+      modelIdForMessage: (msg) => msg.modelId ?? selectedModelId ?? undefined,
+    });
+  }, [messages, usageSettings, selectedModelId]);
+
+  const costUsd = usage?.totalCostUsd ?? 0;
+  const budgetRatio = usage?.budgetStatus.ratio ?? 0;
+  const budgetAlerts = usage?.alerts ?? [];
 
   // Color the ring by pressure level.
   // <70% → neutral, 70–90% → amber accent, ≥90% → red.
@@ -256,7 +273,32 @@ export function ContextMeter() {
               label="Messages"
               value={messageCount.toLocaleString()}
             />
+            {costUsd > 0 && (
+              <>
+                <div className="h-px bg-white/[0.06] my-1" />
+                <Row label="Cost" value={`$${costUsd.toFixed(4)}`} />
+                {usageSettings.monthlyBudgetUsd > 0 && (
+                  <Row 
+                    label="Budget" 
+                    value={`${Math.round(budgetRatio * 100)}% of $${usageSettings.monthlyBudgetUsd}`}
+                  />
+                )}
+              </>
+            )}
           </dl>
+
+          {budgetAlerts.length > 0 && (
+            <div className="px-3.5 pb-2">
+              {budgetAlerts.map((alert, i) => (
+                <div 
+                  key={i}
+                  className="text-[10.5px] text-[#f59e42] bg-[#f59e42]/10 border border-[#f59e42]/20 rounded px-2 py-1 mb-1"
+                >
+                  {alert.message}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="px-3.5 pb-2 pt-1 text-[10.5px] text-[#888] leading-relaxed">
             {!windowKnown

@@ -6,7 +6,6 @@ import { DesignWorkspacePicker } from "./design/DesignWorkspacePicker";
 import { ModeToggle } from "./ModeToggle";
 import { SafeArtifactPanel } from "./SafeArtifactPanel";
 import { AttachmentPanel } from "./AttachmentPanel";
-import { ProductWorkspacePanel } from "./ProductWorkspacePanel";
 import { TopBar } from "./TopBar";
 import { TodoWidget } from "./TodoWidget";
 import { Settings as SettingsIcon, ArrowRight, Upload, Folder, X } from "lucide-react";
@@ -165,7 +164,6 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
   const workspaceFile = useChatStore((s) => s.workspaceFile);
   const activeAttachment = useChatStore((s) => s.activeAttachment);
   const attachmentPanelOpen = useChatStore((s) => s.attachmentPanelOpen);
-  const workspacePanelOpen = useChatStore((s) => s.workspacePanelOpen);
   const subagentPanelOpen = useChatStore((s) => s.subagentPanelOpen);
   const getModels = useChatStore((s) => s.getModels);
   const _hydrated = useChatStore((s) => s._hydrated);
@@ -195,7 +193,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       ? "attachment"
       : null;
   const sidePanelOpen = canvasPanel !== null;
-  const showHero = !activeId && !sidePanelOpen && !workspacePanelOpen;
+  const showHero = !activeId && !sidePanelOpen;
   const availableModels = getModels().filter((m) => m.isAvailable);
   const needsSetup = _hydrated && availableModels.length === 0;
   const heroWorkspacePath = agentMode ? workspacePath : designMode ? designWorkspacePath : null;
@@ -294,13 +292,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
         </div>
       )}
       <TopBar />
-      
-      {/* Workspace panel as full-screen view when active */}
-      {workspacePanelOpen ? (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <ProductWorkspacePanel />
-        </div>
-      ) : !showHero ? (
+      {!showHero ? (
         <div className="flex-1 min-h-0 flex overflow-hidden">
           {/* Subagent panel replaces chat when active */}
           {subagentPanelOpen ? (

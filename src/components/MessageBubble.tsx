@@ -7,7 +7,7 @@ import { splitContentByArtifacts, type ContentSegment } from "../lib/artifact-se
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
-import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, GitFork, Navigation, Volume2, VolumeX, Sparkles } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, ChevronLeft, GitFork, Navigation, Volume2, VolumeX, Sparkles } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -294,6 +294,35 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     store.setActiveConversation(newConvId);
   }, [message.conversationId, message.id]);
 
+  // Branch navigation: find siblings (messages with same parent)
+  const allMessages = useChatStore((s) => s.messages[message.conversationId] ?? []);
+  const branchInfo = useMemo(() => {
+    if (!message.parentId) return null;
+    
+    // Find all messages with the same parent (siblings)
+    const siblings = allMessages.filter((m) => m.parentId === message.parentId);
+    if (siblings.length <= 1) return null;
+    
+    const currentIndex = siblings.findIndex((m) => m.id === message.id);
+    return {
+      siblings,
+      currentIndex,
+      total: siblings.length,
+    };
+  }, [allMessages, message.id, message.parentId]);
+
+  const handlePrevBranch = useCallback(() => {
+    if (!branchInfo || branchInfo.currentIndex <= 0) return;
+    const prevSibling = branchInfo.siblings[branchInfo.currentIndex - 1];
+    useChatStore.getState().navigateToBranch(message.conversationId, prevSibling.id);
+  }, [branchInfo, message.conversationId]);
+
+  const handleNextBranch = useCallback(() => {
+    if (!branchInfo || branchInfo.currentIndex >= branchInfo.total - 1) return;
+    const nextSibling = branchInfo.siblings[branchInfo.currentIndex + 1];
+    useChatStore.getState().navigateToBranch(message.conversationId, nextSibling.id);
+  }, [branchInfo, message.conversationId]);
+
   const hasToolCalls = !!(message.toolCalls && message.toolCalls.length > 0);
   const anyToolRunning = !!message.toolCalls?.some((t) => t.state === "running" || t.state === "pending_approval");
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
@@ -315,6 +344,31 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           >
             {formatMessageTime(message.createdAt)}
           </span>
+          {branchInfo && (
+            <div className="flex items-center gap-0.5 ml-1">
+              <button
+                onClick={handlePrevBranch}
+                disabled={branchInfo.currentIndex === 0}
+                className="p-0.5 rounded hover:bg-white/[0.08] text-[#888] hover:text-[#ececec] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Previous branch"
+                aria-label="Previous branch"
+              >
+                <ChevronLeft size={12} strokeWidth={2} />
+              </button>
+              <span className="text-[10px] text-[#888] tabular-nums px-1">
+                {branchInfo.currentIndex + 1}/{branchInfo.total}
+              </span>
+              <button
+                onClick={handleNextBranch}
+                disabled={branchInfo.currentIndex === branchInfo.total - 1}
+                className="p-0.5 rounded hover:bg-white/[0.08] text-[#888] hover:text-[#ececec] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Next branch"
+                aria-label="Next branch"
+              >
+                <ChevronRight size={12} strokeWidth={2} />
+              </button>
+            </div>
+          )}
           {isUser && message.steered && (
             <span
               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/20"

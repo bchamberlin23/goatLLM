@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { useChatStore, type Conversation, type ProductWorkspaceTab } from "../stores/chat";
+import { useChatStore, type Conversation } from "../stores/chat";
 import { downloadExport } from "../lib/export";
 import {
   SquarePen,
@@ -18,17 +18,6 @@ import {
   FileDown,
   ExternalLink,
   Copy,
-  BarChart3,
-  Columns2,
-  GitBranch,
-  Globe2,
-  BookOpen,
-  ImageIcon,
-  FileClock,
-  CalendarClock,
-  Brain,
-  Cloud,
-  Eye,
 } from "lucide-react";
 
 function formatTimestamp(ts: number): string {
@@ -107,99 +96,6 @@ function useDesignWorkspaces() {
   const addDesignWorkspace = useChatStore((s) => s.addDesignWorkspace);
   const removeDesignWorkspace = useChatStore((s) => s.removeDesignWorkspace);
   return { workspaces, addDesignWorkspace, removeDesignWorkspace } as DesignWorkspaceCtx;
-}
-
-// ── Workspace Navigation Component ──
-
-interface WorkspaceNavItem {
-  id: ProductWorkspaceTab;
-  icon: any;
-  label: string;
-}
-
-const workspaceNavItems: WorkspaceNavItem[] = [
-  { id: "usage", icon: BarChart3, label: "Usage" },
-  { id: "compare", icon: Columns2, label: "Compare" },
-  { id: "branches", icon: GitBranch, label: "Branches" },
-  { id: "browser", icon: Globe2, label: "Browser" },
-  { id: "notebook", icon: BookOpen, label: "Notebook" },
-  { id: "images", icon: ImageIcon, label: "Images" },
-  { id: "prompts", icon: FileClock, label: "Prompts" },
-  { id: "schedules", icon: CalendarClock, label: "Schedules" },
-  { id: "memory", icon: Brain, label: "Memory" },
-  { id: "sync", icon: Cloud, label: "Sync" },
-  { id: "watcher", icon: Eye, label: "Watcher" },
-];
-
-function WorkspaceNav() {
-  const openWorkspacePanel = useChatStore((s) => s.openWorkspacePanel);
-  const workspacePanelOpen = useChatStore((s) => s.workspacePanelOpen);
-  const workspacePanelTab = useChatStore((s) => s.workspacePanelTab);
-  const featureFlags = useChatStore((s) => s.featureFlags);
-
-  // Filter items based on feature flags
-  const visibleItems = workspaceNavItems.filter((item) => {
-    switch (item.id) {
-      case "usage":
-        return featureFlags.costDashboard;
-      case "compare":
-        return featureFlags.modelComparison;
-      case "browser":
-        return featureFlags.browserMirror;
-      case "notebook":
-        return featureFlags.notebookMode;
-      case "images":
-        return featureFlags.imageGeneration;
-      case "sync":
-        return featureFlags.cloudSync;
-      case "prompts":
-        return featureFlags.promptLibrary;
-      case "schedules":
-        return featureFlags.scheduledAgents;
-      case "memory":
-        return featureFlags.ragMemory;
-      case "watcher":
-        return featureFlags.filesystemWatcher;
-      default:
-        return true; // branches always visible
-    }
-  });
-
-  if (visibleItems.length === 0) return null;
-
-  return (
-    <div className="px-2 pt-2 mt-1 border-t border-white/[0.04]">
-      <div className="px-2.5 pb-1.5">
-        <span className="text-[10.5px] font-semibold text-[#8e8e8e] uppercase tracking-wider">
-          Workspace
-        </span>
-      </div>
-      <div className="grid grid-cols-4 gap-0.5">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = workspacePanelOpen && workspacePanelTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => openWorkspacePanel(item.id)}
-              className={`flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-lg transition-colors ${
-                isActive
-                  ? "bg-[#f59e42]/10 text-[#f59e42]"
-                  : "text-[#9a9a9a] hover:bg-white/[0.04] hover:text-[#d5d5d5]"
-              }`}
-              title={item.label}
-              aria-label={item.label}
-            >
-              <Icon size={15} strokeWidth={1.5} />
-              <span className="text-[9px] leading-tight text-center truncate w-full">
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 interface DesignWorkspaceCtx {
@@ -742,8 +638,6 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
             );
           })}
         </div>
-
-        <WorkspaceNav />
 
         {/* Bottom settings */}
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
@@ -1447,8 +1341,6 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
           })}
         </div>
 
-        <WorkspaceNav />
-
         {/* Bottom settings */}
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
           <button
@@ -2097,8 +1989,6 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
             </>
           )}
         </div>
-
-        <WorkspaceNav />
 
         {/* Bottom settings */}
         <div className="px-2 pb-3 pt-2 border-t border-white/[0.04] mt-1">
