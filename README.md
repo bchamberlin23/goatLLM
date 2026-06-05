@@ -9,13 +9,31 @@ A desktop AI workspace with three modes — chat, coding agent, and design-to-co
 Full streaming chat with multi-model support. No tools, no workspace — just conversation.
 
 - **Streaming responses** with markdown rendering (syntax-highlighted code blocks via Shiki, tables, blockquotes, inline math)
-- **Multi-model** — LM Studio, Ollama, OpenAI, Anthropic, Groq, OpenCode Go (DeepSeek V4 free tier included out of the box, no key needed), Google Gemini, xAI Grok, and any OpenAI-compatible endpoint
+- **Multi-model** — LM Studio, Ollama, OpenAI, Anthropic, Groq, OpenCode Go (DeepSeek V4 free tier included out of the box, no key needed), Google Gemini, xAI Grok, MiMo, and any OpenAI-compatible endpoint
 - **Image attachments** — drag-and-drop images into the chat; multimodal models see them inline
 - **Time-of-day welcome** greetings that rotate by hour (🌅 dawn messages, ☕ morning, 🌙 late-night)
 - **Editable messages** — edit any message and regenerate from that point in history
 - **Conversation management** — search, rename, archive, tag, export to Markdown or JSON
 - **Speech-to-text** — Web Speech API for voice input in the chat bar
-- **Slash commands** — `/review`, `/plan`, and any workspace-level `.goat/prompts/*.md` templates expand into full prompts
+- **Slash commands** — `/review`, `/plan`, `/explain`, `/debug`, and any workspace-level `.goat/prompts/*.md` templates expand into full prompts. Autocomplete menu shows available commands as you type.
+- **@ file references** — type `@` followed by a filename to reference workspace files in your message; parsed as context for the model
+- **Session forking / branching** — fork any message in a conversation to create a branched exploration. Tree-structured message tree preserved in the sidebar.
+- **Per-conversation system prompt** — set a custom system prompt for individual conversations via the conversation menu
+- **Manual context compaction** — compact oversize conversations with custom compaction instructions when approaching the model's context limit
+- **Bash inline execution** — type `!command` to run a one-off shell command inline; `!!command` runs with approval bypass
+- **Expandable thinking** — models that emit reasoning tokens render them as a collapsible thinking block inside the message bubble
+- **Deep Research** — dedicated research mode for multi-step, multi-source investigation. See separate section below.
+
+### Deep Research
+
+Dedicated multi-step research mode that uses a structured pipeline of search, read, and synthesis cycles. Triggered from the mode toggle or via `/research`.
+
+- **Iterative loop** — the model plans search queries, executes web/bing searches, reads results, chases follow-up links, and synthesizes findings into a structured report
+- **Progress UI** — live status panel with active border glow, progress sweep animation, shimmer text on current task, and interactive detail pane showing research depth
+- **Source tracking** — every claim links back to its source URL; sources collected into a bibliography at the end
+- **Parallel search** — multiple queries issued concurrently for breadth coverage
+- **Depth control** — adjustable research depth (basic / balanced / deep). Deep mode chases 3+ levels of follow-up links.
+- **Output formats** — final report rendered as structured markdown in the chat, with artifact-supported HTML export
 
 ### Agent
 
@@ -52,12 +70,16 @@ Workspace-scoped tools for reading, searching, editing, and running code. Same c
 | `git_push` | Push current branch |
 | `read_lints` | Run `cargo check` or `tsc --noEmit` (auto-detects) |
 | `run_tests` | Run `cargo test` or `vitest` (auto-detects) |
-| `browser_fetch` | Fetch http(s) URLs — CORS bypassed via Tauri HTTP plugin, scheme/host blocklist, 200KB cap |
+| `browser_fetch` / `web_search` | Fetch http(s) URLs — CORS bypassed via Tauri HTTP plugin, scheme/host blocklist, 200KB cap. Web search via SearXNG or Tavily. |
 | `browser_extract` | CSS-selector extraction over `browser_fetch` — grab `main`, `article`, `pre code`, etc. |
 | `browser_session_open` | Open a persistent headless browser session (keeps cookies, localStorage across calls) |
 | `browser_session_navigate` | Navigate within an open browser session |
 | `browser_session_close` | Tear down a browser session |
 | `index_workspace` | Build semantic index (chunk → Ollama embed → SQLite) for `search_semantic` |
+| `edit_artifact` | Targeted edits to existing artifacts (HTML, code blocks) without regenerating from scratch |
+| `done` | Explicit agent loop exit — the agent summarizes its work and suggests next steps before finishing |
+| `spawn_subagent` | Delegate sub-tasks to a child agent session — supports parallel research, file operations, and design work |
+| `todo_create` / `todo_update` | Create and manage persistent tasks — keep track of work items across multi-turn sessions |
 
 #### Agent infrastructure
 
@@ -65,9 +87,19 @@ Workspace-scoped tools for reading, searching, editing, and running code. Same c
 - **Command safety** — `exec_command` classifies every shell command as safe, suspicious, or destructive. Destructive commands (`rm -rf`, `DROP TABLE`, `git push --force`) require double confirmation.
 - **Denylist** — `.env`, credentials, private keys, `.ssh`, `secrets/` are blocked at the path level regardless of permission mode.
 - **Path traversal protection** — every resolved path is canonicalized and checked against the workspace root.
-- **Context management** — auto-summarize long conversations when approaching the model's context window. Pinned messages survive compaction. Context meter in the chat footer shows remaining budget.
+- **Context management** — auto-summarize long conversations when approaching the model's context window. Pinned messages survive compaction. Context meter in the chat footer shows remaining budget. Mid-loop compaction also available for unbounded agent runs.
 - **Context window awareness** — auto-detects per-model context limits via `@earendil-works/pi-ai` registry; user can override per model.
 - **ANSI rendering** — terminal output from `bash` tools renders with color codes intact (not raw escape sequences).
+- **Agent session system** — turn timeline with diff review for every write operation. Approval queue shows pending operations with full context. Workspace health panel surfaces file changes, test status, and lint results.
+- **Subagent support** — `spawn_subagent` tool delegates work to child agent sessions. Dedicated drill-down panel with live transcript streaming for monitoring subagent progress.
+- **MCP support** — Model Context Protocol with HTTP and stdio transports. Add/remove MCP servers from Settings with trust toggle and heuristic denylist.
+- **Memory module** — persistent, queryable knowledge store. The model can store and retrieve notes, preferences, and context across conversations and sessions.
+- **Active skills bar** — shows currently active skills above the input bar. Skills auto-trigger based on user intent. Multi-select skill picker in Settings.
+- **Todo task management** — persistent todo widget tracks work items across multi-turn agent sessions. Create, update, and complete tasks inline.
+- **Prompt caching** — pi-agent-style prompt caching to reduce token usage on repeated tool calls and system prompt prefixed content.
+- **jjagent edit isolation** — toggle to isolate artifact edits from the main conversation thread, preventing clutter from iterative refinements.
+- **Completion sounds** — subtle audio feedback when an agent or designer turn completes.
+- **Product Workspace Panel** — premium workspace dashboard with usage dashboard, model comparison, conversation branches, browser mirror, notebook, image generation, prompt library, scheduled agents, RAG memory, filesystem watcher, and cloud sync toggles.
 - **Subagent loop** — `agentLoop.ts` provides the generic stream loop for the parent agent; designed for future parallel subagent swarms.
 
 ### Designer
@@ -101,6 +133,9 @@ Universal side panel for viewing and interacting with model-generated content:
 - **Download** — office formats download as real .docx/.pptx/.xlsx; HTML as .html
 - **Copy** — copy source code to clipboard
 - **Undo/Redo** — Monaco editor undo stack
+- **Workspace file browser** — browse, open, and edit workspace files directly from the artifact panel. Reveal files in Finder.
+- **Inline file references** — artifact previews automatically resolve CSS, JS, and image references from the workspace file tree, rendering them correctly inside the preview iframe
+- **File canvas** — workspace files open in a permanent canvas panel alongside the conversation, enabling side-by-side editing and review
 
 ### Persistence
 
@@ -122,13 +157,15 @@ On startup: read the journal first (instant, no IPC), then merge in SQLite. The 
 
 ### Settings
 
-- **Provider management** — add/remove API keys for OpenAI, Anthropic, Groq, Google, xAI, and any OpenAI-compatible endpoint. Per-provider custom base URLs.
+- **Provider management** — add/remove API keys for OpenAI, Anthropic, Groq, Google, xAI, MiMo, and any OpenAI-compatible endpoint. Per-provider custom base URLs. Provider model capabilities auto-detected (context window, token limits) on connection.
 - **Model overrides** — per-model gear menu: context window, temperature, custom system prompt
 - **Local model lifecycle** — Ollama auto-detect, recommended model catalog with hardware-fit labels (Recommended / Will work / Tight fit / Not enough RAM), install/start/stop from Settings
 - **Tavily web search** — API key for agent web search. Free tier token available.
 - **Semantic index** — toggle Ollama embeddings, pick embedding model, trigger reindex
 - **Artifact toggles** — enable/disable auto-extraction, office artifact generation
-- **Skills** — pi-compatible skill directory picker, enable/disable individual skills
+- **Skills** — pi-compatible skill directory picker, enable/disable individual skills. Auto-trigger settings, multi-select picker with skill search.
+- **MCP servers** — add/remove Model Context Protocol servers (HTTP or stdio). Trust toggle, heuristic denylist.
+- **Subagent settings** — enable/disable subagent tool, configure isolation mode
 - **Denylist editor** — add/remove custom blocked patterns
 
 ### Keyboard Shortcuts
@@ -150,13 +187,14 @@ On startup: read the journal first (instant, no IPC), then merge in SQLite. The 
 |---|---|
 | Desktop shell | Tauri 2 (Rust) |
 | Frontend | React 19, Vite 6 |
-| AI SDK | `ai` (Vercel), `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/openai-compatible` |
+| AI SDK | `ai` (Vercel), `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/groq`, `@ai-sdk/openai-compatible` |
 | State | Zustand 5 |
 | Database | SQLite via `rusqlite` (bundled, WAL mode) |
 | Markdown | `react-markdown` + Shiki + `remark-gfm` |
 | Editor | Monaco Editor (lazy-loaded) |
 | Office | `docx` + `pptxgenjs` + `xlsx` (SheetJS) — all browser-side |
 | LaTeX | tectonic (Rust, ~30MB, first-run download) |
+| PDF | `@react-pdf/renderer` (browser-side PDF generation) |
 | Styling | Tailwind 4 + CSS variables (DESIGN.md is source of truth) |
 | Testing | Vitest + React Testing Library + jsdom |
 | Linting | TypeScript strict mode |
@@ -243,7 +281,7 @@ The app opens a desktop window. Vite dev server at `http://localhost:1420` hot-r
 ### Run Tests
 
 ```bash
-pnpm vitest          # frontend tests (385 tests, jsdom)
+pnpm vitest          # frontend tests (600+ tests, jsdom)
 cargo test           # Rust backend tests
 ```
 
@@ -260,21 +298,40 @@ pnpm tauri build     # produces .dmg in src-tauri/target/release/bundle/
 - [x] SQLite persistence with dual-write journal
 - [x] Agent — write tools with approval gates + diff preview
 - [x] Command safety classification
-- [x] Context management (auto-summarize, pinning, context meter)
-- [x] Browser tools (fetch, extract, persistent sessions)
+- [x] Context management (auto-summarize, pinning, context meter, mid-loop compaction)
+- [x] Browser tools (fetch, extract, persistent sessions, SearXNG)
 - [x] Semantic search (local Ollama embeddings)
 - [x] Git tools (branch, commit, push)
 - [x] LaTeX → PDF compilation (tectonic)
 - [x] Python execution (in-browser)
 - [x] Office artifacts (docx, pptx, xlsx)
-- [x] Slash commands (`/review`, workspace prompt templates)
+- [x] Slash commands (`/review`, `/plan`, `/explain`, `/debug` — with autocomplete)
 - [x] Designer mode — skill picker, design systems, discovery form, HTML artifacts
 - [x] Designer export pipeline (HTML download, PDF print, ZIP)
 - [x] Designer 5-dim critique
+- [x] Agent session system — turn timeline, approval queue, workspace health
+- [x] Deep Research — multi-step iterative research with progress UI
+- [x] Subagent tool (`spawn_subagent`) with live transcript panel
+- [x] MCP Protocol support (HTTP + stdio transports)
+- [x] Memory module — persistent knowledge across conversations
+- [x] Product Workspace Panel — premium workspace dashboard
+- [x] Session forking / branching — tree-structured message history
+- [x] Todo task management — persistent todo widget
+- [x] Active skills bar — auto-trigger skills above input
+- [x] Expandable thinking / reasoning blocks
+- [x] @ file references in messages
+- [x] Bash inline execution (`!command`, `!!command`)
+- [x] @MiMo cloud provider with subscription plans
+- [x] Provider model capabilities auto-detection
+- [x] Prompt caching (pi-agent style)
+- [x] File canvas — side-by-side file editing
+- [x] Edit artifact tool — targeted artifact edits
 - [ ] Multi-file Monaco editor in artifact panel (edit template.html, theme.css inline)
 - [ ] Agent subagent swarms — parallel orchestration for long-horizon coding sessions
 - [ ] Windows + Linux distribution
 - [ ] Homebrew cask for macOS
+- [ ] E2E tests + build bundle optimization
+- [ ] Unified capabilities registry for model routing
 
 ## License
 
