@@ -6,11 +6,6 @@ import { SettingsGroup } from "./SettingsGroup";
 import {
   Upload,
   Target,
-  BarChart3,
-  Columns2,
-  BookOpen,
-  Globe2,
-  Image as ImageIcon,
   ListChecks,
   Telescope,
   Wand2
@@ -19,11 +14,6 @@ import {
 const PLUS_ITEMS = [
   { key: "upload", label: "Upload File", description: "Attach files to the prompt.", modes: ["chat", "agent"], icon: Upload },
   { key: "pursueGoal", label: "Pursue Goal", description: "Launch autonomous multi-step goal execution.", modes: ["agent"], icon: Target },
-  { key: "usage", label: "Usage Dashboard", description: "Open panel for token count and cost details.", modes: ["chat", "agent"], icon: BarChart3 },
-  { key: "compare", label: "Compare Models", description: "Compare responses from multiple models in parallel.", modes: ["chat", "agent"], icon: Columns2 },
-  { key: "notebook", label: "Notebook Mode", description: "Open interactive scratchpad.", modes: ["agent"], icon: BookOpen },
-  { key: "browser", label: "Browser Panel", description: "Open local browser screen.", modes: ["agent"], icon: Globe2 },
-  { key: "image", label: "Generate Image", description: "Generate images from a prompt.", modes: ["chat", "agent"], icon: ImageIcon },
   { key: "plan", label: "Plan Mode", description: "Toggle read-only planning mode.", modes: ["agent"], icon: ListChecks },
   { key: "research", label: "Deep Research", description: "Toggle sequential web research.", modes: ["chat", "agent"], icon: Telescope },
   { key: "skills", label: "Choose Skills", description: "Pick custom system-prompt skills.", modes: ["chat", "agent"], icon: Wand2 },

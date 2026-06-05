@@ -118,10 +118,6 @@ import {
   ListChecks,
   Telescope,
   Target,
-  Columns2,
-  BookOpen,
-  Globe2,
-  BarChart3,
 } from "lucide-react";
 import { useSpeechToText } from "../lib/speech";
 
@@ -252,7 +248,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const searchBackend = useChatStore((s) => s.searchBackend);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
-  const setNotebookMode = useChatStore((s) => s.setNotebookMode);
   const featureFlags = useChatStore((s) => s.featureFlags);
   const pursueGoalMode = useChatStore((s) => s.pursueGoalMode);
   const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
@@ -1806,21 +1801,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                               active: pursueGoalMode,
                               onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
                             }]
-                          : []),
-                        ...(featureFlags.costDashboard && plusMenuVisibility[activeModeKey]?.usage !== false
-                          ? [{ icon: BarChart3, label: "Usage dashboard", description: "Token, cost, budget, and alerts.", onClick: () => { setShowPlusMenu(false); } }]
-                          : []),
-                        ...(featureFlags.modelComparison && plusMenuVisibility[activeModeKey]?.compare !== false
-                          ? [{ icon: Columns2, label: "Compare models", description: "Open the model picker to select 2-4 models.", onClick: () => { setShowPlusMenu(false); } }]
-                          : []),
-                        ...(featureFlags.notebookMode && plusMenuVisibility[activeModeKey]?.notebook !== false
-                          ? [{ icon: BookOpen, label: "Notebook mode", description: "Switch to notebook mode with text, Python, and AI cells.", onClick: () => { setShowPlusMenu(false); setNotebookMode(true); } }]
-                          : []),
-                        ...(featureFlags.browserMirror && plusMenuVisibility[activeModeKey]?.browser !== false
-                          ? [{ icon: Globe2, label: "Browser panel", description: "Open the artifact panel in browser view.", onClick: () => { setShowPlusMenu(false); } }]
-                          : []),
-                        ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
-                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); } }]
                           : []),
                         ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
                           ? [{
