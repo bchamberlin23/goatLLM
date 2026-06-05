@@ -6,6 +6,7 @@ import {
   Cloud,
   Cpu,
   Eye,
+  FileText,
   Flag,
   Image as ImageIcon,
   Layout,
@@ -13,6 +14,15 @@ import {
   Search,
   Shield,
   Sparkles,
+  Plus,
+  DownloadCloud,
+  UploadCloud,
+  Tag,
+  Check,
+  Copy,
+  Trash2,
+  RefreshCw,
+  Play,
 } from "lucide-react";
 import { ProvidersTab } from "./ProvidersTab";
 import { ToolsTab } from "./ToolsTab";
@@ -21,6 +31,9 @@ import { AdvancedTab } from "./AdvancedTab";
 import { SettingsGroup } from "./SettingsGroup";
 import { ToggleRow } from "./ToggleRow";
 import { useChatStore, type ProductFeatureFlags, type ScheduledAgent, type ImageGenSettings } from "../../stores/chat";
+import { loadPromptTemplates } from "../../lib/prompt-templates";
+import { createPromptVersion, filterPromptDocuments, type PromptDocument } from "../../lib/product-workspace";
+import { invoke } from "@tauri-apps/api/core";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
 
@@ -31,6 +44,7 @@ export type SettingsTabId =
   | "voice"
   | "images"
   | "cost"
+  | "prompts"
   | "sync"
   | "memory"
   | "schedules"
@@ -44,6 +58,7 @@ const TABS: { id: SettingsTabId; label: string; hint: string; icon: typeof Cpu; 
   { id: "voice", label: "Voice", hint: "Speak and dictate", icon: Mic2, keywords: "voice text to speech tts dictate microphone hands free" },
   { id: "images", label: "Images", hint: "Generation settings", icon: ImageIcon, keywords: "image generation flux stable diffusion openai endpoint" },
   { id: "cost", label: "Cost & Budget", hint: "Spending controls", icon: BarChart3, keywords: "cost usage tokens budget spending alerts price" },
+  { id: "prompts", label: "Prompt Library", hint: "Versioned prompts", icon: FileText, keywords: "prompt library templates version tags share fork clone" },
   { id: "sync", label: "Sync", hint: "iCloud and S3", icon: Cloud, keywords: "cloud sync icloud s3 encrypted cross device" },
   { id: "memory", label: "Memory/RAG", hint: "Retrieval controls", icon: Brain, keywords: "memory rag embeddings retrieval provenance documents source" },
   { id: "schedules", label: "Scheduled Agents", hint: "Recurring runs", icon: CalendarClock, keywords: "scheduled agents cron recurring daily nightly digest" },
@@ -204,6 +219,7 @@ export function SettingsTabs() {
         {activeTab === "voice" && <VoiceSettings />}
         {activeTab === "images" && <ImageSettings />}
         {activeTab === "cost" && <CostSettings />}
+        {activeTab === "prompts" && <PromptsSettings />}
         {activeTab === "sync" && <SyncSettings />}
         {activeTab === "memory" && <MemorySettings />}
         {activeTab === "schedules" && <ScheduleSettings />}
@@ -369,33 +385,233 @@ function CostSettings() {
   );
 }
 
+// ── Prompt Library ──
+
+function promptDocsStorageKey(workspace: string) {
+  return `goatllm-prompt-docs:${workspace}`;
+}
+
+function loadPromptDocHistory(workspace: string): Record<string, PromptDocument> {
+  try {
+    const raw = localStorage.getItem(promptDocsStorageKey(workspace));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePromptDocHistory(workspace: string, docs: Record<string, PromptDocument>) {
+  try {
+    localStorage.setItem(promptDocsStorageKey(workspace), JSON.stringify(docs));
+  } catch { /* ignore quota */ }
+}
+
+function PromptsSettings() {
+  const workspace = useChatStore((s) => s.workspacePath);
+  const [docs, setDocs] = useState<PromptDocument[]>([]);
+  const [selected, setSelected] = useState<PromptDocument | null>(null);
+  const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+
+  const refresh = useCallback(async () => {
+    if (!workspace) return;
+    const templates = await loadPromptTemplates(workspace).catch(() => []);
+    const saved = loadPromptDocHistory(workspace);
+    const next: Record<string, PromptDocument> = { ...saved };
+    for (const tpl of templates) {
+      if (!next[tpl.name]) {
+        next[tpl.name] = createPromptVersion(tpl.name, tpl.content, {
+          description: tpl.description,
+          tags: tpl.argumentHint ? [tpl.argumentHint] : [],
+        });
+      } else if (next[tpl.name].body !== tpl.content) {
+        next[tpl.name] = createPromptVersion(tpl.name, tpl.content, {
+          previous: next[tpl.name],
+          description: tpl.description,
+          tags: next[tpl.name].tags,
+        });
+      }
+    }
+    savePromptDocHistory(workspace, next);
+    setDocs(Object.values(next).sort((a, b) => b.updatedAt - a.updatedAt));
+    if (!selected && Object.values(next)[0]) {
+      setSelected(Object.values(next)[0]);
+      setDraft(Object.values(next)[0].body);
+    }
+  }, [workspace, selected]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const filtered = useMemo(() => filterPromptDocuments(docs, query), [docs, query]);
+
+  const saveDoc = async () => {
+    if (!workspace || !selected) return;
+    const next = createPromptVersion(selected.name, draft, { previous: selected, tags: selected.tags });
+    await invoke("create_dir_abs", { path: `${workspace}/.goat/prompts` }).catch(() => undefined);
+    await invoke("write_file", { workspace, path: `.goat/prompts/${next.name}.md`, content: next.body });
+    const map = loadPromptDocHistory(workspace);
+    map[next.name] = next;
+    savePromptDocHistory(workspace, map);
+    setSelected(next);
+    setDocs(Object.values(map).sort((a, b) => b.updatedAt - a.updatedAt));
+    setStatus("Saved.");
+  };
+
+  const cloneDoc = async () => {
+    if (!workspace || !selected) return;
+    const name = `${selected.name}-copy-${Date.now().toString(36)}`;
+    const next = createPromptVersion(name, selected.body, { description: selected.description, tags: selected.tags });
+    await invoke("create_dir_abs", { path: `${workspace}/.goat/prompts` }).catch(() => undefined);
+    await invoke("write_file", { workspace, path: `.goat/prompts/${name}.md`, content: next.body });
+    const map = loadPromptDocHistory(workspace);
+    map[name] = next;
+    savePromptDocHistory(workspace, map);
+    setDocs(Object.values(map).sort((a, b) => b.updatedAt - a.updatedAt));
+    setSelected(next);
+    setDraft(next.body);
+    setStatus("Cloned.");
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
+      <SettingsGroup title="Library" description="Browse and manage prompts.">
+        {!workspace ? (
+          <p className="text-[12px] text-text-3">Open a workspace in Agent mode to manage prompts.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search prompts..." />
+            <div className="flex flex-col gap-1 max-h-[400px] overflow-y-auto">
+              {filtered.map((doc) => (
+                <button
+                  key={doc.name}
+                  type="button"
+                  onClick={() => { setSelected(doc); setDraft(doc.body); }}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                    selected?.name === doc.name ? "border-accent/30 bg-accent/10" : "border-white/[0.06] bg-black/15 hover:bg-white/[0.045]"
+                  }`}
+                >
+                  <div className="truncate text-[12px] font-medium text-text-1">/{doc.name}</div>
+                  <div className="mt-0.5 line-clamp-2 text-[10.5px] text-text-3">{doc.description || "No description"}</div>
+                  <div className="mt-1 flex items-center gap-2 text-[10px] text-text-4">
+                    <Tag size={10} /> v{doc.version} · {doc.stats.words}w
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup
+        title={selected ? `/${selected.name}` : "Prompt editor"}
+        description="Edit, clone, or save to disk."
+        action={
+          selected && (
+            <div className="flex gap-1.5">
+              <button onClick={() => navigator.clipboard?.writeText(draft)} className="control-pill px-2 py-1 rounded text-[11px]"><Copy size={12} /></button>
+              <button onClick={cloneDoc} className="control-pill px-2 py-1 rounded text-[11px]"><Plus size={12} /> Clone</button>
+              <button onClick={saveDoc} className="primary-action px-3 py-1 rounded text-[11px] font-medium"><Check size={12} /> Save</button>
+            </div>
+          )
+        }
+      >
+        {selected ? (
+          <div className="flex flex-col gap-3">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="min-h-[300px] w-full rounded-lg border border-white/[0.08] bg-black/20 p-3 font-mono text-[12px] text-text-1 outline-none focus:border-accent/45 resize-none"
+            />
+            <div className="flex items-center gap-4 text-[11px] text-text-3">
+              <span>v{selected.version}</span>
+              <span>{selected.stats.words} words</span>
+              <span>{selected.stats.variables.length} vars: {selected.stats.variables.join(", ") || "none"}</span>
+            </div>
+            {status && <p className="text-[11px] text-accent">{status}</p>}
+          </div>
+        ) : (
+          <p className="text-[12px] text-text-3">{workspace ? "Select a prompt from the library." : "Open an agent workspace to see prompts."}</p>
+        )}
+      </SettingsGroup>
+    </div>
+  );
+}
+
 function SyncSettings() {
   const syncSettings = useChatStore((s) => s.syncSettings);
   const setSyncSettings = useChatStore((s) => s.setSyncSettings);
+  const [status, setStatus] = useState("");
+
+  const handleExport = async () => {
+    setStatus("Exporting...");
+    try {
+      const passphrase = prompt("Enter encryption passphrase:");
+      if (!passphrase) { setStatus("Export cancelled."); return; }
+      const state = useChatStore.getState();
+      const payload = JSON.stringify({
+        version: 1,
+        exportedAt: Date.now(),
+        conversations: state.conversations,
+        messages: state.messages,
+      });
+      const result = await invoke<string>("sync_export_state", { config: syncSettings, payload }).catch((e: any) => {
+        throw new Error(e instanceof Error ? e.message : String(e));
+      });
+      setStatus(result || "Exported.");
+    } catch (e) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleImport = async () => {
+    setStatus("Importing...");
+    try {
+      const raw = await invoke<string>("sync_import_state", { config: syncSettings });
+      const imported = JSON.parse(raw);
+      if (imported.conversations?.length) {
+        useChatStore.setState({
+          conversations: [...useChatStore.getState().conversations, ...imported.conversations],
+          messages: { ...useChatStore.getState().messages, ...(imported.messages ?? {}) },
+        });
+      }
+      setStatus(`Imported ${imported.conversations?.length ?? 0} conversations.`);
+    } catch (e) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   return (
-    <SettingsGroup title="Encrypted cloud sync" description="Opt-in sync package target for iCloud Drive or user-supplied S3-compatible storage.">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <ToggleRow enabled={syncSettings.enabled} onToggle={(enabled) => setSyncSettings({ ...syncSettings, enabled })} title="Enable sync" description="Allow export/import actions." />
-        <Field label="Provider">
-          <Select value={syncSettings.provider} onChange={(e) => setSyncSettings({ ...syncSettings, provider: e.target.value as "icloud" | "s3" })}>
-            <option value="icloud">iCloud Drive</option>
-            <option value="s3">S3-compatible</option>
-          </Select>
-        </Field>
-        <Field label="Prefix">
-          <TextInput value={syncSettings.prefix ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, prefix: e.target.value })} />
-        </Field>
-        <Field label="Encryption key hint">
-          <TextInput value={syncSettings.encryptionKeyHint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, encryptionKeyHint: e.target.value })} />
-        </Field>
-        <Field label="S3 bucket">
-          <TextInput value={syncSettings.bucket ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, bucket: e.target.value })} />
-        </Field>
-        <Field label="S3 endpoint">
-          <TextInput value={syncSettings.endpoint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, endpoint: e.target.value })} placeholder="https://... or file:///..." />
-        </Field>
-      </div>
-    </SettingsGroup>
+    <>
+      <SettingsGroup title="Encrypted cloud sync" description="Opt-in sync package target for iCloud Drive or S3-compatible storage.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ToggleRow enabled={syncSettings.enabled} onToggle={(enabled) => setSyncSettings({ ...syncSettings, enabled })} title="Enable sync" description="Allow export/import actions." />
+          <Field label="Provider">
+            <Select value={syncSettings.provider} onChange={(e) => setSyncSettings({ ...syncSettings, provider: e.target.value as "icloud" | "s3" })}>
+              <option value="icloud">iCloud Drive</option>
+              <option value="s3">S3-compatible</option>
+            </Select>
+          </Field>
+          <Field label="Prefix">
+            <TextInput value={syncSettings.prefix ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, prefix: e.target.value })} />
+          </Field>
+          <Field label="Encryption key hint">
+            <TextInput value={syncSettings.encryptionKeyHint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, encryptionKeyHint: e.target.value })} />
+          </Field>
+          <Field label="S3 bucket">
+            <TextInput value={syncSettings.bucket ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, bucket: e.target.value })} />
+          </Field>
+          <Field label="S3 endpoint">
+            <TextInput value={syncSettings.endpoint ?? ""} onChange={(e) => setSyncSettings({ ...syncSettings, endpoint: e.target.value })} placeholder="https://... or file:///..." />
+          </Field>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <button onClick={handleExport} className="control-pill px-4 py-2 rounded-lg text-[12px] font-medium"><UploadCloud size={13} className="inline mr-1.5" />Export</button>
+          <button onClick={handleImport} className="control-pill px-4 py-2 rounded-lg text-[12px] font-medium"><DownloadCloud size={13} className="inline mr-1.5" />Import</button>
+        </div>
+        {status && <p className="mt-3 text-[12px] text-text-3">{status}</p>}
+      </SettingsGroup>
+    </>
   );
 }
 
@@ -404,19 +620,108 @@ function MemorySettings() {
   const setRagSettings = useChatStore((s) => s.setRagSettings);
   const memoryEnabled = useChatStore((s) => s.memoryEnabled);
   const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
+  const [memText, setMemText] = useState("");
+  const [memCategory, setMemCategory] = useState("fact");
+  const [memQuery, setMemQuery] = useState("");
+  const [memList, setMemList] = useState<any[]>([]);
+  const [memStatus, setMemStatus] = useState("");
+
+  const refreshMemories = useCallback(async () => {
+    try {
+      const { listMemories } = await import("../../lib/memory");
+      setMemList(await listMemories().catch(() => []));
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { refreshMemories(); }, [refreshMemories]);
+
+  const addMem = async () => {
+    if (!memText.trim()) return;
+    try {
+      const { addMemory } = await import("../../lib/memory");
+      await addMemory(memText, memCategory);
+      setMemText("");
+      setMemStatus("Memory saved.");
+      refreshMemories();
+    } catch (e) {
+      setMemStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const searchMem = async () => {
+    if (!memQuery.trim()) return;
+    try {
+      const { searchMemories } = await import("../../lib/memory");
+      const hits = await searchMemories(memQuery, ragSettings.maxRetrievedMemories).catch(() => []);
+      setMemList(hits.length > 0 ? hits : []);
+      setMemStatus(hits.length > 0 ? `${hits.length} hit${hits.length === 1 ? "" : "s"}` : "No results.");
+    } catch (e) {
+      setMemStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const deleteMem = async (id: string) => {
+    try {
+      const { deleteMemory } = await import("../../lib/memory");
+      await deleteMemory(id);
+      refreshMemories();
+    } catch { /* ignore */ }
+  };
+
   return (
-    <SettingsGroup title="Memory and retrieval" description="Control what can be remembered, retrieved, and shown with provenance.">
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        <ToggleRow enabled={memoryEnabled} onToggle={setMemoryEnabled} title="Long-term memory" description="Allow memories to be saved and searched during chat turns." />
-        <ToggleRow enabled={ragSettings.projectMemory} onToggle={(v) => setRagSettings({ ...ragSettings, projectMemory: v })} title="Project memory" description="Use project-scoped memory sources when available." />
-        <ToggleRow enabled={ragSettings.conversationMemory} onToggle={(v) => setRagSettings({ ...ragSettings, conversationMemory: v })} title="Conversation memory" description="Use conversation-specific remembered facts." />
-        <ToggleRow enabled={ragSettings.retrievalPreview} onToggle={(v) => setRagSettings({ ...ragSettings, retrievalPreview: v })} title="Retrieval preview" description="Show what memory snippets were retrieved before use." />
-        <ToggleRow enabled={ragSettings.provenance} onToggle={(v) => setRagSettings({ ...ragSettings, provenance: v })} title="Provenance" description="Track where remembered context came from." />
-        <Field label="Max retrieved memories">
-          <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
-        </Field>
-      </div>
-    </SettingsGroup>
+    <>
+      <SettingsGroup title="Memory and retrieval" description="Control what can be remembered, retrieved, and shown.">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <ToggleRow enabled={memoryEnabled} onToggle={setMemoryEnabled} title="Long-term memory" description="Allow memories to be saved and searched during chat." />
+          <ToggleRow enabled={ragSettings.projectMemory} onToggle={(v) => setRagSettings({ ...ragSettings, projectMemory: v })} title="Project memory" description="Use project-scoped memory sources." />
+          <ToggleRow enabled={ragSettings.conversationMemory} onToggle={(v) => setRagSettings({ ...ragSettings, conversationMemory: v })} title="Conversation memory" description="Use conversation-specific facts." />
+          <ToggleRow enabled={ragSettings.retrievalPreview} onToggle={(v) => setRagSettings({ ...ragSettings, retrievalPreview: v })} title="Retrieval preview" description="Show retrieved snippets." />
+          <ToggleRow enabled={ragSettings.provenance} onToggle={(v) => setRagSettings({ ...ragSettings, provenance: v })} title="Provenance" description="Track where context came from." />
+          <Field label="Max retrieved">
+            <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
+          </Field>
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup title="Add memory" description="Save a fact, preference, or task for future retrieval.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr]">
+          <Select value={memCategory} onChange={(e) => setMemCategory(e.target.value)}>
+            <option value="fact">Fact</option>
+            <option value="preference">Preference</option>
+            <option value="project">Project</option>
+            <option value="task">Task</option>
+          </Select>
+          <div className="flex gap-2">
+            <TextInput value={memText} onChange={(e) => setMemText(e.target.value)} placeholder="What should goatLLM remember?" className="flex-1" />
+            <button onClick={addMem} disabled={!memText.trim()} className="primary-action px-3 py-2 rounded-lg text-[11px] font-medium disabled:opacity-50 shrink-0"><Plus size={13} className="inline mr-1" />Add</button>
+          </div>
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup title="Search memories" description="Find and manage saved memories.">
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <TextInput value={memQuery} onChange={(e) => setMemQuery(e.target.value)} placeholder="Search memories..." className="flex-1" onKeyDown={(e) => e.key === "Enter" && searchMem()} />
+            <button onClick={searchMem} className="control-pill px-3 py-2 rounded-lg text-[11px] shrink-0"><Search size={13} /></button>
+            <button onClick={refreshMemories} className="control-pill px-3 py-2 rounded-lg text-[11px] shrink-0"><RefreshCw size={13} /></button>
+          </div>
+          {memStatus && <p className="text-[11px] text-text-3">{memStatus}</p>}
+          <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
+            {memList.map((mem: any) => (
+              <div key={mem.id} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] uppercase text-accent">{mem.category}</span>
+                    <p className="mt-0.5 text-[12px] text-text-2">{mem.text}</p>
+                  </div>
+                  <button onClick={() => deleteMem(mem.id)} className="control-icon p-0.5 rounded text-text-3 hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SettingsGroup>
+    </>
   );
 }
 
@@ -485,17 +790,47 @@ function ScheduleSettings() {
 function WatcherSettings() {
   const events = useChatStore((s) => s.watcherEvents);
   const clearEvents = useChatStore((s) => s.clearWatcherEvents);
+  const workspace = useChatStore((s) => s.workspacePath);
+  const [watching, setWatching] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const startWatch = async () => {
+    if (!workspace) return;
+    try {
+      await invoke("watch_workspace", { workspace });
+      setWatching(true);
+      setStatus(`Watching ${workspace}`);
+    } catch (e) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const stopWatch = async () => {
+    if (!workspace) return;
+    try {
+      await invoke("unwatch_workspace", { workspace }).catch(() => undefined);
+      setWatching(false);
+      setStatus("Stopped watcher.");
+    } catch (e) {
+      setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   return (
     <SettingsGroup title="Filesystem watcher" description="Native notify events for config changes, test signals, and generated artifacts.">
       <div className="flex flex-col gap-3">
+        {!workspace && <p className="text-[12px] text-text-3">Open a workspace in Agent mode to start the watcher.</p>}
+        <div className="flex items-center gap-2">
+          <button onClick={startWatch} disabled={!workspace || watching} className="control-pill px-3 py-1.5 rounded-lg text-[11px] font-medium disabled:opacity-40"><Play size={13} className="inline mr-1" />Start</button>
+          <button onClick={stopWatch} disabled={!watching} className="control-pill px-3 py-1.5 rounded-lg text-[11px] font-medium disabled:opacity-40">Stop</button>
+          <button onClick={clearEvents} className="control-pill px-3 py-1.5 rounded-lg text-[11px]">Clear events</button>
+        </div>
+        {status && <p className="text-[11px] text-accent">{status}</p>}
         <div className="flex items-center justify-between">
-          <span className="text-[12px] text-text-2">{events.length} event{events.length === 1 ? "" : "s"} received</span>
-          {events.length > 0 && (
-            <button onClick={clearEvents} className="control-pill px-3 py-1 rounded-md text-[11px]">Clear events</button>
-          )}
+          <span className="text-[12px] text-text-2">{events.length} event{events.length === 1 ? "" : "s"}</span>
         </div>
         {events.length > 0 && (
-          <div className="flex flex-col gap-1 max-h-[300px] overflow-y-auto">
+          <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
             {events.map((event, i) => (
               <div key={`${event.path}-${event.at}-${i}`} className="rounded border border-white/[0.06] bg-black/20 px-3 py-1.5">
                 <div className="text-[11.5px] text-text-2 truncate">{event.path}</div>
