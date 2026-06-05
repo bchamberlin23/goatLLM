@@ -72,8 +72,8 @@ export function SemanticIndexSection() {
 
   if (!workspacePath) {
     return (
-      <div className="p-3.5 bg-[#212122] border border-white/5 rounded-xl">
-        <p className="text-[12.5px] text-[#a0a0a0]">Pick a workspace first to enable semantic indexing.</p>
+      <div className="p-3.5 bg-surface-3 border border-white/5 rounded-xl">
+        <p className="text-[12.5px] text-text-3">Pick a workspace first to enable semantic indexing.</p>
       </div>
     );
   }
@@ -82,16 +82,16 @@ export function SemanticIndexSection() {
     <div className="soft-card p-3.5 rounded-xl flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-[13px] text-[#ececec]">
+          <span className="text-[13px] text-text-1">
             {count === null ? "—" : count === 0 ? "Not indexed" : `${count.toLocaleString()} chunks indexed`}
           </span>
-          <span className="text-[11px] text-[#a0a0a0] font-mono truncate">{workspacePath}</span>
+          <span className="text-[11px] text-text-3 font-mono truncate">{workspacePath}</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {count !== null && count > 0 && status !== "indexing" && (
             <button
               onClick={handleClear}
-              className="control-pill px-2.5 py-1.5 text-[12px] font-medium hover:text-[#f87171] hover:bg-red-500/10 rounded-md transition-colors"
+              className="control-pill px-2.5 py-1.5 text-[12px] font-medium hover:text-error hover:bg-red-500/10 rounded-md transition-colors"
             >
               Clear
             </button>
@@ -114,11 +114,11 @@ export function SemanticIndexSection() {
         <div className="flex flex-col gap-1.5">
           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#f59e42] transition-[width] duration-200"
+              className="h-full bg-accent transition-[width] duration-200"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="flex items-center justify-between text-[11px] text-[#a0a0a0] font-mono">
+          <div className="flex items-center justify-between text-[11px] text-text-3 font-mono">
             <span>{progress.done.toLocaleString()} / {progress.total.toLocaleString() || "?"}</span>
             {progress.current && <span className="truncate ml-2 max-w-[60%]">{progress.current}</span>}
           </div>
@@ -126,17 +126,17 @@ export function SemanticIndexSection() {
       )}
 
       {status === "error" && error && (
-        <div className="text-[12px] text-[#f87171] bg-red-500/5 border border-red-500/15 rounded-md p-2.5 whitespace-pre-wrap leading-relaxed">
+        <div className="text-[12px] text-error bg-red-500/5 border border-red-500/15 rounded-md p-2.5 whitespace-pre-wrap leading-relaxed">
           {error}
         </div>
       )}
 
       <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
         <div className="flex items-center gap-2">
-          <label className="text-[11px] text-[#a0a0a0] w-[80px] shrink-0">Ollama URL</label>
+          <label className="text-[11px] text-text-3 w-[80px] shrink-0">Ollama URL</label>
           <input
             type="text"
-            className="flex-1 h-[26px] px-2 bg-[#2c2c2e] border border-white/5 rounded text-[11px] text-[#ececec] font-mono outline-none focus:border-white/15"
+            className="flex-1 h-[26px] px-2 bg-surface-2 border border-white/5 rounded text-[11px] text-text-1 font-mono outline-none focus:border-white/15"
             value={urlDraft}
             onChange={(e) => setUrlDraft(e.target.value)}
             onBlur={() => setOllamaUrl(urlDraft.trim() || "http://localhost:11434")}
@@ -144,18 +144,18 @@ export function SemanticIndexSection() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-[11px] text-[#a0a0a0] w-[80px] shrink-0">Model</label>
+          <label className="text-[11px] text-text-3 w-[80px] shrink-0">Model</label>
           <input
             type="text"
-            className="flex-1 h-[26px] px-2 bg-[#2c2c2e] border border-white/5 rounded text-[11px] text-[#ececec] font-mono outline-none focus:border-white/15"
+            className="flex-1 h-[26px] px-2 bg-surface-2 border border-white/5 rounded text-[11px] text-text-1 font-mono outline-none focus:border-white/15"
             value={modelDraft}
             onChange={(e) => setModelDraft(e.target.value)}
             onBlur={() => setEmbeddingModel(modelDraft.trim() || "nomic-embed-text")}
             placeholder="nomic-embed-text"
           />
         </div>
-        <p className="text-[11px] text-[#888] leading-relaxed">
-          Run <span className="font-mono text-[#a0a0a0]">ollama pull {modelDraft || "nomic-embed-text"}</span> first if you haven't.
+        <p className="text-[11px] text-text-4 leading-relaxed">
+          Run <span className="font-mono text-text-3">ollama pull {modelDraft || "nomic-embed-text"}</span> first if you haven't.
         </p>
       </div>
     </div>

@@ -97,37 +97,37 @@ export function TodoWidget() {
         {!expanded && (
           <button
             onClick={() => setExpanded(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#2a2a2d]/90 backdrop-blur-xl border border-white/[0.07] shadow-[0_4px_20px_rgba(0,0,0,0.3)] text-[12.5px] text-[#c9c9c9] hover:bg-[#323236] hover:text-[#ececec] transition-colors select-none"
+            className="motion-feedback flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2/90 backdrop-blur-xl border border-hairline shadow-[0_4px_20px_rgba(0,0,0,0.3)] text-[12.5px] text-text-2 hover:bg-surface-2 hover:text-text-1 transition-[background,border-color,color,box-shadow,transform] select-none"
           >
-            <CheckSquare size={14} strokeWidth={1.75} className={visibleTasks.length === 0 ? "text-[#888]" : allDone ? "text-[#4ade80]" : inProgressCount > 0 ? "text-[#f59e42]" : "text-[#888]"} />
+            <CheckSquare size={14} strokeWidth={1.75} className={visibleTasks.length === 0 ? "text-text-4" : allDone ? "text-success" : inProgressCount > 0 ? "text-accent" : "text-text-4"} />
             <span className="tabular-nums font-medium">
               {visibleTasks.length === 0 && !manualTasksEnabled ? "0/0" : visibleTasks.length === 0 ? "Tasks" : `${completedCount}/${visibleTasks.length}`}
             </span>
-            <span className="text-[#888]">{visibleTasks.length === 0 && !manualTasksEnabled ? "tasks" : visibleTasks.length === 0 ? "(empty)" : "tasks"}</span>
+            <span className="text-text-4">{visibleTasks.length === 0 && !manualTasksEnabled ? "tasks" : visibleTasks.length === 0 ? "(empty)" : "tasks"}</span>
           </button>
         )}
 
         {/* Expanded panel */}
         {expanded && (
-          <div className="rounded-xl bg-[#242426]/95 backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden animate-[fadeIn_160ms_ease] w-full flex flex-col">
+          <div className="motion-surface-in rounded-xl bg-surface-3/95 backdrop-blur-xl border border-hairline-strong shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden w-full flex flex-col">
             {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-white/[0.05]">
+            <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-hairline">
               <CheckSquare
                 size={15}
                 strokeWidth={1.75}
-                className={visibleTasks.length === 0 ? "text-[#888]" : allDone ? "text-[#4ade80]" : inProgressCount > 0 ? "text-[#f59e42]" : "text-[#888]"}
+                className={visibleTasks.length === 0 ? "text-text-4" : allDone ? "text-success" : inProgressCount > 0 ? "text-accent" : "text-text-4"}
               />
-              <span className="text-[13px] font-medium text-[#ececec] flex-1">
+              <span className="text-[13px] font-medium text-text-1 flex-1">
                 Tasks
               </span>
               {visibleTasks.length > 0 && (
-                <span className="text-[11.5px] text-[#888] tabular-nums">
+                <span className="text-[11.5px] text-text-4 tabular-nums">
                   {completedCount}/{visibleTasks.length}
                 </span>
               )}
               <button
                 onClick={() => setExpanded(false)}
-                className="p-0.5 rounded hover:bg-white/[0.06] text-[#888] hover:text-[#ececec] transition-colors"
+                className="p-0.5 rounded hover:bg-white/5 text-text-4 hover:text-text-1 transition-colors"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -138,10 +138,10 @@ export function TodoWidget() {
 
             {/* Progress bar */}
             {visibleTasks.length > 0 && (
-              <div className="h-0.5 bg-white/[0.04]">
+              <div className="h-0.5 bg-white/5">
                 <div
                   className={`h-full transition-all duration-500 ${
-                    allDone ? "bg-[#4ade80]" : "bg-[#f59e42]"
+                    allDone ? "bg-success" : "bg-accent"
                   }`}
                   style={{ width: `${(completedCount / visibleTasks.length) * 100}%` }}
                 />
@@ -163,15 +163,15 @@ export function TodoWidget() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-[#666] text-[12px] italic select-none">
+              <div className="text-center py-6 text-text-4 text-[12px] italic select-none">
                 No tasks created yet.
               </div>
             )}
 
             {/* Add Task input at bottom */}
             {manualTasksEnabled && (
-              <div className="border-t border-white/[0.05] p-2 bg-white/[0.01]">
-                <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2.5 py-1 focus-within:border-white/[0.15] focus-within:bg-white/[0.06] transition-all">
+              <div className="border-t border-hairline p-2 bg-white/[0.01]">
+                <div className="flex items-center gap-1.5 bg-white/5 border border-hairline-strong rounded-lg px-2.5 py-1 focus-within:border-white/[0.15] focus-within:bg-white/5 transition-all">
                   <input
                     type="text"
                     placeholder="Add a task..."
@@ -180,12 +180,12 @@ export function TodoWidget() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleAddTask();
                     }}
-                    className="flex-1 bg-transparent border-0 p-0 text-[12px] text-[#ececec] placeholder-[#666] focus:outline-none focus:ring-0 h-6"
+                    className="flex-1 bg-transparent border-0 p-0 text-[12px] text-text-1 placeholder-text-4 focus:outline-none focus:ring-0 h-6"
                   />
                   <button
                     onClick={handleAddTask}
                     disabled={!newTaskTitle.trim()}
-                    className="p-0.5 rounded text-[#888] hover:text-[#ececec] disabled:opacity-20 disabled:hover:text-[#888] transition-colors"
+                    className="p-0.5 rounded text-text-4 hover:text-text-1 disabled:opacity-20 disabled:hover:text-text-4 transition-colors"
                   >
                     <Plus size={14} />
                   </button>
@@ -304,14 +304,14 @@ function TaskRow({
 
   return (
     <div
-      className={`group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[12.5px] select-none transition-colors hover:bg-white/[0.04] ${
+      className={`group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[12.5px] select-none transition-colors hover:bg-white/5 ${
         task.status === "completed"
-          ? "text-[#666] line-through"
+          ? "text-text-4 line-through"
           : task.status === "in_progress"
-            ? "text-[#f59e42]"
+            ? "text-accent"
             : blocked
-              ? "text-[#888] opacity-70"
-              : "text-[#c9c9c9]"
+              ? "text-text-4 opacity-70"
+              : "text-text-2"
       }`}
       title={task.title}
     >
@@ -325,12 +325,12 @@ function TaskRow({
             : ""
         } ${
           task.status === "completed"
-            ? "bg-[#4ade80] border-[#4ade80]"
+            ? "bg-success border-success"
             : task.status === "in_progress"
-              ? "bg-[#f59e42] border-[#f59e42] animate-pulse"
+              ? "bg-accent border-accent animate-pulse"
               : blocked
-                ? "border-[#666]"
-                : "border-[#888]"
+                ? "border-text-4"
+                : "border-text-4"
         }`}
       >
         {task.status === "completed" && (
@@ -351,7 +351,7 @@ function TaskRow({
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") handleCancel();
           }}
-          className="flex-1 bg-white/[0.06] border border-white/[0.12] rounded px-1.5 py-0.5 text-[12.5px] text-[#ececec] focus:outline-none focus:border-white/[0.2] focus:ring-0"
+          className="flex-1 bg-white/5 border border-hairline-strong rounded px-1.5 py-0.5 text-[12.5px] text-text-1 focus:outline-none focus:border-white/[0.2] focus:ring-0"
         />
       ) : (
         <span
@@ -367,14 +367,14 @@ function TaskRow({
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
             onClick={() => setIsEditing(true)}
-            className="p-1 rounded hover:bg-white/[0.06] text-[#888] hover:text-[#ececec] transition-colors"
+            className="p-1 rounded hover:bg-white/5 text-text-4 hover:text-text-1 transition-colors"
             title="Edit task title"
           >
             <Pencil size={11} />
           </button>
           <button
             onClick={handleDelete}
-            className="p-1 rounded hover:bg-red-500/10 text-[#888] hover:text-[#ff5555] transition-colors"
+            className="p-1 rounded hover:bg-red-500/10 text-text-4 hover:text-error transition-colors"
             title="Delete task"
           >
             <Trash2 size={11} />
@@ -384,7 +384,7 @@ function TaskRow({
 
       {task.blockedBy && task.blockedBy.length > 0 && !isEditing && (
         <span
-          className="text-[10px] text-[#888] shrink-0 font-mono tabular-nums group-hover:hidden"
+          className="text-[10px] text-text-4 shrink-0 font-mono tabular-nums group-hover:hidden"
           title={`Blocked by: ${task.blockedBy.join(", ")}`}
         >
           x{task.blockedBy.length}

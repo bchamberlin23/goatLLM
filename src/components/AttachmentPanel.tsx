@@ -3,6 +3,7 @@ import { useChatStore, type Attachment } from "../stores/chat";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { extractAttachment, classify } from "../lib/attachment-extract";
 import { Copy, Download, X, FileCode, FileText, FileSpreadsheet, FileArchive, File as FileIcon, Image as ImageIcon, Columns } from "lucide-react";
+import { sandboxFor } from "../lib/iframe-sandbox";
 
 const MonacoEditor = lazy(() =>
   import("@monaco-editor/react").then((m) => ({ default: m.default })),
@@ -238,13 +239,13 @@ export function AttachmentPanel() {
   };
 
   return (
-    <div className="liquid-surface flex-1 flex flex-col h-full rounded-2xl overflow-hidden animate-[fadeIn_120ms_ease]">
+    <div className="liquid-surface motion-surface-in flex-1 flex flex-col h-full rounded-2xl overflow-hidden">
       <div className="h-[32px] shrink-0" data-tauri-drag-region />
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-3 py-2 border-b border-white/[0.06] shrink-0">
-        <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
-        <span className="text-[13px] font-medium text-[#ececec] truncate">{attachment.filename}</span>
-        <span className="text-[10px] text-[#a0a0a0] bg-white/5 px-1.5 py-0.5 rounded">{formatFileSize(attachment.sizeBytes)}</span>
+      <div className="flex items-center gap-3 px-3 py-2 border-b border-hairline shrink-0">
+        <Icon size={13} strokeWidth={1.75} className="text-text-3" />
+        <span className="text-[13px] font-medium text-text-1 truncate">{attachment.filename}</span>
+        <span className="text-[10px] text-text-3 bg-white/5 px-1.5 py-0.5 rounded">{formatFileSize(attachment.sizeBytes)}</span>
         <div className="flex-1" />
         {canPreview && !previewOnly && (
           <button
@@ -287,7 +288,7 @@ export function AttachmentPanel() {
 
         {/* Image (raster) attachments — always show the picture. */}
         {!effectiveShowPreview && isImage && (
-          <div className="flex-1 min-h-0 flex items-center justify-center bg-[#151516] p-4 overflow-auto">
+          <div className="flex-1 min-h-0 flex items-center justify-center bg-sunken p-4 overflow-auto">
             <img src={attachment.dataUrl} alt={attachment.filename} className="max-w-full max-h-full object-contain" />
           </div>
         )}
@@ -296,15 +297,15 @@ export function AttachmentPanel() {
         {!effectiveShowPreview && (isText || isExtracted) && (
           <>
             {loading && (
-              <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading…</div>
+              <div className="flex-1 flex items-center justify-center text-[12px] text-text-3">Loading…</div>
             )}
             {error && (
-              <div className="flex-1 flex items-center justify-center text-[12px] text-[#f87171]">{error}</div>
+              <div className="flex-1 flex items-center justify-center text-[12px] text-error">{error}</div>
             )}
             {text !== null && !loading && !error && (
               <Suspense
                 fallback={
-                  <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading editor…</div>
+                  <div className="flex-1 flex items-center justify-center text-[12px] text-text-3">Loading editor…</div>
                 }
               >
                 <MonacoEditor
@@ -335,9 +336,9 @@ export function AttachmentPanel() {
         {/* Unknown binary fallback. */}
         {!effectiveShowPreview && !isImage && !isText && !isExtracted && (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-8">
-            <Icon size={32} strokeWidth={1.5} className="text-[#5a5a5a]" />
-            <span className="text-[13px] text-[#d5d5d5]">No preview available</span>
-            <span className="text-[12px] text-[#888]">
+            <Icon size={32} strokeWidth={1.5} className="text-text-4" />
+            <span className="text-[13px] text-text-2">No preview available</span>
+            <span className="text-[12px] text-text-4">
               {attachment.mimeType || "Unknown type"} · {formatFileSize(attachment.sizeBytes)}
             </span>
             <button
@@ -369,7 +370,7 @@ function PreviewSurface({
   }
   if (kind === "html") {
     if (text === null) {
-      return <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading preview…</div>;
+      return <div className="flex-1 flex items-center justify-center text-[12px] text-text-3">Loading preview…</div>;
     }
     // Sandbox without `allow-same-origin` so the page can't reach the local
     // app's storage — still allows scripts so the user's HTML behaves naturally.
@@ -377,14 +378,14 @@ function PreviewSurface({
       <iframe
         className="flex-1 w-full border-none bg-white"
         srcDoc={text}
-        sandbox="allow-scripts allow-forms allow-popups"
+        sandbox={sandboxFor("attachment")}
         title={attachment.filename}
       />
     );
   }
   if (kind === "svg") {
     if (text === null) {
-      return <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading preview…</div>;
+      return <div className="flex-1 flex items-center justify-center text-[12px] text-text-3">Loading preview…</div>;
     }
     const svgHtml = `<!DOCTYPE html>
 <html>
@@ -400,7 +401,7 @@ function PreviewSurface({
 </html>`;
     return (
       <iframe
-        className="flex-1 w-full border-none bg-[#0f0f10]"
+        className="flex-1 w-full border-none bg-bg"
         srcDoc={svgHtml}
         sandbox=""
         title={attachment.filename}
@@ -409,7 +410,7 @@ function PreviewSurface({
   }
   if (kind === "markdown") {
     if (text === null) {
-      return <div className="flex-1 flex items-center justify-center text-[12px] text-[#a0a0a0]">Loading preview…</div>;
+      return <div className="flex-1 flex items-center justify-center text-[12px] text-text-3">Loading preview…</div>;
     }
     return (
       <div className="flex-1 min-h-0 overflow-auto px-6 py-5">

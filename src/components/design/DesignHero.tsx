@@ -59,21 +59,21 @@ export function DesignHero() {
   };
 
   return (
-    <div className="w-full max-w-[920px] mx-auto px-6 py-10 animate-[fadeIn_320ms_ease]">
+    <div className="motion-surface-in w-full max-w-[920px] mx-auto px-6 py-10">
       <header className="mb-6 flex items-baseline justify-between">
         <div>
-          <h1 className="text-[22px] font-medium text-[#ececec]">
+          <h1 className="text-[22px] font-medium text-text-1">
             Pick a surface to design.
           </h1>
-          <p className="mt-1.5 text-[13px] text-[#a0a0a0] max-w-[60ch]">
+          <p className="mt-1.5 text-[13px] text-text-3 max-w-[60ch]">
             Each skill ships a seed template, brand checklist, and anti-slop
             rules the model reads before it draws a single pixel. Pick one,
             then type the brief.
           </p>
         </div>
         {activeSkillId && (
-          <span className="text-[11px] text-[#888] uppercase tracking-wider">
-            <Sparkles size={11} strokeWidth={2} className="inline mr-1 -mt-px text-[#f59e42]" aria-hidden />
+          <span className="text-[11px] text-text-4 uppercase tracking-wider">
+            <Sparkles size={11} strokeWidth={2} className="inline mr-1 -mt-px text-accent" aria-hidden />
             Skill selected
           </span>
         )}
@@ -88,7 +88,7 @@ export function DesignHero() {
             <section key={scenario} aria-labelledby={`design-hero-${scenario}`}>
               <h2
                 id={`design-hero-${scenario}`}
-                className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold text-[#888] mb-2.5"
+                className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.12em] font-semibold text-text-4 mb-2.5"
               >
                 <Icon size={11} strokeWidth={2} aria-hidden />
                 {label}
@@ -127,8 +127,8 @@ function SkillCard({
       aria-pressed={active}
       className={`soft-card group relative flex flex-col text-left rounded-xl overflow-hidden transition-all ${
         active
-          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
-          : "hover:border-white/[0.12] hover:bg-white/[0.06]"
+          ? "border-accent/60 bg-accent/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
+          : "hover:border-hairline-strong hover:bg-white/5"
       }`}
     >
       {/* Tiny visual rhythm — no real preview yet, just a uniform card-sized
@@ -137,21 +137,21 @@ function SkillCard({
           the SVG sketch, not on the card itself, so cards stay a consistent
           height across the grid. */}
       <div
-        className="relative w-full bg-sunken border-b border-white/[0.04]"
+        className="relative w-full bg-sunken border-b border-hairline"
         style={{ aspectRatio: "16/10" }}
       >
         <SkillPreviewSketch skill={skill} />
       </div>
       <div className="px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-medium text-[#ececec]">
+          <span className="text-[13px] font-medium text-text-1">
             {skill.name}
           </span>
-          <span className="text-[10px] uppercase tracking-wider text-[#888] font-mono">
+          <span className="text-[10px] uppercase tracking-wider text-text-4 font-mono">
             {skill.mode}
           </span>
         </div>
-        <p className="mt-1 text-[11.5px] text-[#a0a0a0] leading-snug line-clamp-2">
+        <p className="mt-1 text-[11.5px] text-text-3 leading-snug line-clamp-2">
           {skill.description}
         </p>
       </div>

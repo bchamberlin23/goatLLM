@@ -97,8 +97,8 @@ function FileNode({
         onClick={() => node.isDir ? onToggle(node.path) : onSelect(node.path, node.name)}
         className={`flex items-center gap-1.5 w-full text-left py-[3px] px-2 rounded-md text-[12px] transition-colors ${
           isSelected
-            ? "bg-[#f59e42]/10 text-[#f59e42]"
-            : "text-[#b4b4b4] hover:bg-white/[0.04] hover:text-[#ececec]"
+            ? "bg-accent/10 text-accent"
+            : "text-text-2 hover:bg-white/5 hover:text-text-1"
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
       >
@@ -106,12 +106,12 @@ function FileNode({
           <ChevronRight
             size={10}
             strokeWidth={2}
-            className={`shrink-0 text-[#888] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+            className={`shrink-0 text-text-4 transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
           />
         )}
-        <Icon size={13} strokeWidth={1.75} className={node.isDir ? "text-[#888] shrink-0" : "text-[#666] shrink-0"} />
+        <Icon size={13} strokeWidth={1.75} className={node.isDir ? "text-text-4 shrink-0" : "text-text-4 shrink-0"} />
         <span className="truncate">{node.name}</span>
-        {node.loading && <span className="text-[10px] text-[#666] ml-auto">…</span>}
+        {node.loading && <span className="text-[10px] text-text-4 ml-auto">…</span>}
       </button>
       {isExpanded && node.children && node.children.map((child) => (
         <FileNode
@@ -217,7 +217,7 @@ export function WorkspaceFileBrowser({ onFileContent, refreshKey }: WorkspaceFil
 
   if (!workspacePath) {
     return (
-      <div className="flex items-center justify-center h-full text-[11px] text-[#666] px-4 text-center">
+      <div className="flex items-center justify-center h-full text-[11px] text-text-4 px-4 text-center">
         Select a workspace to browse files
       </div>
     );
@@ -225,14 +225,14 @@ export function WorkspaceFileBrowser({ onFileContent, refreshKey }: WorkspaceFil
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.04]">
-        <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-hairline">
+        <span className="text-[10.5px] uppercase tracking-[0.12em] text-text-4 font-semibold">
           Files
         </span>
         <button
           onClick={loadRoot}
           disabled={loading}
-          className="p-1 rounded text-[#888] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+          className="p-1 rounded text-text-4 hover:text-text-1 hover:bg-white/5 transition-colors"
           aria-label="Refresh file tree"
         >
           <RefreshCw size={11} strokeWidth={2} className={loading ? "animate-spin" : ""} />
@@ -240,10 +240,10 @@ export function WorkspaceFileBrowser({ onFileContent, refreshKey }: WorkspaceFil
       </div>
       <div className="flex-1 overflow-y-auto py-1 px-1">
         {error && (
-          <div className="px-2 py-1.5 text-[11px] text-[#f87171]">{error}</div>
+          <div className="px-2 py-1.5 text-[11px] text-error">{error}</div>
         )}
         {tree.length === 0 && !loading && !error && (
-          <div className="px-2 py-3 text-[11px] text-[#666]">Empty workspace</div>
+          <div className="px-2 py-3 text-[11px] text-text-4">Empty workspace</div>
         )}
         {tree.map((node) => (
           <FileNode

@@ -99,7 +99,7 @@ function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-9 rounded-lg border border-white/[0.08] bg-black/20 px-3 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 ${props.className ?? ""}`}
+      className={`motion-feedback h-9 rounded-lg border border-hairline-strong bg-black/20 px-3 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 ${props.className ?? ""}`}
     />
   );
 }
@@ -108,7 +108,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`h-9 rounded-lg border border-white/[0.08] bg-[#171719] px-3 text-[12.5px] text-text-1 outline-none focus:border-accent/45 ${props.className ?? ""}`}
+      className={`motion-feedback h-9 rounded-lg border border-hairline-strong bg-sunken px-3 text-[12.5px] text-text-1 outline-none focus:border-accent/45 ${props.className ?? ""}`}
     />
   );
 }
@@ -162,7 +162,7 @@ export function SettingsTabs() {
 
   return (
     <div className="flex flex-1 min-h-0 max-[760px]:flex-col">
-      <aside className="w-[236px] shrink-0 border-r border-white/[0.06] bg-black/15 p-3 max-[760px]:w-full max-[760px]:border-r-0 max-[760px]:border-b">
+      <aside className="w-[236px] shrink-0 border-r border-hairline bg-black/15 p-3 max-[760px]:w-full max-[760px]:border-r-0 max-[760px]:border-b">
         <div className="relative mb-3">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-3" aria-hidden="true" />
           <TextInput
@@ -191,10 +191,10 @@ export function SettingsTabs() {
                 tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(tab.id)}
                 onKeyDown={(e) => handleTabKeyDown(e, index)}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,color,box-shadow] max-[760px]:min-w-[180px] ${
+                className={`motion-feedback flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,color,box-shadow,transform] max-[760px]:min-w-[180px] ${
                   isActive
                     ? "border-accent/28 bg-accent/10 text-text-1 shadow-[0_18px_48px_-34px_rgba(245,158,66,0.9),inset_0_1px_0_rgba(255,255,255,0.055)]"
-                    : "border-transparent text-text-3 hover:border-white/[0.08] hover:bg-white/[0.04] hover:text-text-2"
+                    : "border-transparent text-text-3 hover:border-hairline-strong hover:bg-white/5 hover:text-text-2"
                 }`}
               >
                 <Icon size={15} strokeWidth={1.75} className={isActive ? "text-accent" : ""} aria-hidden="true" />
@@ -213,18 +213,20 @@ export function SettingsTabs() {
         role="tabpanel"
         aria-label={TABS.find((t) => t.id === activeTab)?.label}
       >
-        {activeTab === "providers" && <ProvidersTab />}
-        {activeTab === "appearance" && <AppearanceSettings />}
-        {activeTab === "features" && <FeatureFlagSettings />}
-        {activeTab === "voice" && <VoiceSettings />}
-        {activeTab === "images" && <ImageSettings />}
-        {activeTab === "cost" && <CostSettings />}
-        {activeTab === "prompts" && <PromptsSettings />}
-        {activeTab === "sync" && <SyncSettings />}
-        {activeTab === "memory" && <MemorySettings />}
-        {activeTab === "schedules" && <ScheduleSettings />}
-        {activeTab === "watcher" && <WatcherSettings />}
-        {activeTab === "advanced" && <AdvancedDeveloperSettings />}
+        <div key={activeTab} className="motion-reveal flex flex-col gap-6">
+          {activeTab === "providers" && <ProvidersTab />}
+          {activeTab === "appearance" && <AppearanceSettings />}
+          {activeTab === "features" && <FeatureFlagSettings />}
+          {activeTab === "voice" && <VoiceSettings />}
+          {activeTab === "images" && <ImageSettings />}
+          {activeTab === "cost" && <CostSettings />}
+          {activeTab === "prompts" && <PromptsSettings />}
+          {activeTab === "sync" && <SyncSettings />}
+          {activeTab === "memory" && <MemorySettings />}
+          {activeTab === "schedules" && <ScheduleSettings />}
+          {activeTab === "watcher" && <WatcherSettings />}
+          {activeTab === "advanced" && <AdvancedDeveloperSettings />}
+        </div>
       </div>
     </div>
   );
@@ -365,13 +367,13 @@ function ImageSettings() {
       </div>
 
       {showOllamaInfo && (
-        <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+        <div className="mt-4 rounded-xl border border-hairline-strong bg-black/20 p-4">
           <div className="flex flex-col gap-3">
             <div>
               <div className="text-[12px] font-medium text-text-1">Recommended Ollama image models</div>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {ollamaModels.map((m) => (
-                  <div key={m.name} className={`rounded-lg border px-3 py-2 text-[12px] ${m.rec ? "border-accent/25 bg-accent/[0.04]" : "border-white/[0.06]"}`}>
+                  <div key={m.name} className={`rounded-lg border px-3 py-2 text-[12px] ${m.rec ? "border-accent/25 bg-accent/[0.04]" : "border-hairline"}`}>
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-text-1">{m.name}</span>
                       {m.rec && <span className="text-[10px] text-accent font-medium">Recommended</span>}
@@ -381,8 +383,8 @@ function ImageSettings() {
                 ))}
               </div>
             </div>
-            <div className="rounded-lg border border-[#f59e42]/20 bg-[#f59e42]/[0.05] px-3 py-2">
-              <p className="text-[11.5px] text-[#d4944a] leading-relaxed">
+            <div className="rounded-lg border border-accent/20 bg-accent/[0.05] px-3 py-2">
+              <p className="text-[11.5px] text-accent leading-relaxed">
                 <strong>Memory warning:</strong> Running an image model alongside an LLM can consume significant VRAM.
                 The 4B model uses ~5.7 GB and the 9B uses ~12 GB. Make sure you have enough GPU memory free,
                 especially if you already have a large LLM loaded in Ollama. On limited hardware, consider
@@ -439,7 +441,7 @@ function CostSettings() {
               setUsageSettings({ ...usageSettings, priceOverrides: JSON.parse(e.target.value) });
             } catch { /* keep typing until valid JSON */ }
           }}
-          className="min-h-[160px] w-full rounded-xl border border-white/[0.08] bg-black/20 p-3 font-mono text-[11.5px] text-text-1 outline-none focus:border-accent/45"
+          className="min-h-[160px] w-full rounded-xl border border-hairline-strong bg-black/20 p-3 font-mono text-[11.5px] text-text-1 outline-none focus:border-accent/45"
           placeholder='{"openai:gpt-4o": {"inputPerMillion": 2.50, "outputPerMillion": 10.00}}'
         />
       </SettingsGroup>
@@ -550,7 +552,7 @@ function PromptsSettings() {
                   type="button"
                   onClick={() => { setSelected(doc); setDraft(doc.body); }}
                   className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                    selected?.name === doc.name ? "border-accent/30 bg-accent/10" : "border-white/[0.06] bg-black/15 hover:bg-white/[0.045]"
+                    selected?.name === doc.name ? "border-accent/30 bg-accent/10" : "border-hairline bg-black/15 hover:bg-white/5"
                   }`}
                 >
                   <div className="truncate text-[12px] font-medium text-text-1">/{doc.name}</div>
@@ -583,7 +585,7 @@ function PromptsSettings() {
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="min-h-[300px] w-full rounded-lg border border-white/[0.08] bg-black/20 p-3 font-mono text-[12px] text-text-1 outline-none focus:border-accent/45 resize-none"
+              className="min-h-[300px] w-full rounded-lg border border-hairline-strong bg-black/20 p-3 font-mono text-[12px] text-text-1 outline-none focus:border-accent/45 resize-none"
             />
             <div className="flex items-center gap-4 text-[11px] text-text-3">
               <span>v{selected.version}</span>
@@ -770,7 +772,7 @@ function MemorySettings() {
           {memStatus && <p className="text-[11px] text-text-3">{memStatus}</p>}
           <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
             {memList.map((mem) => (
-              <div key={mem.id} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+              <div key={mem.id} className="rounded-lg border border-hairline bg-black/20 px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <span className="text-[10px] uppercase text-accent">{mem.category}</span>
@@ -823,7 +825,7 @@ function ScheduleSettings() {
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="What should the agent do on schedule?"
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-black/20 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
+          className="w-full px-3 py-2 rounded-lg border border-hairline-strong bg-black/20 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
         />
         <button onClick={addAgent} disabled={!prompt.trim()} className="primary-action self-start px-4 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50">
           Add Schedule
@@ -833,7 +835,7 @@ function ScheduleSettings() {
         <div className="mt-4 flex flex-col gap-2">
           <div className="text-[11.5px] font-medium text-text-2">{agents.length} configured agent{agents.length === 1 ? "" : "s"}</div>
           {agents.map((agent) => (
-            <div key={agent.id} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+            <div key={agent.id} className="rounded-lg border border-hairline bg-black/20 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12.5px] font-medium text-text-1 truncate">{agent.name}</span>
                 <button onClick={() => setAgents(agents.filter((a) => a.id !== agent.id))} className="control-icon p-0.5 rounded text-text-3 hover:text-red-400">
@@ -894,7 +896,7 @@ function WatcherSettings() {
         {events.length > 0 && (
           <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
             {events.map((event, i) => (
-              <div key={`${event.path}-${event.at}-${i}`} className="rounded border border-white/[0.06] bg-black/20 px-3 py-1.5">
+              <div key={`${event.path}-${event.at}-${i}`} className="rounded border border-hairline bg-black/20 px-3 py-1.5">
                 <div className="text-[11.5px] text-text-2 truncate">{event.path}</div>
                 <div className="text-[10.5px] text-text-3">{event.kind} · {new Date(event.at).toLocaleTimeString()}</div>
               </div>

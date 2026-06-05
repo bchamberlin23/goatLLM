@@ -196,9 +196,9 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
   }, [tc.toolName, tc.input]);
 
   return (
-    <div className="border border-amber-500/35 bg-amber-500/5 rounded-xl p-3.5 flex flex-col gap-3 my-1">
+    <div className="motion-surface-in border border-amber-500/35 bg-amber-500/5 rounded-xl p-3.5 flex flex-col gap-3 my-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#f59e0b]">
+        <span className="text-[10.5px] font-semibold uppercase tracking-wider text-accent">
           Needs approval
         </span>
       </div>
@@ -207,35 +207,35 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
           <DiffView diff={diffPreview} />
         ) : isWrite ? (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#a0a0a0]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-3">
               File
             </span>
-            <code className="block bg-[#2c2c2e] border border-white/5 rounded-lg p-2.5 font-mono text-[11.5px] text-[#ececec] whitespace-pre-wrap break-all max-h-[180px] overflow-auto select-text">
+            <code className="block bg-surface-2 border border-white/5 rounded-lg p-2.5 font-mono text-[11.5px] text-text-1 whitespace-pre-wrap break-all max-h-[180px] overflow-auto select-text">
               {formatInput(tc.input)}
             </code>
           </div>
         ) : isExec ? (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#a0a0a0]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-3">
               Command
             </span>
-            <code className="block bg-[#2c2c2e] border border-white/5 rounded-lg p-2.5 font-mono text-[11.5px] text-[#ececec] whitespace-pre-wrap break-all select-text">
+            <code className="block bg-surface-2 border border-white/5 rounded-lg p-2.5 font-mono text-[11.5px] text-text-1 whitespace-pre-wrap break-all select-text">
               {getInputField(tc.input, "command") || "(unknown)"}
             </code>
             {isDestructive && (
-              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-red-500/10 border border-red-500/20 rounded-md text-[11.5px] font-semibold text-[#fca5a5]">
-                <AlertTriangle size={12} className="text-[#f87171]" />
+              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-red-500/10 border border-red-500/20 rounded-md text-[11.5px] font-semibold text-error">
+                <AlertTriangle size={12} className="text-error" />
                 DESTRUCTIVE — {tc.dangerReason}
               </div>
             )}
             {isSuspicious && (
-              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md text-[11.5px] font-semibold text-[#fde68a]">
-                <AlertTriangle size={12} className="text-[#f59e0b]" />
+              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md text-[11.5px] font-semibold text-accent">
+                <AlertTriangle size={12} className="text-accent" />
                 Suspicious — {tc.dangerReason}
               </div>
             )}
             {needsDoubleConfirm && (
-              <div className="mt-1 text-[11.5px] text-[#a0a0a0] italic">
+              <div className="mt-1 text-[11.5px] text-text-3 italic">
                 This will permanently affect your system. Click again to
                 confirm.
               </div>
@@ -257,7 +257,7 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
         <button
           className={`px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors ${
             isDestructive && !needsDoubleConfirm
-              ? "bg-red-500/20 text-[#fca5a5] hover:bg-red-500/30 hover:text-[#fecaca]"
+              ? "bg-red-500/20 text-error hover:bg-red-500/30 hover:text-error"
               : "primary-action"
           }`}
           onClick={() => {
@@ -280,17 +280,17 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
 
 function JsonToken({ type, value }: { type: string; value: string }) {
   const colors: Record<string, string> = {
-    key: "#60a5fa",      // info blue — keys
-    string: "#34d399",   // success green — string values
-    number: "#f59e42",   // accent amber — numbers
-    boolean: "#f59e42",  // accent amber — booleans
-    null: "#888888",     // text-4 — null
-    brace: "#b4b4b4",    // text-2 — structural chars
-    colon: "#666666",
-    comma: "#666666",
+    key: "var(--info)",     // info blue — keys
+    string: "var(--success)",  // success green — string values
+    number: "var(--accent)",   // accent amber — numbers
+    boolean: "var(--accent)",  // accent amber — booleans
+    null: "var(--text-4)",     // text-4 — null
+    brace: "var(--text-2)",    // text-2 — structural chars
+    colon: "var(--text-4)",
+    comma: "var(--text-4)",
   };
   return (
-    <span style={{ color: colors[type] ?? "#ececec" }}>{value}</span>
+    <span style={{ color: colors[type] ?? "var(--text-1)" }}>{value}</span>
   );
 }
 
@@ -365,8 +365,8 @@ function JsonInspectorNode({
   if (type === "null") {
     return (
       <div className="flex items-baseline gap-1.5 py-0.5 font-mono text-[11.5px] leading-normal">
-        {label !== undefined && <span className="text-[#888] select-none">{label}:</span>}
-        <span className="text-[#555] italic">null</span>
+        {label !== undefined && <span className="text-text-4 select-none">{label}:</span>}
+        <span className="text-text-4 italic">null</span>
       </div>
     );
   }
@@ -379,25 +379,25 @@ function JsonInspectorNode({
         <div
           onClick={() => !isEmpty && setIsExpanded(!isExpanded)}
           className={`flex items-baseline gap-1 select-none ${
-            isEmpty ? "" : "cursor-pointer hover:text-[#ececec] transition-colors"
-          } text-[#888]`}
+            isEmpty ? "" : "cursor-pointer hover:text-text-1 transition-colors"
+          } text-text-4`}
         >
           {!isEmpty && (
             <ChevronDown
               size={10.5}
               strokeWidth={2}
-              className={`shrink-0 text-[#666] mr-0.5 transition-transform duration-100 ${
+              className={`shrink-0 text-text-4 mr-0.5 transition-transform duration-100 ${
                 isExpanded ? "" : "-rotate-90"
               }`}
             />
           )}
-          {label !== undefined && <span className="text-[#b4b4b4] font-medium">{label}:</span>}
-          <span className="text-[#666] text-[10.5px]">
+          {label !== undefined && <span className="text-text-2 font-medium">{label}:</span>}
+          <span className="text-text-4 text-[10.5px]">
             {isEmpty ? "[]" : `[${arr.length} item${arr.length === 1 ? "" : "s"}]`}
           </span>
         </div>
         {isExpanded && !isEmpty && (
-          <div className="border-l border-white/[0.04] ml-[5px] pl-3.5 mt-0.5 flex flex-col gap-0.5">
+          <div className="motion-expand-content border-l border-hairline ml-[5px] pl-3.5 mt-0.5 flex flex-col gap-0.5">
             {arr.map((item, idx) => (
               <JsonInspectorNode key={idx} label={idx} value={item} depth={depth + 1} />
             ))}
@@ -416,25 +416,25 @@ function JsonInspectorNode({
         <div
           onClick={() => !isEmpty && setIsExpanded(!isExpanded)}
           className={`flex items-baseline gap-1 select-none ${
-            isEmpty ? "" : "cursor-pointer hover:text-[#ececec] transition-colors"
-          } text-[#888]`}
+            isEmpty ? "" : "cursor-pointer hover:text-text-1 transition-colors"
+          } text-text-4`}
         >
           {!isEmpty && (
             <ChevronDown
               size={10.5}
               strokeWidth={2}
-              className={`shrink-0 text-[#666] mr-0.5 transition-transform duration-100 ${
+              className={`shrink-0 text-text-4 mr-0.5 transition-transform duration-100 ${
                 isExpanded ? "" : "-rotate-90"
               }`}
             />
           )}
-          {label !== undefined && <span className="text-[#b4b4b4] font-medium">{label}:</span>}
-          <span className="text-[#666] text-[10.5px]">
+          {label !== undefined && <span className="text-text-2 font-medium">{label}:</span>}
+          <span className="text-text-4 text-[10.5px]">
             {isEmpty ? "{}" : `{${keys.length} field${keys.length === 1 ? "" : "s"}}`}
           </span>
         </div>
         {isExpanded && !isEmpty && (
-          <div className="border-l border-white/[0.04] ml-[5px] pl-3.5 mt-0.5 flex flex-col gap-0.5">
+          <div className="motion-expand-content border-l border-hairline ml-[5px] pl-3.5 mt-0.5 flex flex-col gap-0.5">
             {keys.map((k) => (
               <JsonInspectorNode key={k} label={k} value={obj[k]} depth={depth + 1} />
             ))}
@@ -446,27 +446,27 @@ function JsonInspectorNode({
 
   let valElement: ReactNode;
   if (type === "boolean") {
-    valElement = <span className="text-[#f59e42] font-semibold">{String(value)}</span>;
+    valElement = <span className="text-accent font-semibold">{String(value)}</span>;
   } else if (type === "number") {
-    valElement = <span className="text-[#f59e42] font-semibold tabular-nums">{String(value)}</span>;
+    valElement = <span className="text-accent font-semibold tabular-nums">{String(value)}</span>;
   } else if (type === "string") {
     const str = value as string;
     if (str.includes("\n") || str.length > 80) {
       valElement = (
-        <pre className="mt-1 p-2 bg-black/20 border border-white/[0.03] rounded font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto whitespace-pre-wrap break-all select-text text-[#b4b4b4]">
+        <pre className="mt-1 p-2 bg-black/20 border border-hairline rounded font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto whitespace-pre-wrap break-all select-text text-text-2">
           {str}
         </pre>
       );
     } else {
-      valElement = <span className="text-[#34d399] select-text">"{str}"</span>;
+      valElement = <span className="text-success select-text">"{str}"</span>;
     }
   } else {
-    valElement = <span className="text-[#ececec] select-text">{String(value)}</span>;
+    valElement = <span className="text-text-1 select-text">{String(value)}</span>;
   }
 
   return (
     <div className="flex items-baseline gap-1.5 py-0.5 font-mono text-[11.5px] leading-normal hover:bg-white/[0.02] rounded px-1 -mx-1 transition-colors">
-      {label !== undefined && <span className="text-[#888] select-none">{label}:</span>}
+      {label !== undefined && <span className="text-text-4 select-none">{label}:</span>}
       {valElement}
     </div>
   );
@@ -482,8 +482,8 @@ function renderMassiveContent(obj: Record<string, unknown>) {
   if (content !== undefined) {
     return (
       <div className="col-span-2 mt-1 w-full">
-        <span className="text-[#888] font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Code Content</span>
-        <pre className="p-2.5 bg-black/25 border border-white/[0.05] rounded-lg font-mono text-[11.5px] max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-[#ececec]">
+        <span className="text-text-4 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Code Content</span>
+        <pre className="p-2.5 bg-black/25 border border-hairline rounded-lg font-mono text-[11.5px] max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
           {String(content)}
         </pre>
       </div>
@@ -495,16 +495,16 @@ function renderMassiveContent(obj: Record<string, unknown>) {
       <div className="col-span-2 mt-1.5 w-full flex flex-col gap-2">
         {target !== undefined && (
           <div>
-            <span className="text-[#f87171]/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Target Content (To Replace)</span>
-            <pre className="p-2.5 bg-red-950/15 border border-red-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-[#fca5a5]">
+            <span className="text-error/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Target Content (To Replace)</span>
+            <pre className="p-2.5 bg-red-950/15 border border-red-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-error">
               {String(target)}
             </pre>
           </div>
         )}
         {replacement !== undefined && (
           <div>
-            <span className="text-[#34d399]/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Replacement Content</span>
-            <pre className="p-2.5 bg-emerald-950/15 border border-emerald-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-[#a7f3d0]">
+            <span className="text-success/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Replacement Content</span>
+            <pre className="p-2.5 bg-emerald-950/15 border border-emerald-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-success">
               {String(replacement)}
             </pre>
           </div>
@@ -533,6 +533,7 @@ function FileListOutput({ output }: { output: string }) {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
         return parsed.map((item: any) => ({
           name: String(item.name ?? ""),
           isDir: Boolean(item.isDir ?? item.is_dir ?? item.type === "directory"),
@@ -584,38 +585,38 @@ function FileListOutput({ output }: { output: string }) {
   };
 
   return (
-    <div className="rounded-lg border border-white/[0.05] overflow-hidden bg-black/15">
+    <div className="rounded-lg border border-hairline overflow-hidden bg-black/15">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.04] bg-white/[0.01]">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666]">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline bg-white/[0.01]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4">
           Directory Contents
         </span>
         {summary && (
-          <span className="text-[10px] text-[#555] tabular-nums">{summary}</span>
+          <span className="text-[10px] text-text-4 tabular-nums">{summary}</span>
         )}
       </div>
       <div className="max-h-[240px] overflow-auto">
         {dirs.map((entry, i) => (
           <div
             key={i}
-            className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors"
+            className="motion-row flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0 hover:bg-white/[0.02] transition-colors"
           >
-            <Folder size={12} className="shrink-0 text-[#f59e42]" strokeWidth={1.6} />
-            <span className="font-mono text-[11.5px] text-[#b4b4b4] truncate flex-1">{entry.name}</span>
+            <Folder size={12} className="shrink-0 text-accent" strokeWidth={1.6} />
+            <span className="font-mono text-[11.5px] text-text-2 truncate flex-1">{entry.name}</span>
             {entry.children !== undefined && (
-              <span className="text-[10px] text-[#555] tabular-nums shrink-0">{entry.children} items</span>
+              <span className="text-[10px] text-text-4 tabular-nums shrink-0">{entry.children} items</span>
             )}
           </div>
         ))}
         {files.map((entry, i) => (
           <div
             key={i}
-            className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors"
+            className="motion-row flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0 hover:bg-white/[0.02] transition-colors"
           >
-            <File size={12} className="shrink-0 text-[#555]" strokeWidth={1.6} />
-            <span className="font-mono text-[11.5px] text-[#888] truncate flex-1">{entry.name}</span>
+            <File size={12} className="shrink-0 text-text-4" strokeWidth={1.6} />
+            <span className="font-mono text-[11.5px] text-text-4 truncate flex-1">{entry.name}</span>
             {entry.sizeBytes !== undefined && (
-              <span className="text-[10px] text-[#555] tabular-nums shrink-0">{formatSize(entry.sizeBytes)}</span>
+              <span className="text-[10px] text-text-4 tabular-nums shrink-0">{formatSize(entry.sizeBytes)}</span>
             )}
           </div>
         ))}
@@ -653,32 +654,32 @@ function WebSearchOutput({ output }: { output: string }) {
       {results.slice(0, 5).map((result, i) => (
         <div
           key={i}
-          className="rounded-lg border border-white/[0.05] bg-black/15 p-2.5 flex flex-col gap-1"
+          className="rounded-lg border border-hairline bg-black/15 p-2.5 flex flex-col gap-1"
         >
           <div className="flex items-start gap-2">
-            <Globe size={11} className="shrink-0 mt-0.5 text-[#60a5fa]" strokeWidth={1.6} />
+            <Globe size={11} className="shrink-0 mt-0.5 text-info" strokeWidth={1.6} />
             <div className="min-w-0 flex-1">
               {result.title && (
-                <div className="text-[12px] font-medium text-[#ececec] leading-snug truncate">
+                <div className="text-[12px] font-medium text-text-1 leading-snug truncate">
                   {result.title}
                 </div>
               )}
               {result.url && (
-                <div className="text-[10.5px] text-[#555] truncate font-mono mt-0.5">
+                <div className="text-[10.5px] text-text-4 truncate font-mono mt-0.5">
                   {result.url}
                 </div>
               )}
             </div>
           </div>
           {(result.snippet || result.content) && (
-            <p className="text-[11.5px] text-[#888] leading-relaxed line-clamp-2 pl-[19px]">
+            <p className="text-[11.5px] text-text-4 leading-relaxed line-clamp-2 pl-[19px]">
               {result.snippet || result.content}
             </p>
           )}
         </div>
       ))}
       {results.length > 5 && (
-        <div className="text-[10.5px] text-[#555] pl-1">+{results.length - 5} more results</div>
+        <div className="text-[10.5px] text-text-4 pl-1">+{results.length - 5} more results</div>
       )}
     </div>
   );
@@ -706,17 +707,17 @@ function JsonOutput({ text }: { text: string }) {
   };
 
   return (
-    <div className="rounded-lg border border-white/[0.05] overflow-hidden bg-black/15">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.04] bg-white/[0.01]">
+    <div className="rounded-lg border border-hairline overflow-hidden bg-black/15">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline bg-white/[0.01]">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666]">JSON</span>
-          <div className="flex items-center gap-0.5 rounded bg-white/[0.03] border border-white/[0.05] p-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4">JSON</span>
+          <div className="flex items-center gap-0.5 rounded bg-white/[0.03] border border-hairline p-0.5">
             <button
               onClick={() => setViewMode("visual")}
               className={`px-1.5 py-0.5 text-[10px] rounded transition-colors font-sans ${
                 viewMode === "visual"
                   ? "bg-accent text-bg font-semibold"
-                  : "text-[#888] hover:text-[#b4b4b4]"
+                  : "text-text-4 hover:text-text-2"
               }`}
             >
               Visual
@@ -726,7 +727,7 @@ function JsonOutput({ text }: { text: string }) {
               className={`px-1.5 py-0.5 text-[10px] rounded transition-colors font-sans ${
                 viewMode === "raw"
                   ? "bg-accent text-bg font-semibold"
-                  : "text-[#888] hover:text-[#b4b4b4]"
+                  : "text-text-4 hover:text-text-2"
               }`}
             >
               Raw
@@ -734,10 +735,10 @@ function JsonOutput({ text }: { text: string }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[#555] tabular-nums">{lineCount} lines</span>
+          <span className="text-[10px] text-text-4 tabular-nums">{lineCount} lines</span>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-[#888] hover:text-[#b4b4b4] hover:bg-white/5 transition-colors"
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-text-4 hover:text-text-2 hover:bg-white/5 transition-colors"
           >
             {copied ? <Check size={10} strokeWidth={2} className="text-success" /> : <Copy size={10} strokeWidth={1.6} />}
             {copied ? "Copied" : "Copy"}
@@ -780,24 +781,24 @@ function GrepOutput({ text }: { text: string }) {
   if (!isJsonl || results.length === 0) return <PlainOutput text={text} />;
 
   return (
-    <div className="rounded-lg border border-white/[0.05] overflow-hidden bg-black/15">
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.04] bg-white/[0.01]">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666]">
+    <div className="rounded-lg border border-hairline overflow-hidden bg-black/15">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-hairline bg-white/[0.01]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4">
           {results.length} match{results.length !== 1 ? "es" : ""}
         </span>
       </div>
       <div className="max-h-[240px] overflow-auto">
         {results.map((r, i) => (
-          <div key={i} className="px-3 py-1.5 border-b border-white/[0.03] last:border-0 flex gap-2 items-baseline hover:bg-white/[0.02] transition-colors">
+          <div key={i} className="px-3 py-1.5 border-b border-hairline last:border-0 flex gap-2 items-baseline hover:bg-white/[0.02] transition-colors">
             {r.LineNumber !== undefined && (
-              <span className="text-[10px] text-[#555] tabular-nums shrink-0 w-8 text-right">{r.LineNumber}</span>
+              <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-8 text-right">{r.LineNumber}</span>
             )}
             <div className="min-w-0">
-              <span className="font-mono text-[10.5px] text-[#60a5fa] truncate block">
+              <span className="font-mono text-[10.5px] text-info truncate block">
                 {r.File ?? ""}
               </span>
               {r.LineContent && (
-                <span className="font-mono text-[11px] text-[#a0a0a0] whitespace-pre truncate block">
+                <span className="font-mono text-[11px] text-text-3 whitespace-pre truncate block">
                   {r.LineContent.trimStart()}
                 </span>
               )}
@@ -826,18 +827,18 @@ function PlainOutput({ text, toolName }: { text: string; toolName?: string }) {
     <div className="flex flex-col gap-1 w-full">
       {html ? (
         <pre
-          className="p-2.5 bg-black/20 border border-white/[0.05] rounded-lg font-mono text-[11.5px] leading-relaxed text-[#b4b4b4] max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text"
+          className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="p-2.5 bg-black/20 border border-white/[0.05] rounded-lg font-mono text-[11.5px] leading-relaxed text-[#b4b4b4] max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text">
+        <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text">
           {visibleText}
         </pre>
       )}
       {overLimit && (
         <button
           onClick={() => setShowAll(v => !v)}
-          className="self-start text-[10.5px] text-[#555] hover:text-[#888] transition-colors mt-0.5 ml-0.5"
+          className="self-start text-[10.5px] text-text-4 hover:text-text-4 transition-colors mt-0.5 ml-0.5"
         >
           {showAll ? "Show less" : `Show ${lines.length - PLAIN_LINE_LIMIT} more lines`}
         </button>
@@ -851,7 +852,7 @@ function PlainOutput({ text, toolName }: { text: string; toolName?: string }) {
 function ErrorOutput({ text }: { text: string }) {
   return (
     <div className="rounded-lg border border-red-500/20 bg-red-500/5 overflow-hidden">
-      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-[#fca5a5] max-h-[200px] overflow-auto whitespace-pre-wrap break-all select-text">
+      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-error max-h-[200px] overflow-auto whitespace-pre-wrap break-all select-text">
         {text}
       </pre>
     </div>
@@ -862,8 +863,8 @@ function ErrorOutput({ text }: { text: string }) {
 
 function SuccessOutput({ text }: { text: string }) {
   return (
-    <div className="rounded-lg border border-[#34d399]/15 bg-[#34d399]/5 overflow-hidden">
-      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-[#a0a0a0] max-h-[120px] overflow-auto whitespace-pre-wrap break-all select-text">
+    <div className="rounded-lg border border-success/15 bg-success/5 overflow-hidden">
+      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-text-3 max-h-[120px] overflow-auto whitespace-pre-wrap break-all select-text">
         {text}
       </pre>
     </div>
@@ -881,8 +882,8 @@ function ToolOutput({ tc }: { tc: ToolCallEntry }) {
 
   if (!text.trim()) {
     return (
-      <div className="flex items-center gap-1.5 text-[10.5px] text-[#555]">
-        <CheckCircle2 size={11} className="text-[#34d399]/60" strokeWidth={2} />
+      <div className="flex items-center gap-1.5 text-[10.5px] text-text-4">
+        <CheckCircle2 size={11} className="text-success/60" strokeWidth={2} />
         <span>Done — no output returned</span>
       </div>
     );
@@ -932,14 +933,14 @@ function TerminalOutput({ text, toolName }: { text: string; toolName: string }) 
     const html = ansiToHtml(text);
     return (
       <pre
-        className="mt-[5px] ml-4 p-2.5 bg-[#1a1a1c] border border-white/5 rounded-lg font-mono text-[11.5px] leading-relaxed text-[#b4b4b4] max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text"
+        className="mt-[5px] ml-4 p-2.5 bg-bg border border-white/5 rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   }
 
   return (
-    <pre className="mt-2 ml-5 p-2.5 bg-[#2c2c2e] border border-white/5 rounded-lg font-mono text-[11.5px] leading-relaxed text-[#b4b4b4] max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text">
+    <pre className="mt-2 ml-5 p-2.5 bg-surface-2 border border-white/5 rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text">
       {text}
     </pre>
   );
@@ -954,15 +955,15 @@ function TerminalView({ tc }: { tc: ToolCallEntry }) {
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-mono text-[11.5px] leading-relaxed shadow-lg">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-mono text-[11.5px] leading-relaxed shadow-lg">
       {/* Terminal Window Header */}
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02] select-none">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02] select-none">
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-error" />
+          <span className="w-2.5 h-2.5 rounded-full bg-accent" />
+          <span className="w-2.5 h-2.5 rounded-full bg-success" />
         </div>
-        <span className="text-[10px] text-[#666] font-sans font-medium uppercase tracking-wider">Terminal — bash</span>
+        <span className="text-[10px] text-text-4 font-sans font-medium uppercase tracking-wider">Terminal — bash</span>
         <div className="w-12" />
       </div>
 
@@ -970,17 +971,17 @@ function TerminalView({ tc }: { tc: ToolCallEntry }) {
       <div className="p-3.5 flex flex-col gap-2 bg-black/[0.15]">
         {/* Command line */}
         <div className="flex items-start gap-2 text-accent">
-          <span className="text-[#666] select-none">$</span>
+          <span className="text-text-4 select-none">$</span>
           <span className="font-semibold select-all break-all">{command}</span>
         </div>
         
         {/* Output */}
         {output.trim() ? (
-          <div className="border-t border-white/[0.03] pt-2 mt-1 max-h-[300px] overflow-auto select-text">
+          <div className="border-t border-hairline pt-2 mt-1 max-h-[300px] overflow-auto select-text">
             <PlainOutput text={output} toolName={tc.toolName} />
           </div>
         ) : (
-          <div className="text-[10.5px] text-[#555] italic pt-1">Command completed with no output</div>
+          <div className="text-[10.5px] text-text-4 italic pt-1">Command completed with no output</div>
         )}
       </div>
     </div>
@@ -1001,9 +1002,9 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
   const isMarkdown = path.toLowerCase().endsWith(".md") || path.toLowerCase().endsWith(".mdx") || path.toLowerCase().endsWith(".markdown");
 
   let opLabel = "File Action";
-  let opColor = "text-[#b4b4b4]";
-  if (isRead) { opLabel = "Read File"; opColor = "text-[#60a5fa]"; }
-  else if (isWrite) { opLabel = "Write File"; opColor = "text-[#34d399]"; }
+  let opColor = "text-text-2";
+  if (isRead) { opLabel = "Read File"; opColor = "text-info"; }
+  else if (isWrite) { opLabel = "Write File"; opColor = "text-success"; }
   else if (isEdit) { opLabel = "Edit File"; opColor = "text-accent"; }
   else if (isDiff) { opLabel = "Diff File"; opColor = "text-accent"; }
 
@@ -1013,24 +1014,24 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
   const outputText = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
         <div className="flex items-center gap-2">
-          <File size={13} className={isRead ? "text-[#60a5fa]" : isWrite ? "text-[#34d399]" : "text-accent"} />
-          <span className="font-mono font-semibold text-[#ececec] select-all truncate max-w-[280px]">
+          <File size={13} className={isRead ? "text-info" : isWrite ? "text-success" : "text-accent"} />
+          <span className="font-mono font-semibold text-text-1 select-all truncate max-w-[280px]">
             {path.split("/").pop()}
           </span>
-          <span className="text-[10px] text-[#555] truncate max-w-[150px] font-mono select-all">
+          <span className="text-[10px] text-text-4 truncate max-w-[150px] font-mono select-all">
             {path}
           </span>
         </div>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-white/[0.05] ${opColor}`}>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-hairline ${opColor}`}>
           {opLabel}
         </span>
       </div>
 
       <div className="p-3.5 flex flex-col gap-3 bg-black/[0.15]">
-        <div className="grid grid-cols-[100px_1fr] gap-y-1.5 gap-x-3 text-[11px] text-[#888] font-mono border-b border-white/[0.03] pb-2">
+        <div className="grid grid-cols-[100px_1fr] gap-y-1.5 gap-x-3 text-[11px] text-text-4 font-mono border-b border-hairline pb-2">
           {startLine !== undefined && (
             <div className="contents">
               <span>Start Line:</span>
@@ -1053,37 +1054,37 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isRead && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
               File Contents
             </span>
             {outputText.trim() ? (
               isMarkdown ? (
-                <div className="p-3.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg max-h-[250px] overflow-auto select-text text-[#ececec]">
+                <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
                   <MarkdownRenderer content={outputText} />
                 </div>
               ) : (
-                <pre className="p-2.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-[#ececec]">
+                <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
                   {outputText}
                 </pre>
               )
             ) : (
-              <span className="text-[#555] italic text-[11px]">Empty file</span>
+              <span className="text-text-4 italic text-[11px]">Empty file</span>
             )}
           </div>
         )}
 
         {isWrite && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
               Written Content
             </span>
             {isMarkdown ? (
-              <div className="p-3.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg max-h-[250px] overflow-auto select-text text-[#ececec]">
+              <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
                 <MarkdownRenderer content={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} />
               </div>
             ) : (
               renderMassiveContent(obj) ?? (
-                <pre className="p-2.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-[#ececec]">
+                <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
                   {String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")}
                 </pre>
               )
@@ -1093,26 +1094,27 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isEdit && (
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
               Modifications
             </span>
             {obj.ReplacementChunks ? (
               <div className="flex flex-col gap-3">
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
                 {(obj.ReplacementChunks as any[]).map((chunk, idx) => (
-                  <div key={idx} className="border border-white/[0.04] rounded-lg overflow-hidden bg-black/20">
-                    <div className="px-2.5 py-1 bg-white/[0.02] border-b border-white/[0.03] text-[10px] text-[#888] font-mono">
+                  <div key={idx} className="border border-hairline rounded-lg overflow-hidden bg-black/20">
+                    <div className="px-2.5 py-1 bg-white/[0.02] border-b border-hairline text-[10px] text-text-4 font-mono">
                       Chunk #{idx + 1} (Lines {chunk.StartLine ?? "?"} - {chunk.EndLine ?? "?"})
                     </div>
                     <div className="p-2 flex flex-col gap-2">
                       <div>
-                        <span className="text-[10px] text-[#f87171]/70 font-semibold uppercase block mb-0.5 select-none">Target</span>
-                        <pre className="p-2 bg-red-950/10 border border-red-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-[#fca5a5]">
+                        <span className="text-[10px] text-error/70 font-semibold uppercase block mb-0.5 select-none">Target</span>
+                        <pre className="p-2 bg-red-950/10 border border-red-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-error">
                           {chunk.TargetContent}
                         </pre>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#34d399]/70 font-semibold uppercase block mb-0.5 select-none">Replacement</span>
-                        <pre className="p-2 bg-emerald-950/10 border border-emerald-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-[#a7f3d0]">
+                        <span className="text-[10px] text-success/70 font-semibold uppercase block mb-0.5 select-none">Replacement</span>
+                        <pre className="p-2 bg-emerald-950/10 border border-emerald-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-success">
                           {chunk.ReplacementContent}
                         </pre>
                       </div>
@@ -1125,8 +1127,8 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
             )}
             
             {outputText.trim() && (
-              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#34d399]/80 font-mono">
-                <CheckCircle2 size={12} className="text-[#34d399]" />
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-success/80 font-mono">
+                <CheckCircle2 size={12} className="text-success" />
                 <span>{outputText}</span>
               </div>
             )}
@@ -1135,10 +1137,10 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isDiff && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
               Diff View
             </span>
-            <pre className="p-2.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-[#ececec]">
+            <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
               {outputText}
             </pre>
           </div>
@@ -1182,19 +1184,19 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
   }
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
         <div className="flex items-center gap-2">
-          <Globe size={13} className="text-[#60a5fa]" />
-          <span className="font-semibold text-[#ececec]">Project Search</span>
+          <Globe size={13} className="text-info" />
+          <span className="font-semibold text-text-1">Project Search</span>
         </div>
-        <span className="text-[10px] text-[#555] font-mono">
+        <span className="text-[10px] text-text-4 font-mono">
           {searchPath || "."}
         </span>
       </div>
 
       <div className="p-3.5 flex flex-col gap-3 bg-black/[0.15]">
-        <div className="flex items-center justify-between border-b border-white/[0.03] pb-2 font-mono text-[11px] text-[#888]">
+        <div className="flex items-center justify-between border-b border-hairline pb-2 font-mono text-[11px] text-text-4">
           <div>
             <span>Query: </span>
             <span className="text-accent font-semibold">"{query}"</span>
@@ -1208,29 +1210,29 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
         {isJsonl && results.length > 0 ? (
           <div className="max-h-[250px] overflow-auto flex flex-col gap-2">
             {Object.entries(groupedMatches).map(([filePath, fileMatches]) => (
-              <div key={filePath} className="border border-white/[0.03] rounded-lg overflow-hidden bg-black/15">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.01] border-b border-white/[0.02] text-[10.5px] font-mono text-[#b4b4b4]">
-                  <File size={11} className="text-[#888]" />
+              <div key={filePath} className="border border-hairline rounded-lg overflow-hidden bg-black/15">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.01] border-b border-hairline text-[10.5px] font-mono text-text-2">
+                  <File size={11} className="text-text-4" />
                   <span className="font-semibold text-text-1 truncate">{filePath.split("/").pop()}</span>
-                  <span className="text-[#555] truncate max-w-[200px]">{filePath}</span>
+                  <span className="text-text-4 truncate max-w-[200px]">{filePath}</span>
                 </div>
 
                 <div className="flex flex-col">
                   {fileMatches.map((m, idx) => (
-                    <div key={idx} className="flex gap-2 items-baseline px-2.5 py-1.5 hover:bg-white/[0.02] border-b border-white/[0.01] last:border-0 font-mono text-[11px]">
+                    <div key={idx} className="flex gap-2 items-baseline px-2.5 py-1.5 hover:bg-white/[0.02] border-b border-hairline last:border-0 font-mono text-[11px]">
                       {m.LineNumber !== undefined && (
-                        <span className="text-[10px] text-[#555] tabular-nums shrink-0 w-8 text-right select-none">{m.LineNumber}</span>
+                        <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-8 text-right select-none">{m.LineNumber}</span>
                       )}
-                      <span className="text-[#a0a0a0] whitespace-pre-wrap break-all flex-1 select-text">
+                      <span className="text-text-3 whitespace-pre-wrap break-all flex-1 select-text">
                         {m.LineContent ? (
                           m.LineContent.trimStart().split(query).map((part, i, arr) => (
                             <span key={i}>
                               {part}
-                              {i < arr.length - 1 && <span className="bg-accent/20 text-[#ececec] px-0.5 rounded font-semibold">{query}</span>}
+                              {i < arr.length - 1 && <span className="bg-accent/20 text-text-1 px-0.5 rounded font-semibold">{query}</span>}
                             </span>
                           ))
                         ) : (
-                          <span className="italic text-[#555]">No content snippet</span>
+                          <span className="italic text-text-4">No content snippet</span>
                         )}
                       </span>
                     </div>
@@ -1240,11 +1242,11 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
             ))}
           </div>
         ) : !isJsonl && output.trim() ? (
-          <pre className="p-2.5 bg-[#1a1a1c] border border-white/[0.05] rounded-lg font-mono text-[11px] leading-relaxed max-h-[180px] overflow-auto text-[#b4b4b4]">
+          <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[180px] overflow-auto text-text-2">
             {output}
           </pre>
         ) : (
-          <div className="text-[11px] text-[#555] italic">No matches found.</div>
+          <div className="text-[11px] text-text-4 italic">No matches found.</div>
         )}
       </div>
     </div>
@@ -1259,14 +1261,15 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
   const outputText = String(tc.output ?? "");
 
   let actionLabel = "Todo Task";
-  let color = "text-[#b4b4b4]";
-  if (name === "todo_create") { actionLabel = "Task Created"; color = "text-[#34d399]"; }
+  let color = "text-text-2";
+  if (name === "todo_create") { actionLabel = "Task Created"; color = "text-success"; }
   else if (name === "todo_update") { actionLabel = "Task Updated"; color = "text-accent"; }
   else if (name === "todo_delete") { actionLabel = "Task Deleted"; color = "text-error"; }
-  else if (name === "todo_list") { actionLabel = "Todo List"; color = "text-[#60a5fa]"; }
-  else if (name === "todo_get") { actionLabel = "Task Retrieved"; color = "text-[#60a5fa]"; }
+  else if (name === "todo_list") { actionLabel = "Todo List"; color = "text-info"; }
+  else if (name === "todo_get") { actionLabel = "Task Retrieved"; color = "text-info"; }
 
   // Extract task board serialized state from comment markers
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
   let boardTasks: any[] = [];
   const BOARD_MARKER = "<!-- TODO_BOARD";
   const BOARD_MARKER_END = "TODO_BOARD -->";
@@ -1280,6 +1283,7 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
         try {
           const raw = JSON.parse(json);
           if (raw && Array.isArray(raw.tasks)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
             boardTasks = raw.tasks.filter((t: any) => t.status !== "deleted");
           }
         } catch {}
@@ -1290,38 +1294,39 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
   const actionSummary = start !== -1 ? outputText.slice(0, start).trim() : outputText;
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
         <div className="flex items-center gap-2">
-          <Sliders size={13} className="text-[#34d399]" />
-          <span className="font-semibold text-[#ececec]">Workspace Tasks</span>
+          <Sliders size={13} className="text-success" />
+          <span className="font-semibold text-text-1">Workspace Tasks</span>
         </div>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-white/[0.05] ${color}`}>
+        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-hairline ${color}`}>
           {actionLabel}
         </span>
       </div>
 
       <div className="p-3.5 bg-black/[0.15] flex flex-col gap-3">
         {actionSummary && name !== "todo_list" && (
-          <div className="text-[11px] font-mono text-[#888] pb-2 border-b border-white/[0.03]">
+          <div className="text-[11px] font-mono text-text-4 pb-2 border-b border-hairline">
             {actionSummary.split("\n\n")[0]}
           </div>
         )}
 
         {boardTasks.length > 0 ? (
           <div className="flex flex-col gap-1.5 max-h-[240px] overflow-auto">
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
             {boardTasks.map((t: any) => {
               const isCompleted = t.status === "completed";
               const isInProgress = t.status === "in_progress";
               const isBlocked = t.blockedBy && t.blockedBy.length > 0;
 
               return (
-                <div key={t.id} className="flex items-center gap-2.5 p-2.5 bg-white/[0.02] border border-white/[0.04] rounded-lg hover:bg-white/[0.03] transition-all">
+                <div key={t.id} className="flex items-center gap-2.5 p-2.5 bg-white/[0.02] border border-hairline rounded-lg hover:bg-white/[0.03] transition-all">
                   <span className={`w-4 h-4 rounded border transition-colors ${
                     isCompleted 
                       ? "border-success bg-success/15 text-success" 
                       : isInProgress 
-                        ? "border-[#f59e42] bg-[#f59e42]/10 text-[#f59e42]" 
+                        ? "border-accent bg-accent/10 text-accent" 
                         : "border-white/20"
                   } flex items-center justify-center text-[10px] font-bold shrink-0`}>
                     {isCompleted && "✓"}
@@ -1330,12 +1335,12 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
                   
                   <div className="flex-1 min-w-0">
                     <div className={`font-semibold text-[11.5px] truncate ${
-                      isCompleted ? "text-[#666] line-through font-normal" : "text-[#b4b4b4]"
+                      isCompleted ? "text-text-4 line-through font-normal" : "text-text-2"
                     }`}>
                       {t.title}
                     </div>
                     {t.description && (
-                      <div className="text-[10.5px] text-[#666] truncate mt-0.5">
+                      <div className="text-[10.5px] text-text-4 truncate mt-0.5">
                         {t.description}
                       </div>
                     )}
@@ -1347,7 +1352,7 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
                         Blocked
                       </span>
                     )}
-                    <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.03] text-text-4 border border-white/[0.05] rounded font-mono select-all">
+                    <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.03] text-text-4 border border-hairline rounded font-mono select-all">
                       {t.id.slice(-8)}
                     </span>
                   </div>
@@ -1356,7 +1361,7 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
             })}
           </div>
         ) : (
-          <pre className="p-2.5 bg-black/20 border border-white/[0.05] rounded-lg font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto text-[#b4b4b4] select-text">
+          <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto text-text-2 select-text">
             {actionSummary}
           </pre>
         )}
@@ -1375,11 +1380,11 @@ function WebOpView({ tc }: { tc: ToolCallEntry }) {
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
         <div className="flex items-center gap-2">
-          <Globe size={13} className="text-[#60a5fa]" />
-          <span className="font-semibold text-[#ececec]">
+          <Globe size={13} className="text-info" />
+          <span className="font-semibold text-text-1">
             {isSearch ? "Web Search" : isScrape ? "Web Scrape" : "Web Fetch"}
           </span>
         </div>
@@ -1393,10 +1398,10 @@ function WebOpView({ tc }: { tc: ToolCallEntry }) {
           <WebSearchOutput output={output} />
         ) : (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
               {isScrape ? "Scraped Page Content" : "Fetched Page Content"}
             </span>
-            <div className="p-3.5 bg-black/20 border border-white/[0.05] rounded-lg max-h-[250px] overflow-auto select-text text-[#ececec]">
+            <div className="p-3.5 bg-black/20 border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
               <MarkdownRenderer content={output} />
             </div>
           </div>
@@ -1413,26 +1418,26 @@ function SubagentView({ tc }: { tc: ToolCallEntry }) {
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
         <div className="flex items-center gap-2">
           <Sliders size={13} className="text-accent" />
-          <span className="font-semibold text-[#ececec]">Agentic Loop</span>
+          <span className="font-semibold text-text-1">Agentic Loop</span>
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#888] rounded bg-white/[0.03] px-2 py-0.5 border border-white/[0.05]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 rounded bg-white/[0.03] px-2 py-0.5 border border-hairline">
           Subagent
         </span>
       </div>
 
       <div className="p-3.5 bg-black/[0.15] flex flex-col gap-2">
-        <div className="border border-white/[0.04] bg-white/[0.01] rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-[#666] uppercase tracking-wider mb-1">Assigned Task</div>
-          <p className="text-[12px] font-medium text-[#ececec]">{task}</p>
+        <div className="border border-hairline bg-white/[0.01] rounded-lg p-3">
+          <div className="text-[10px] font-semibold text-text-4 uppercase tracking-wider mb-1">Assigned Task</div>
+          <p className="text-[12px] font-medium text-text-1">{task}</p>
         </div>
         {output.trim() && (
           <div className="flex flex-col gap-1.5 mt-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#666] select-none">Output / Status</span>
-            <pre className="p-2.5 bg-black/20 border border-white/[0.05] rounded-lg font-mono text-[11px] max-h-[120px] overflow-auto text-[#b4b4b4]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">Output / Status</span>
+            <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11px] max-h-[120px] overflow-auto text-text-2">
               {output}
             </pre>
           </div>
@@ -1492,13 +1497,13 @@ function PersonalizedToolPanel({ tc }: { tc: ToolCallEntry }) {
   if (name === "list_dir") {
     const path = getInputField(tc.input, "path") || ".";
     return (
-      <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-        <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+      <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+        <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
           <div className="flex items-center gap-2">
-            <Folder size={13} className="text-[#f59e42]" />
-            <span className="font-semibold text-[#ececec]">Directory Listing</span>
+            <Folder size={13} className="text-accent" />
+            <span className="font-semibold text-text-1">Directory Listing</span>
           </div>
-          <span className="text-[10px] text-[#555] font-mono">{path}</span>
+          <span className="text-[10px] text-text-4 font-mono">{path}</span>
         </div>
         <div className="p-3 bg-black/[0.15]">
           <FileListOutput output={String(tc.output ?? "")} />
@@ -1509,22 +1514,22 @@ function PersonalizedToolPanel({ tc }: { tc: ToolCallEntry }) {
 
   const hasOutput = tc.output !== undefined;
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden flex flex-col shadow-lg">
-      <div className="px-3.5 py-2.5 bg-white/[0.01] border-b border-white/[0.04] flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col shadow-lg">
+      <div className="px-3.5 py-2.5 bg-white/[0.01] border-b border-hairline flex flex-col gap-2">
+        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-4">
           <Sliders size={11} className="text-accent" strokeWidth={2} />
           Parameters
         </div>
         {tc.input && typeof tc.input === "object" ? (
           <JsonInspectorNode value={tc.input} depth={0} />
         ) : (
-          <div className="text-[11.5px] font-mono text-[#b4b4b4]">{String(tc.input)}</div>
+          <div className="text-[11.5px] font-mono text-text-2">{String(tc.input)}</div>
         )}
       </div>
 
       {hasOutput && (
-        <div className="px-3.5 py-2.5 bg-black/[0.15] border-t border-white/[0.02] flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+        <div className="px-3.5 py-2.5 bg-black/[0.15] border-t border-hairline flex flex-col gap-2">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-4">
             <Terminal size={11} className="text-success" strokeWidth={2} />
             Result
           </div>
@@ -1576,25 +1581,25 @@ export function InlineToolCall({
           }`}
           aria-expanded={canExpand ? expanded : undefined}
         >
-          <span className="shrink-0 self-center text-[#777] group-hover/tool:text-[#a0a0a0] transition-colors">
+          <span className="shrink-0 self-center text-text-4 group-hover/tool:text-text-3 transition-colors">
             {pres.icon}
           </span>
           {isRunning ? (
             <Shimmer text={label} className="text-[13px] font-normal" />
           ) : (
             <span
-              className={`truncate ${isError ? "text-[#f87171]/70" : "text-[#a0a0a0]"} ${
+              className={`truncate ${isError ? "text-error/70" : "text-text-3"} ${
                 canExpand
-                  ? "group-hover/tool:text-[#d5d5d5] transition-colors"
+                  ? "group-hover/tool:text-text-2 transition-colors"
                   : ""
               }`}
             >
               {label}
-              {isError && <span className="text-[#f87171]/60 ml-1">— failed</span>}
+              {isError && <span className="text-error/60 ml-1">— failed</span>}
             </span>
           )}
           {pres.detail && !isRunning && (
-            <span className="text-[12px] text-[#777] font-mono break-all line-clamp-1 shrink-0">
+            <span className="text-[12px] text-text-4 font-mono break-all line-clamp-1 shrink-0">
               {pres.detail}
             </span>
           )}
@@ -1602,7 +1607,7 @@ export function InlineToolCall({
             <ChevronDown
               size={11}
               strokeWidth={1.6}
-              className={`shrink-0 self-center text-[#666] group-hover/tool:text-[#a0a0a0] transition-all duration-200 ${
+              className={`shrink-0 self-center text-text-4 group-hover/tool:text-text-3 transition-all duration-200 ${
                 expanded ? "rotate-180" : ""
               }`}
               aria-hidden="true"
@@ -1613,7 +1618,7 @@ export function InlineToolCall({
           <>
             {tc.approvalBypassed && (
               <span
-                className="shrink-0 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-[#f59e0b]"
+                className="shrink-0 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-accent"
                 title="This subagent ran write-capable tools without individual approval cards."
               >
                 Auto-ran tools
@@ -1625,7 +1630,7 @@ export function InlineToolCall({
           <button
             type="button"
             onClick={handleOpenPanel}
-            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-[#f59e42] hover:bg-[#f59e42]/10 transition-colors"
+            className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-accent hover:bg-accent/10 transition-colors"
             title="Open subagent workspace"
           >
             <ArrowUpRight size={11} strokeWidth={2} />
@@ -1633,13 +1638,13 @@ export function InlineToolCall({
         )}
       </div>
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+        className={`grid transition-[grid-template-rows,opacity] duration-[var(--d-short)] ease-[var(--ease-out)] ${
           expanded
             ? "grid-rows-[1fr] opacity-100 mt-2"
             : "grid-rows-[0fr] opacity-0"
         }`}
       >
-        <div className="overflow-hidden min-h-0">
+        <div className={`overflow-hidden min-h-0 ${expanded ? "motion-expand-content" : ""}`}>
           {children
             ? children
             : tc.subagentTranscript

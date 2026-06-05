@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useChatStore } from '../../stores/chat';
 import { X, Save, RotateCw, Eye, Code2 } from 'lucide-react';
+import { sandboxFor } from '../../lib/iframe-sandbox';
 
 const MonacoEditor = lazy(() => 
   import('@monaco-editor/react').then(m => ({ default: m.default }))
@@ -87,7 +88,7 @@ export function ManualEditPanel({
   
   if (!artifact) {
     return (
-      <div className="flex items-center justify-center h-full text-[#a0a0a0]">
+      <div className="flex items-center justify-center h-full text-text-3">
         <p>Artifact not found</p>
       </div>
     );
@@ -105,15 +106,15 @@ export function ManualEditPanel({
 </html>`;
   
   return (
-    <div className="flex flex-col h-full bg-[#1a1a1c]">
+    <div className="flex flex-col h-full bg-bg">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <h3 className="text-[13px] font-semibold text-[#ececec]">
+          <h3 className="text-[13px] font-semibold text-text-1">
             Edit: {artifact.title}
           </h3>
           {hasChanges && (
-            <span className="px-2 py-0.5 text-[10px] font-medium bg-[#f59e42]/20 text-[#f59e42] rounded">
+            <span className="px-2 py-0.5 text-[10px] font-medium bg-accent/20 text-accent rounded">
               Unsaved
             </span>
           )}
@@ -124,21 +125,21 @@ export function ManualEditPanel({
           <div className="flex items-center gap-1 p-0.5 bg-white/5 rounded-md">
             <button
               onClick={() => setView('code')}
-              className={`p-1.5 rounded ${view === 'code' ? 'bg-white/10 text-[#ececec]' : 'text-[#a0a0a0]'}`}
+              className={`p-1.5 rounded ${view === 'code' ? 'bg-white/10 text-text-1' : 'text-text-3'}`}
               title="Code only"
             >
               <Code2 size={14} />
             </button>
             <button
               onClick={() => setView('split')}
-              className={`p-1.5 rounded ${view === 'split' ? 'bg-white/10 text-[#ececec]' : 'text-[#a0a0a0]'}`}
+              className={`p-1.5 rounded ${view === 'split' ? 'bg-white/10 text-text-1' : 'text-text-3'}`}
               title="Split view"
             >
               <div className="w-3.5 h-3.5 border border-current rounded-sm" />
             </button>
             <button
               onClick={() => setView('preview')}
-              className={`p-1.5 rounded ${view === 'preview' ? 'bg-white/10 text-[#ececec]' : 'text-[#a0a0a0]'}`}
+              className={`p-1.5 rounded ${view === 'preview' ? 'bg-white/10 text-text-1' : 'text-text-3'}`}
               title="Preview only"
             >
               <Eye size={14} />
@@ -149,7 +150,7 @@ export function ManualEditPanel({
           <button
             onClick={handleReset}
             disabled={!hasChanges}
-            className="p-1.5 text-[#a0a0a0] hover:text-[#ececec] disabled:opacity-30"
+            className="p-1.5 text-text-3 hover:text-text-1 disabled:opacity-30"
             title="Reset changes"
           >
             <RotateCw size={14} />
@@ -157,14 +158,14 @@ export function ManualEditPanel({
           <button
             onClick={handleSave}
             disabled={!hasChanges}
-            className="p-1.5 text-[#a0a0a0] hover:text-[#f59e42] disabled:opacity-30"
+            className="p-1.5 text-text-3 hover:text-accent disabled:opacity-30"
             title="Save (⌘S)"
           >
             <Save size={14} />
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#a0a0a0] hover:text-[#ececec]"
+            className="p-1.5 text-text-3 hover:text-text-1"
             title="Close (Esc)"
           >
             <X size={14} />
@@ -178,7 +179,7 @@ export function ManualEditPanel({
         {(view === 'code' || view === 'split') && (
           <div className={`flex flex-col ${view === 'split' ? 'w-1/2' : 'w-full'} border-r border-white/5`}>
             <Suspense fallback={
-              <div className="flex items-center justify-center h-full text-[#a0a0a0]">
+              <div className="flex items-center justify-center h-full text-text-3">
                 Loading editor...
               </div>
             }>
@@ -219,7 +220,7 @@ export function ManualEditPanel({
             <iframe
               className="flex-1 w-full border-none bg-white"
               srcDoc={previewHtml}
-              sandbox="allow-same-origin allow-popups"
+              sandbox={sandboxFor("design-html")}
               title="Preview"
             />
           </div>
@@ -227,7 +228,7 @@ export function ManualEditPanel({
       </div>
       
       {/* Footer */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-white/5 text-[11px] text-[#a0a0a0]">
+      <div className="flex items-center justify-between px-4 py-2 border-t border-white/5 text-[11px] text-text-3">
         <div className="flex items-center gap-4">
           <span>{code.length} characters</span>
           <span>{code.split('\n').length} lines</span>

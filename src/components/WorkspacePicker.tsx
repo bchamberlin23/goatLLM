@@ -86,8 +86,8 @@ export function WorkspacePicker() {
         onClick={() => setOpen_((v) => !v)}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] transition-colors ${
           workspacePath
-            ? "text-[#b4b4b4] hover:text-[#ececec] hover:bg-white/5"
-            : "text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5"
+            ? "text-text-2 hover:text-text-1 hover:bg-white/5"
+            : "text-text-3 hover:text-text-1 hover:bg-white/5"
         }`}
         title={workspacePath ?? "No workspace"}
       >
@@ -99,29 +99,29 @@ export function WorkspacePicker() {
       {open_ && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen_(false)} />
-          <div className="absolute bottom-full left-0 mb-1.5 w-60 popover-surface rounded-xl p-1.5 z-20 animate-[dropdownIn_110ms_ease]">
+          <div className="motion-popover-in absolute bottom-full left-0 mb-1.5 w-60 popover-surface rounded-xl p-1.5 z-20">
             <button
-              className="flex flex-col gap-0.5 w-full px-2.5 py-2 rounded-md text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors text-left"
+              className="motion-row flex flex-col gap-0.5 w-full px-2.5 py-2 rounded-md text-[13px] text-text-2 hover:bg-white/5 hover:text-text-1 transition-colors text-left"
               onClick={handleNone}
             >
               None (chat only)
             </button>
             {loading && !error && (
-              <div className="px-2.5 py-2 text-[12px] text-[#a0a0a0]">Loading workspaces…</div>
+              <div className="px-2.5 py-2 text-[12px] text-text-3">Loading workspaces…</div>
             )}
             {error && (
               <div className="flex items-center justify-between px-2.5 py-2">
-                <span className="text-[12px] text-[#f87171]">Failed to load</span>
-                <button onClick={refresh} className="text-[12px] text-[#ececec] hover:underline">Retry</button>
+                <span className="text-[12px] text-error">Failed to load</span>
+                <button onClick={refresh} className="text-[12px] text-text-1 hover:underline">Retry</button>
               </div>
             )}
             {workspaces.map((ws) => (
               <div
                 key={ws}
-                className={`flex items-center justify-between w-full px-2.5 py-2 rounded-md text-[13px] transition-colors text-left group/ws ${
+                className={`motion-row flex items-center justify-between w-full px-2.5 py-2 rounded-md text-[13px] transition-colors text-left group/ws ${
                   ws === workspacePath
-                    ? "text-[#ececec] bg-white/5"
-                    : "text-[#d5d5d5] hover:bg-white/5 hover:text-[#ececec]"
+                    ? "text-text-1 bg-white/5"
+                    : "text-text-2 hover:bg-white/5 hover:text-text-1"
                 }`}
               >
                 <button
@@ -129,12 +129,12 @@ export function WorkspacePicker() {
                   onClick={() => handleSelect(ws)}
                 >
                   <span className="truncate">{ws.split("/").pop()}</span>
-                  <span className="text-[11px] text-[#a0a0a0] font-mono truncate">{ws}</span>
+                  <span className="text-[11px] text-text-3 font-mono truncate">{ws}</span>
                 </button>
                 <div className="flex items-center gap-1 shrink-0">
-                  {ws === workspacePath && <Check size={13} className="text-[#f59e42]" />}
+                  {ws === workspacePath && <Check size={13} className="motion-pop-in text-accent" />}
                   <button
-                    className="w-5 h-5 flex items-center justify-center rounded text-[#666] hover:text-[#f87171] hover:bg-red-500/10 opacity-0 group-hover/ws:opacity-100 transition-all"
+                    className="w-5 h-5 flex items-center justify-center rounded text-text-4 hover:text-error hover:bg-red-500/10 opacity-0 group-hover/ws:opacity-100 transition-all"
                     onClick={(e) => handleRemove(ws, e)}
                     aria-label={`Remove ${ws.split("/").pop()}`}
                     title="Remove workspace"
@@ -146,7 +146,7 @@ export function WorkspacePicker() {
             ))}
             <div className="h-px bg-white/5 mx-1 my-1" />
             <button
-              className="flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-[13px] text-[#ececec] hover:bg-white/5 transition-colors font-medium"
+              className="motion-row flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-[13px] text-text-1 hover:bg-white/5 transition-colors font-medium"
               onClick={handleAdd}
               disabled={adding}
             >

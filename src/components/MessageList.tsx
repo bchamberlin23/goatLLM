@@ -311,7 +311,7 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
       </div>
       {showScrollBtn && (
         <button
-          className={`absolute bottom-4 h-9 w-9 rounded-full bg-[#2a2a2c]/90 border border-white/[0.08] text-[#a0a0a0] flex items-center justify-center shadow-lg hover:bg-[#333335] hover:text-[#ececec] hover:-translate-y-0.5 transition-all z-10 animate-[fadeInUp_150ms_ease] ${
+          className={`motion-status-in absolute bottom-4 h-9 w-9 rounded-full bg-surface-1/90 border border-hairline-strong text-text-3 flex items-center justify-center shadow-lg hover:bg-surface-2 hover:text-text-1 hover:-translate-y-0.5 transition-all z-10 ${
             edgeScroll ? "left-[430px] -translate-x-1/2" : "left-1/2 -translate-x-1/2"
           }`}
           onClick={scrollToBottom}
@@ -335,14 +335,14 @@ function DateSeparator({ ts }: { ts: number }) {
       aria-label={formatLongDateTime(ts)}
     >
       <div className="flex items-center gap-3 w-full max-w-[720px] mx-auto">
-        <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
+        <div className="flex-1 h-px bg-white/5" aria-hidden="true" />
         <span
-          className="shrink-0 px-2.5 py-0.5 rounded-full bg-white/[0.045] border border-white/[0.06] text-[10.5px] font-medium uppercase tracking-wider text-[#a0a0a0] tabular-nums shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+          className="shrink-0 px-2.5 py-0.5 rounded-full bg-white/5 border border-hairline text-[10.5px] font-medium uppercase tracking-wider text-text-3 tabular-nums shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
           title={formatLongDateTime(ts)}
         >
           {formatDateSeparator(ts)}
         </span>
-        <div className="flex-1 h-px bg-white/[0.06]" aria-hidden="true" />
+        <div className="flex-1 h-px bg-white/5" aria-hidden="true" />
       </div>
     </div>
   );
@@ -350,14 +350,14 @@ function DateSeparator({ ts }: { ts: number }) {
 
 function QueuedMessageBubble({ content, onSteer }: { content: string; onSteer: () => void }) {
   return (
-    <div className="flex flex-col items-end px-6 py-1.5">
-      <div className="max-w-[70%] bg-[#f59e42]/[0.055] border border-[#f59e42]/20 rounded-2xl rounded-br-md px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+    <div className="motion-reveal flex flex-col items-end px-6 py-1.5">
+      <div className="max-w-[70%] bg-accent/[0.055] border border-accent/20 rounded-2xl rounded-br-md px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#f59e42]/60">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-accent/60">
             Queued
           </span>
         </div>
-        <p className="text-[14px] text-[#d5d5d5] whitespace-pre-wrap">{content}</p>
+        <p className="text-[14px] text-text-2 whitespace-pre-wrap">{content}</p>
         <button
           onClick={onSteer}
           className="primary-action flex items-center gap-1 mt-2 px-2 py-1 rounded-md text-[11px] font-medium"

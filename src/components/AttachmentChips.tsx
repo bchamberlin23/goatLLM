@@ -52,15 +52,15 @@ function getFileExtColor(mimeType: string, filename = ""): string {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (mimeType.startsWith("image/")) return "#a78bfa";
   if (mimeType.startsWith("audio/") || /^(mp3|m4a|wav|flac|ogg|aac|webm)$/.test(ext)) return "#f472b6"; // pink
-  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.includes("javascript")) return "#60a5fa";
-  if (mimeType.includes("pdf") || ext === "pdf") return "#f87171"; // red
+  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.includes("javascript")) return "var(--info)";
+  if (mimeType.includes("pdf") || ext === "pdf") return "var(--error)"; // red
   if (mimeType.includes("word") || ext === "docx" || ext === "doc") return "#3b82f6"; // blue
   if (mimeType.includes("presentation") || ext === "pptx" || ext === "ppt") return "#fb923c"; // orange
-  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return "#34d399"; // green
+  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return "var(--success)"; // green
   if (ext === "ipynb") return "#f59e0b"; // jupyter amber
   if (ext === "rtf") return "#94a3b8";
   if (mimeType.includes("zip") || mimeType.includes("tar")) return "#fbbf24";
-  return "#a0a0a0";
+  return "var(--text-3)";
 }
 
 function formatFileSize(bytes: number): string {
@@ -106,7 +106,7 @@ export const AttachmentChips = memo(function AttachmentChips({ attachments, vari
             key={`${a.filename}-${i}`}
             type="button"
             onClick={() => setActiveAttachment(a)}
-            className={`soft-card flex items-center gap-2 ${padding} rounded-xl max-w-[220px] hover:bg-white/[0.07] hover:border-white/[0.12] transition-colors text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#f59e42]/35`}
+            className={`soft-card motion-feedback motion-reveal flex items-center gap-2 ${padding} rounded-xl max-w-[220px] hover:bg-white/5 hover:border-hairline-strong transition-[background,border-color,color,box-shadow,transform] text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/35`}
             title={`Open ${a.filename}`}
             aria-label={`Open ${a.filename}`}
           >
@@ -125,8 +125,8 @@ export const AttachmentChips = memo(function AttachmentChips({ attachments, vari
               </div>
             )}
             <div className="flex flex-col min-w-0">
-              <span className={`${nameSize} font-medium text-[#d5d5d5] truncate leading-tight`}>{fileLabel(a.filename)}</span>
-              <span className={`${sizeText} text-[#888] leading-tight mt-0.5`}>{formatFileSize(a.sizeBytes)}</span>
+              <span className={`${nameSize} font-medium text-text-2 truncate leading-tight`}>{fileLabel(a.filename)}</span>
+              <span className={`${sizeText} text-text-4 leading-tight mt-0.5`}>{formatFileSize(a.sizeBytes)}</span>
             </div>
           </button>
         );

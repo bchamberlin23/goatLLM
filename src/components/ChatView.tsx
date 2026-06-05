@@ -64,12 +64,12 @@ function ActiveSkillsBar() {
   if (activeSkillNames.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap w-full max-w-[720px] px-1 mb-1.5 animate-[fadeIn_150ms_ease]">
-      <span className="text-[10.5px] text-[#888] mr-0.5">Skills:</span>
+    <div className="motion-reveal flex items-center gap-1.5 flex-wrap w-full max-w-[720px] px-1 mb-1.5">
+      <span className="text-[10.5px] text-text-4 mr-0.5">Skills:</span>
       {activeSkillNames.map((skillName) => (
         <span
           key={skillName}
-          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] text-[11px] text-text-2 border border-white/[0.06]"
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 text-[11px] text-text-2 border border-hairline"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden="true" />
           {skillName}
@@ -298,13 +298,13 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
     >
       {/* Full-window drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#151516]/82 backdrop-blur-md animate-[fadeIn_150ms_ease]">
-          <div className="liquid-surface flex flex-col items-center gap-3 p-8 rounded-2xl border border-[#f59e42]/35">
-            <div className="w-12 h-12 rounded-full bg-[#f59e42]/10 border border-[#f59e42]/20 flex items-center justify-center shadow-[0_12px_34px_-20px_rgba(245,158,66,0.9)]">
-              <Upload size={22} strokeWidth={1.75} className="text-[#f59e42]" />
+        <div className="motion-reveal absolute inset-0 z-50 flex items-center justify-center bg-sunken/82 backdrop-blur-md">
+          <div className="liquid-surface motion-surface-in flex flex-col items-center gap-3 p-8 rounded-2xl border border-accent/35">
+            <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shadow-[0_12px_34px_-20px_rgba(245,158,66,0.9)]">
+              <Upload size={22} strokeWidth={1.75} className="text-accent" />
             </div>
-            <span className="text-[15px] font-medium text-[#f59e42]">Drop files here</span>
-            <span className="text-[12px] text-[#a0a0a0]">Images, documents, code files…</span>
+            <span className="text-[15px] font-medium text-accent">Drop files here</span>
+            <span className="text-[12px] text-text-3">Images, documents, code files…</span>
           </div>
         </div>
       )}
@@ -376,14 +376,14 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
 
       {showHero && (
         <div className="shrink-0 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full max-w-[860px] mx-auto flex-1 justify-center px-0 sm:px-6 pb-6 gap-3 relative">
-          <div className="flex flex-col items-center text-center -mt-10 animate-[fadeIn_320ms_ease]">
+          <div className="motion-surface-in flex flex-col items-center text-center -mt-10">
             {heroWorkspacePath ? (
-              <div className="liquid-surface mb-8 inline-flex max-w-[min(520px,calc(100vw-48px))] items-center gap-2 rounded-full px-4 py-1.5 text-[13px] text-[#c9c9c9]">
-                <Folder size={14} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" aria-hidden="true" />
-                <span className="text-[#a0a0a0]">
+              <div className="liquid-surface mb-8 inline-flex max-w-[min(520px,calc(100vw-48px))] items-center gap-2 rounded-full px-4 py-1.5 text-[13px] text-text-2">
+                <Folder size={14} strokeWidth={1.75} className="shrink-0 text-accent" aria-hidden="true" />
+                <span className="text-text-3">
                   {agentMode ? "Working on" : designMode ? "Designing" : "Notebook"}
                 </span>
-                <span className="min-w-0 truncate font-medium text-[#ececec]">
+                <span className="min-w-0 truncate font-medium text-text-1">
                   {heroWorkspaceName}
                 </span>
               </div>
@@ -393,12 +393,12 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
             )}
             {needsSetup ? (
               <div className="mt-3 flex flex-col items-center gap-2 max-w-[480px]">
-                <p className="text-[13px] text-[#a0a0a0] leading-relaxed">
+                <p className="text-[13px] text-text-3 leading-relaxed">
                   No models configured yet. Add an API key in Settings to start chatting.
                 </p>
                 <button
                   onClick={onOpenSettings}
-                  className="group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#f59e42]/12 border border-[#f59e42]/25 text-[#f59e42] text-[12.5px] font-medium hover:bg-[#f59e42]/18 hover:border-[#f59e42]/40 transition-colors"
+                  className="group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-accent/12 border border-accent/25 text-accent text-[12.5px] font-medium hover:bg-accent/18 hover:border-accent/40 transition-colors"
                   aria-label="Open Settings to add a provider"
                 >
                   <SettingsIcon size={13} strokeWidth={2} aria-hidden="true" />
@@ -411,15 +411,15 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
                 <p className={`mb-2 w-full max-w-[620px] min-w-0 whitespace-normal break-words px-2 leading-snug [text-wrap:balance] ${
                   welcome.message.display
                     ? "text-[26px] max-[520px]:text-[20px] font-medium text-[#e8e4de]"
-                    : "text-[20px] max-[520px]:text-[18px] text-[#c8c8c8]"
+                    : "text-[20px] max-[520px]:text-[18px] text-text-2"
                 }`}>
                   {welcome.message.emoji && (
                     <span className="mr-2" aria-hidden="true">{welcome.message.emoji}</span>
                   )}
                   {welcome.message.text}
                 </p>
-                <p className="mt-6 text-[13px] text-[#b4b4b4]">
-                  Type below or use <kbd className="font-mono text-[11px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#b4b4b4] tabular-nums">⌘N</kbd> for a fresh chat.
+                <p className="mt-6 text-[13px] text-text-2">
+                  Type below or use <kbd className="font-mono text-[11px] px-1.5 py-px rounded bg-white/5 border border-hairline text-text-2 tabular-nums">⌘N</kbd> for a fresh chat.
                 </p>
               </>
             )}

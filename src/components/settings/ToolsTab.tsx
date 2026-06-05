@@ -222,15 +222,16 @@ export function ToolsTab() {
   return (
     <>
       <SettingsGroup title="Search" description="Backends for the agent's web_search tool.">
-        <div className="flex items-center justify-between gap-3 p-3.5 bg-[#212122] border border-white/5 rounded-xl transition-colors">
+        <div className="flex items-center justify-between gap-3 p-3.5 bg-surface-3 border border-white/5 rounded-xl transition-colors">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[14px] font-medium text-[#ececec]">Search Provider</span>
-            <span className="text-[11px] text-[#a0a0a0]">Choose the metasearch provider for the web_search tool.</span>
+            <span className="text-[14px] font-medium text-text-1">Search Provider</span>
+            <span className="text-[11px] text-text-3">Choose the metasearch provider for the web_search tool.</span>
           </div>
           <select
             value={searchBackend}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
             onChange={(e) => setSearchBackend(e.target.value as any)}
-            className="h-[32px] px-3 bg-[#2c2c2e] border border-white/5 rounded-lg text-[13px] text-[#ececec] outline-none focus:border-white/15 cursor-pointer font-medium"
+            className="h-[32px] px-3 bg-surface-2 border border-white/5 rounded-lg text-[13px] text-text-1 outline-none focus:border-white/15 cursor-pointer font-medium"
           >
             <option value="searxng">SearXNG (Local Docker metasearch)</option>
             <option value="tavily">Tavily (API Key required)</option>
@@ -255,28 +256,28 @@ export function ToolsTab() {
         />
 
         {searchBackend === "searxng" && (
-          <div className="flex flex-col gap-3 p-3.5 bg-[#212122] border border-white/5 rounded-xl transition-colors">
+          <div className="flex flex-col gap-3 p-3.5 bg-surface-3 border border-white/5 rounded-xl transition-colors">
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[14px] font-medium text-[#ececec]">SearXNG Service Status</span>
-                <span className="text-[11px] text-[#a0a0a0]">
+                <span className="text-[14px] font-medium text-text-1">SearXNG Service Status</span>
+                <span className="text-[11px] text-text-3">
                   Docker container running local metasearch on port 8080.
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-[12px] font-mono">
                 {searxngLoading ? (
-                  <span className="text-[#a0a0a0] flex items-center gap-1">
+                  <span className="text-text-3 flex items-center gap-1">
                     <RefreshCw size={12} className="animate-spin" /> Checking...
                   </span>
                 ) : !searxngState ? (
-                  <span className="text-[#a0a0a0]">Unknown</span>
+                  <span className="text-text-3">Unknown</span>
                 ) : !searxngState.docker_installed ? (
                   <span className="text-red-400">Docker Not Installed</span>
                 ) : !searxngState.daemon_running ? (
                   <span className="text-red-400">Docker Daemon Stopped</span>
                 ) : searxngState.is_responding ? (
-                  <span className="text-[#34d399] flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#34d399] animate-pulse" />
+                  <span className="text-success flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
                     Running
                   </span>
                 ) : searxngState.container_running ? (
@@ -294,35 +295,35 @@ export function ToolsTab() {
             </div>
 
             {searxngError && (
-              <div className="text-[11.5px] text-[#f87171] bg-red-500/5 border border-red-500/10 rounded-lg p-2.5 font-mono leading-normal whitespace-pre-wrap">
+              <div className="text-[11.5px] text-error bg-red-500/5 border border-red-500/10 rounded-lg p-2.5 font-mono leading-normal whitespace-pre-wrap">
                 {searxngError}
               </div>
             )}
 
             {searxngMessage && (
-              <div className="text-[11.5px] text-[#34d399] bg-[#34d399]/5 border border-[#34d399]/10 rounded-lg p-2.5 font-mono leading-normal">
+              <div className="text-[11.5px] text-success bg-success/5 border border-success/10 rounded-lg p-2.5 font-mono leading-normal">
                 {searxngMessage}
               </div>
             )}
 
             {dockerActionProgress && (
-              <div className="flex flex-col gap-2.5 p-3 bg-[#f59e42]/5 border border-[#f59e42]/10 rounded-lg font-mono text-[11.5px] text-[#f59e42] leading-normal">
+              <div className="flex flex-col gap-2.5 p-3 bg-accent/5 border border-accent/10 rounded-lg font-mono text-[11.5px] text-accent leading-normal">
                 <div className="flex items-center gap-2">
                   <RefreshCw size={12} className="animate-spin shrink-0" />
                   <span className="font-medium">Docker Setup Action in Progress</span>
                 </div>
-                <div className="text-[#a0a0a0] text-[11px] select-all truncate bg-black/20 px-2 py-1.5 rounded border border-white/5">
+                <div className="text-text-3 text-[11px] select-all truncate bg-black/20 px-2 py-1.5 rounded border border-white/5">
                   {dockerActionProgress}
                 </div>
                 {dockerPercent !== null && (
                   <div className="flex flex-col gap-1 w-full mt-0.5">
-                    <div className="flex justify-between text-[10px] text-[#888] font-bold">
+                    <div className="flex justify-between text-[10px] text-text-4 font-bold">
                       <span>Downloading Cask Package</span>
                       <span>{dockerPercent.toFixed(1)}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#f59e42] transition-all duration-300 rounded-full"
+                        className="h-full bg-accent transition-all duration-300 rounded-full"
                         style={{ width: `${dockerPercent}%` }}
                       />
                     </div>
@@ -337,7 +338,7 @@ export function ToolsTab() {
                   <button
                     onClick={handleInstallDocker}
                     disabled={searxngLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium bg-[#f59e42]/10 text-[#f59e42] hover:bg-[#f59e42]/20 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors"
                   >
                     <Play size={12} />
                     {dockerActionProgress ? "Installing Docker..." : "Install Docker Desktop (1-Click)"}
@@ -346,7 +347,7 @@ export function ToolsTab() {
                   <button
                     onClick={handleStartDockerDaemon}
                     disabled={searxngLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium bg-[#f59e42]/10 text-[#f59e42] hover:bg-[#f59e42]/20 rounded-lg transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium bg-accent/10 text-accent hover:bg-accent/20 rounded-lg transition-colors"
                   >
                     <Play size={12} />
                     {dockerActionProgress ? "Starting Docker..." : "Start Docker Desktop"}
@@ -358,8 +359,8 @@ export function ToolsTab() {
                       disabled={searxngLoading || searxngState.is_responding}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium rounded-lg transition-colors ${
                         searxngState.is_responding
-                          ? "bg-white/5 text-[#4a4a4a] cursor-not-allowed"
-                          : "bg-[#34d399]/10 text-[#34d399] hover:bg-[#34d399]/20"
+                          ? "bg-white/5 text-text-4 cursor-not-allowed"
+                          : "bg-success/10 text-success hover:bg-success/20"
                       }`}
                     >
                       <Play size={12} />
@@ -370,8 +371,8 @@ export function ToolsTab() {
                       disabled={searxngLoading || !searxngState.container_running}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium rounded-lg transition-colors ${
                         !searxngState.container_running
-                          ? "bg-white/5 text-[#4a4a4a] cursor-not-allowed"
-                          : "bg-red-500/10 text-[#f87171] hover:bg-red-500/20"
+                          ? "bg-white/5 text-text-4 cursor-not-allowed"
+                          : "bg-red-500/10 text-error hover:bg-red-500/20"
                       }`}
                     >
                       <Square size={12} />
@@ -382,7 +383,7 @@ export function ToolsTab() {
                 <button
                   onClick={checkSearxngStatus}
                   disabled={searxngLoading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-[#b4b4b4] bg-white/5 rounded-lg hover:bg-white/10 hover:text-[#ececec] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-medium text-text-2 bg-white/5 rounded-lg hover:bg-white/10 hover:text-text-1 transition-colors"
                 >
                   <RefreshCw size={12} className={searxngLoading ? "animate-spin" : ""} />
                   Check Status
@@ -402,22 +403,22 @@ export function ToolsTab() {
         />
 
         {memoryEnabled && (
-          <div className="flex flex-col gap-3 p-3.5 bg-[#212122] border border-white/5 rounded-xl transition-colors">
+          <div className="flex flex-col gap-3 p-3.5 bg-surface-3 border border-white/5 rounded-xl transition-colors">
             {/* Add Memory Form */}
             <form onSubmit={handleAddMemory} className="flex flex-col gap-2">
-              <span className="text-[12px] font-medium text-[#ececec]">Add New Memory Record</span>
+              <span className="text-[12px] font-medium text-text-1">Add New Memory Record</span>
               <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="Type a detail to remember (e.g. I prefer Python for coding)..."
                   value={newMemoryText}
                   onChange={(e) => setNewMemoryText(e.target.value)}
-                  className="flex-1 h-[32px] px-2.5 bg-white/[0.06] border border-white/10 rounded-lg text-[12px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+                  className="flex-1 h-[32px] px-2.5 bg-white/5 border border-white/10 rounded-lg text-[12px] text-text-1 placeholder:text-text-4 outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
                 />
                 <select
                   value={newMemoryCategory}
                   onChange={(e) => setNewMemoryCategory(e.target.value)}
-                  className="h-[32px] px-2 bg-white/[0.06] border border-white/10 rounded-lg text-[12px] text-[#ececec] outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20 cursor-pointer"
+                  className="h-[32px] px-2 bg-white/5 border border-white/10 rounded-lg text-[12px] text-text-1 outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20 cursor-pointer"
                 >
                   <option value="fact">Fact</option>
                   <option value="preference">Preference</option>
@@ -437,12 +438,12 @@ export function ToolsTab() {
 
             {/* Memory List */}
             <div className="flex flex-col gap-1.5 pt-2 border-t border-white/5">
-              <span className="text-[12.5px] font-medium text-[#ececec] mb-1">
+              <span className="text-[12.5px] font-medium text-text-1 mb-1">
                 Saved Memories ({memories.length})
               </span>
 
               {memories.length === 0 ? (
-                <div className="text-center py-4 text-[12px] text-[#a0a0a0]">
+                <div className="text-center py-4 text-[12px] text-text-3">
                   No memory records saved yet. The agent will add records automatically or you can add them manually.
                 </div>
               ) : (
@@ -450,35 +451,35 @@ export function ToolsTab() {
                   {memories.map((m) => (
                     <div
                       key={m.id}
-                      className="flex items-start justify-between gap-3 p-2.5 bg-[#2c2c2e]/60 border border-white/5 rounded-lg hover:border-white/10 transition-colors"
+                      className="flex items-start justify-between gap-3 p-2.5 bg-surface-2/60 border border-white/5 rounded-lg hover:border-white/10 transition-colors"
                     >
                       <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase font-mono ${
                             m.category === "preference"
-                              ? "bg-[#f59e42]/10 text-[#f5c18c]"
+                              ? "bg-accent/10 text-accent"
                               : m.category === "contact"
                                 ? "bg-blue-500/10 text-blue-400"
                                 : m.category === "task"
                                   ? "bg-green-500/10 text-green-400"
-                                  : "bg-orange-500/10 text-[#f59e42]"
+                                  : "bg-orange-500/10 text-accent"
                           }`}>
                             {m.category}
                           </span>
-                          <span className="text-[10px] text-[#888] font-mono">
+                          <span className="text-[10px] text-text-4 font-mono">
                             Uses: {m.uses}
                           </span>
-                          <span className="text-[10px] text-[#888] font-mono">
+                          <span className="text-[10px] text-text-4 font-mono">
                             {new Date(m.created_at).toLocaleDateString()}
                           </span>
                         </div>
-                        <span className="text-[12.5px] text-[#ececec] leading-relaxed break-words pr-2">
+                        <span className="text-[12.5px] text-text-1 leading-relaxed break-words pr-2">
                           {m.text}
                         </span>
                       </div>
                       <button
                         onClick={() => handleDeleteMemory(m.id)}
-                        className="p-1.5 text-[#a0a0a0] hover:text-[#f87171] hover:bg-red-500/10 rounded-md transition-colors shrink-0"
+                        className="p-1.5 text-text-3 hover:text-error hover:bg-red-500/10 rounded-md transition-colors shrink-0"
                         title="Delete memory record"
                       >
                         <Trash2 size={12} />

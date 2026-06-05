@@ -850,7 +850,7 @@ function AssistantRail({
                 onClick={stop}
                 aria-label="Stop"
                 title="Stop"
-                className="shrink-0 w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] text-text-2 flex items-center justify-center transition-colors"
+                className="shrink-0 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-text-2 flex items-center justify-center transition-colors"
               >
                 <Square size={13} className="fill-current" />
               </button>
@@ -961,7 +961,7 @@ function ActionRow({ action }: { action: CanvasAction }) {
             ? "bg-error/10 text-error"
             : running
               ? "bg-accent-soft text-accent"
-              : "bg-white/[0.05] text-text-2"
+              : "bg-white/5 text-text-2"
         }`}
       >
         <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
@@ -1034,7 +1034,7 @@ function IconBtn({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`p-1.5 rounded-md text-text-4 ${hover} hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors`}
+      className={`p-1.5 rounded-md text-text-4 ${hover} hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors`}
     >
       {children}
     </button>

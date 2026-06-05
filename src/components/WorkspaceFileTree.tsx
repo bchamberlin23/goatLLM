@@ -65,15 +65,15 @@ function getFileIcon(filename: string, isDir: boolean) {
 }
 
 function getIconColor(filename: string, isDir: boolean): string {
-  if (isDir) return "#60a5fa";
-  if (filename.endsWith(".html") || filename.endsWith(".htm")) return "#f59e42";
-  if (filename.endsWith(".css") || filename.endsWith(".scss")) return "#60a5fa";
-  if (filename.endsWith(".py")) return "#34d399";
-  if (filename.endsWith(".rs")) return "#f59e42";
+  if (isDir) return "var(--info)";
+  if (filename.endsWith(".html") || filename.endsWith(".htm")) return "var(--accent)";
+  if (filename.endsWith(".css") || filename.endsWith(".scss")) return "var(--info)";
+  if (filename.endsWith(".py")) return "var(--success)";
+  if (filename.endsWith(".rs")) return "var(--accent)";
   if (filename.endsWith(".ts") || filename.endsWith(".tsx") || filename.endsWith(".js")) return "#a78bfa";
   if (filename.endsWith(".json")) return "#fbbf24";
-  if (filename.endsWith(".md")) return "#60a5fa";
-  return "#a0a0a0";
+  if (filename.endsWith(".md")) return "var(--info)";
+  return "var(--text-3)";
 }
 
 function formatSize(bytes: number): string {
@@ -268,13 +268,13 @@ export function WorkspaceFileTree({ onOpenFile, onOpenInCanvas }: WorkspaceFileT
   return (
     <div className="p-1.5">
       <div className="flex items-center justify-between px-2.5 py-1.5">
-        <span className="text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+        <span className="text-[10.5px] uppercase tracking-wider text-text-3 font-semibold">
           Workspace files
         </span>
         <button
           onClick={loadRoot}
           disabled={loading}
-          className="p-0.5 rounded text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+          className="p-0.5 rounded text-text-3 hover:text-text-1 hover:bg-white/5 transition-colors"
           title="Refresh"
         >
           <RefreshCw size={11} strokeWidth={2} className={loading ? "animate-spin" : ""} />
@@ -282,21 +282,21 @@ export function WorkspaceFileTree({ onOpenFile, onOpenInCanvas }: WorkspaceFileT
       </div>
 
       {loading && roots.length === 0 && (
-        <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-[#a0a0a0]">
+        <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-text-3">
           <Loader2 size={12} strokeWidth={2} className="animate-spin" />
           Loading…
         </div>
       )}
 
       {error && roots.length === 0 && (
-        <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-[#f87171]">
+        <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] text-error">
           <AlertCircle size={12} />
           {error}
         </div>
       )}
 
       {roots.length === 0 && !loading && !error && (
-        <div className="px-2.5 py-2 text-[11px] text-[#a0a0a0]">Empty workspace</div>
+        <div className="px-2.5 py-2 text-[11px] text-text-3">Empty workspace</div>
       )}
 
       {roots.length > 0 && (
@@ -341,7 +341,7 @@ function FileTreeRow({
     <>
       <button
         onClick={() => node.isDir ? onToggle(node.path) : onOpen({ ...node })}
-        className={`flex items-center gap-1.5 w-full rounded-md text-left hover:bg-white/[0.06] transition-colors py-1.5`}
+        className={`flex items-center gap-1.5 w-full rounded-md text-left hover:bg-white/5 transition-colors py-1.5`}
         style={{ paddingLeft: padLeft, paddingRight: 10 }}
       >
         {/* Expand/collapse chevron for directories */}
@@ -349,28 +349,28 @@ function FileTreeRow({
           <ChevronRight
             size={10}
             strokeWidth={2.5}
-            className={`shrink-0 text-[#666] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+            className={`shrink-0 text-text-4 transition-transform ${isExpanded ? "rotate-90" : ""}`}
           />
         ) : (
           <span className="w-[10px] shrink-0" />
         )}
         {/* Loading spinner */}
         {node.loading ? (
-          <Loader2 size={12} strokeWidth={2} className="animate-spin shrink-0 text-[#a0a0a0]" />
+          <Loader2 size={12} strokeWidth={2} className="animate-spin shrink-0 text-text-3" />
         ) : node.isDir && isExpanded ? (
           <FolderOpen size={13} strokeWidth={1.5} style={{ color }} className="shrink-0" />
         ) : (
           <Icon size={13} strokeWidth={1.5} style={{ color }} className="shrink-0" />
         )}
-        <span className="text-[12px] text-[#d5d5d5] truncate flex-1 leading-tight">{node.name}</span>
+        <span className="text-[12px] text-text-2 truncate flex-1 leading-tight">{node.name}</span>
         {!node.isDir && node.size > 0 && (
-          <span className="text-[9.5px] text-[#666] shrink-0 tabular-nums">{formatSize(node.size)}</span>
+          <span className="text-[9.5px] text-text-4 shrink-0 tabular-nums">{formatSize(node.size)}</span>
         )}
       </button>
       {/* Error indicator */}
       {node.error && (
         <div
-          className="flex items-center gap-1.5 py-1 text-[10px] text-[#f87171]"
+          className="flex items-center gap-1.5 py-1 text-[10px] text-error"
           style={{ paddingLeft: padLeft + 18 }}
         >
           <AlertCircle size={10} />

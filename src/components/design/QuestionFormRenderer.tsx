@@ -52,17 +52,17 @@ export function QuestionFormRenderer({
       className="soft-card my-3 rounded-xl overflow-hidden"
       aria-label={headerText}
     >
-      <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
-        <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">
+      <div className="px-4 py-2.5 border-b border-hairline flex items-center justify-between">
+        <span className="text-[10.5px] uppercase tracking-[0.12em] text-text-4 font-semibold">
           {headerText}
         </span>
-        <span className="text-[10.5px] text-[#666]">
+        <span className="text-[10.5px] text-text-4">
           {form.fields.length} field{form.fields.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {form.description && (
-        <p className="px-4 pt-3 text-[11.5px] text-[#a0a0a0] leading-relaxed">
+        <p className="px-4 pt-3 text-[11.5px] text-text-3 leading-relaxed">
           {form.description}
         </p>
       )}
@@ -75,10 +75,10 @@ export function QuestionFormRenderer({
           <div key={field.id}>
             <label
               htmlFor={`qf-${form.id}-${field.id}`}
-              className="block text-[12.5px] font-medium text-[#ececec] mb-1.5"
+              className="block text-[12.5px] font-medium text-text-1 mb-1.5"
             >
               {field.label}
-              {field.required && <span className="text-[#f59e42] ml-0.5">*</span>}
+              {field.required && <span className="text-accent ml-0.5">*</span>}
             </label>
 
             {(field.type === "radio" || field.type === "direction-cards") && field.options.length > 0 && (
@@ -94,8 +94,8 @@ export function QuestionFormRenderer({
                       onClick={() => setRadio(field.id, opt.value)}
                       className={`text-left px-3 py-2 rounded-lg border text-[12.5px] transition-colors ${
                         active
-                          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.08] text-[#ececec]"
-                          : "border-white/[0.06] bg-white/[0.02] text-[#d5d5d5] hover:bg-white/[0.05] hover:border-white/[0.12]"
+                          ? "border-accent/60 bg-accent/[0.08] text-text-1"
+                          : "border-hairline bg-white/[0.02] text-text-2 hover:bg-white/5 hover:border-hairline-strong"
                       }`}
                     >
                       {opt.label}
@@ -121,8 +121,8 @@ export function QuestionFormRenderer({
                       onClick={() => toggleCheckbox(field.id, opt.value, field.maxSelections)}
                       className={`text-left px-3 py-2 rounded-lg border text-[12.5px] transition-colors ${
                         active
-                          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.08] text-[#ececec]"
-                          : "border-white/[0.06] bg-white/[0.02] text-[#d5d5d5] hover:bg-white/[0.05] hover:border-white/[0.12]"
+                          ? "border-accent/60 bg-accent/[0.08] text-text-1"
+                          : "border-hairline bg-white/[0.02] text-text-2 hover:bg-white/5 hover:border-hairline-strong"
                       }`}
                     >
                       {opt.label}
@@ -137,7 +137,7 @@ export function QuestionFormRenderer({
                 id={`qf-${form.id}-${field.id}`}
                 value={(values[field.id] as string) ?? ""}
                 onChange={(e) => setText(field.id, e.target.value)}
-                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
+                className="w-full bg-white/5 border border-hairline-strong rounded-lg px-3 py-2 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
               >
                 <option value="">Select...</option>
                 {field.options.map((opt) => (
@@ -155,7 +155,7 @@ export function QuestionFormRenderer({
                 value={(values[field.id] as string) ?? ""}
                 onChange={(e) => setText(field.id, e.target.value)}
                 placeholder={field.placeholder}
-                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 placeholder:text-text-4"
+                className="w-full bg-white/5 border border-hairline-strong rounded-lg px-3 py-2 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 placeholder:text-text-4"
               />
             )}
 
@@ -166,15 +166,15 @@ export function QuestionFormRenderer({
                 onChange={(e) => setText(field.id, e.target.value)}
                 placeholder={field.placeholder}
                 rows={3}
-                className="w-full bg-white/[0.055] border border-white/[0.08] rounded-lg px-3 py-2 text-[13px] text-[#ececec] outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 resize-none placeholder:text-text-4"
+                className="w-full bg-white/5 border border-hairline-strong rounded-lg px-3 py-2 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 resize-none placeholder:text-text-4"
               />
             )}
           </div>
         ))}
       </fieldset>
 
-      <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between bg-white/[0.02]">
-        <span className="text-[11px] text-[#a0a0a0]">
+      <div className="px-4 py-3 border-t border-hairline flex items-center justify-between bg-white/[0.02]">
+        <span className="text-[11px] text-text-3">
           {submitted
             ? "Submitted. The model is reading your answers."
             : "Answers post back as a structured message."}

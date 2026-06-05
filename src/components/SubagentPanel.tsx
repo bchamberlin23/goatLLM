@@ -37,7 +37,7 @@ export function SubagentPanel() {
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0">
       {/* Top bar with back arrow */}
-      <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.025]">
+      <div className="shrink-0 flex items-center gap-3 px-5 py-3 border-b border-hairline bg-white/[0.025]">
         <button
           className="control-pill flex items-center gap-1.5 px-2 py-1.5 -ml-2 rounded-md transition-colors"
           onClick={closeSubagentPanel}
@@ -47,15 +47,15 @@ export function SubagentPanel() {
           <span className="text-[12.5px]">Back</span>
         </button>
         <div className="flex items-center gap-2 ml-1">
-          <Bot size={15} strokeWidth={1.75} className="text-[#f59e42]" />
-          <span className="text-[13px] font-medium text-[#ececec]">Subagent</span>
+          <Bot size={15} strokeWidth={1.75} className="text-accent" />
+          <span className="text-[13px] font-medium text-text-1">Subagent</span>
           {isRunning && (
-            <span className="text-[10.5px] text-[#f59e42] bg-[#f59e42]/10 px-2 py-0.5 rounded-full font-medium animate-pulse">
+            <span className="text-[10.5px] text-accent bg-accent/10 px-2 py-0.5 rounded-full font-medium animate-pulse">
               Running
             </span>
           )}
         </div>
-        <span className="text-[12px] text-[#888] truncate ml-2 flex-1 min-w-0">
+        <span className="text-[12px] text-text-4 truncate ml-2 flex-1 min-w-0">
           {taskText}
         </span>
       </div>
@@ -70,13 +70,13 @@ export function SubagentPanel() {
           transcript.map((entry, i) => (
             <div key={i} className="flex flex-col gap-2">
               {/* Role label */}
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#666]">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-text-4">
                 {entry.role === "user" ? "Task" : "Subagent"}
               </div>
 
               {/* Text content */}
               {entry.content && (
-                <div className="text-[13px] text-[#b4b4b4] leading-relaxed whitespace-pre-wrap">
+                <div className="text-[13px] text-text-2 leading-relaxed whitespace-pre-wrap">
                   {entry.role === "assistant" ? (
                     <MarkdownRenderer content={entry.content} />
                   ) : (
@@ -103,11 +103,11 @@ export function SubagentPanel() {
 
               {/* Show summary output at bottom */}
               {summary && i === transcript.length - 1 && entry.role === "assistant" && (
-                <div className="mt-2 border-t border-white/[0.06] pt-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-[#f59e42] mb-2">
+                <div className="mt-2 border-t border-hairline pt-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-accent mb-2">
                     Summary (sent to parent)
                   </div>
-                  <div className="soft-card text-[12.5px] text-[#a0a0a0] leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-auto rounded-lg p-3">
+                  <div className="soft-card text-[12.5px] text-text-3 leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-auto rounded-lg p-3">
                     {summary}
                   </div>
                 </div>
@@ -122,7 +122,7 @@ export function SubagentPanel() {
           if (last.role === "assistant" && !last.content && (!last.toolCalls || last.toolCalls.length === 0)) {
             return (
               <div className="animate-pulse">
-                <div className="h-3 bg-white/[0.04] rounded w-3/4" />
+                <div className="h-3 bg-white/5 rounded w-3/4" />
               </div>
             );
           }

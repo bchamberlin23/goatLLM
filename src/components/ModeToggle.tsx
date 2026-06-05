@@ -30,10 +30,10 @@ export function ModeToggle() {
 
   const chatActive = !agentMode && !designMode && !notebookMode;
   const optionClass = (active: boolean) =>
-    `flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[12px] font-medium transition-[background,border-color,color,box-shadow] ${
+    `motion-feedback flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[12px] font-medium transition-[background,border-color,color,box-shadow,transform] ${
       active
         ? "bg-accent/10 border-accent/25 text-text-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]"
-        : "border-transparent text-text-3 hover:text-text-1 hover:bg-white/[0.055] hover:border-white/[0.08]"
+        : "border-transparent text-text-3 hover:text-text-1 hover:bg-white/5 hover:border-hairline-strong"
     }`;
 
   return (

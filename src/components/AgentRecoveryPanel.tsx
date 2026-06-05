@@ -111,13 +111,13 @@ export function AgentRecoveryPanel() {
             onClick={() => setSelectedId(checkpoint.messageId)}
             className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] transition-colors ${
               (selected?.id ?? checkpoints[0]?.messageId) === checkpoint.messageId
-                ? "bg-[#f59e42]/10 text-text-2 shadow-[inset_0_0_0_1px_rgba(245,158,66,0.16)]"
-                : "text-text-3 hover:bg-white/[0.04]"
+                ? "bg-accent/10 text-text-2 shadow-[inset_0_0_0_1px_rgba(245,158,66,0.16)]"
+                : "text-text-3 hover:bg-white/5"
             }`}
           >
             <span className="shrink-0 font-mono text-[10.5px] text-text-4">{formatCheckpointTime(checkpoint.createdAt)}</span>
             <span className="min-w-0 truncate font-mono">{checkpoint.name || checkpoint.changedFiles.join(", ")}</span>
-            <span className="ml-auto shrink-0 rounded border border-white/[0.06] px-1.5 py-0.5 text-[10px] text-text-4">
+            <span className="ml-auto shrink-0 rounded border border-hairline px-1.5 py-0.5 text-[10px] text-text-4">
               {checkpoint.status}
             </span>
           </button>
@@ -144,7 +144,7 @@ export function AgentRecoveryPanel() {
               value={checkpointNames[selected.id] ?? ""}
               onChange={(event) => setCheckpointName(selected.id, event.currentTarget.value)}
               placeholder="Name checkpoint"
-              className="mt-2 w-full rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+              className="mt-2 w-full rounded-md border border-hairline-strong bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
             />
           )}
           <div className="mt-2 text-[10.5px] text-text-4">

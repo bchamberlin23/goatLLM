@@ -10,21 +10,21 @@ const PERM_OPTIONS: { id: PermMode; label: string; Icon: typeof Hand; help: stri
     label: "Manual",
     Icon: Hand,
     help: "Every file write, edit, and shell command requires your approval.",
-    accent: "text-[#ececec]",
+    accent: "text-text-1",
   },
   {
     id: "auto",
     label: "Auto",
     Icon: Zap,
     help: "File edits run automatically. Shell commands still require approval.",
-    accent: "text-[#f59e42]",
+    accent: "text-accent",
   },
   {
     id: "yolo",
     label: "YOLO",
     Icon: Flame,
     help: "Everything runs without prompting — files and shell commands. Use carefully.",
-    accent: "text-[#fca5a5]",
+    accent: "text-error",
   },
 ];
 
@@ -79,16 +79,16 @@ export function AgentPill() {
           size={11}
           strokeWidth={2}
           aria-hidden="true"
-          className={`text-[#a0a0a0] transition-transform ${open ? "rotate-180" : ""}`}
+          className={`text-text-3 transition-transform ${open ? "rotate-180" : ""}`}
         />
       </button>
       {open && (
         <div
           role="menu"
           aria-label="Agent permission mode"
-          className="popover-surface absolute bottom-full left-0 mb-1.5 w-[260px] rounded-xl py-1 z-50 animate-[dropdownIn_110ms_ease]"
+          className="popover-surface motion-popover-in absolute bottom-full left-0 mb-1.5 w-[260px] rounded-xl py-1 z-50"
         >
-          <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+          <div className="px-3 pt-1.5 pb-1 text-[10px] uppercase tracking-wider text-text-3 font-semibold">
             Permission mode
           </div>
           {PERM_OPTIONS.map((opt) => {
@@ -100,28 +100,28 @@ export function AgentPill() {
                 role="menuitemradio"
                 aria-checked={isActive}
                 onClick={() => handlePick(opt.id)}
-                className={`flex items-start gap-2.5 w-full px-3 py-2 text-left text-[12px] transition-colors ${
-                  isActive ? "bg-white/[0.06]" : "hover:bg-white/[0.05]"
+                className={`motion-row flex items-start gap-2.5 w-full px-3 py-2 text-left text-[12px] transition-colors ${
+                  isActive ? "bg-white/5" : "hover:bg-white/5"
                 }`}
               >
                 <OptIcon
                   size={13}
                   strokeWidth={2}
-                  className={`shrink-0 mt-0.5 ${isActive ? opt.accent : "text-[#a0a0a0]"}`}
+                  className={`shrink-0 mt-0.5 ${isActive ? opt.accent : "text-text-3"}`}
                   aria-hidden="true"
                 />
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className={`font-medium ${isActive ? opt.accent : "text-[#ececec]"}`}>
+                  <span className={`font-medium ${isActive ? opt.accent : "text-text-1"}`}>
                     {opt.label}
                   </span>
-                  <span className="text-[10.5px] text-[#a0a0a0] leading-snug mt-0.5">
+                  <span className="text-[10.5px] text-text-3 leading-snug mt-0.5">
                     {opt.help}
                   </span>
                 </div>
                 {isActive && (
                   <span
                     aria-hidden
-                    className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-[#f59e42]"
+                    className="motion-pop-in shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent"
                   />
                 )}
               </button>

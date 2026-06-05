@@ -38,14 +38,14 @@ export function SystemPromptSection() {
   return (
     <div className="flex flex-col gap-2">
       <textarea
-        className="w-full bg-[#212122] border border-white/5 rounded-xl text-[13px] text-[#ececec] p-3.5 outline-none resize-none min-h-[80px] focus:border-white/10 placeholder:text-[#a0a0a0]"
+        className="w-full bg-surface-3 border border-white/5 rounded-xl text-[13px] text-text-1 p-3.5 outline-none resize-none min-h-[80px] focus:border-white/10 placeholder:text-text-3"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         placeholder="You are a helpful assistant…"
         rows={3}
       />
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-[#a0a0a0]">
+        <span className="text-[11px] text-text-3">
           {label} · {draft.length > 0 ? `${draft.length} chars` : "Empty"}
         </span>
         <button
@@ -53,7 +53,7 @@ export function SystemPromptSection() {
           className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
             saved
               ? "bg-success/10 text-success"
-              : "bg-accent text-bg hover:bg-[#f0903a]"
+              : "bg-accent text-bg hover:bg-accent-hover"
           }`}
         >
           {saved ? "Saved" : "Save"}

@@ -112,7 +112,7 @@ export function TopBar() {
 
           {activeId && (
             <>
-              <span className="text-[13px] font-medium text-[#ececec] truncate max-w-[300px] ml-1">
+              <span className="text-[13px] font-medium text-text-1 truncate max-w-[300px] ml-1">
                 {renaming ? (
                   ""
                 ) : isTitlePending ? (
@@ -142,7 +142,7 @@ export function TopBar() {
                     if (e.key === "Enter") handleRenameSubmit();
                     if (e.key === "Escape") setRenaming(false);
                   }}
-                  className="text-[13px] font-medium text-[#ececec] bg-white/[0.06] border border-white/10 rounded-md px-2 py-0.5 outline-none focus:border-[#f59e42]/50 max-w-[240px]"
+                  className="text-[13px] font-medium text-text-1 bg-white/5 border border-white/10 rounded-md px-2 py-0.5 outline-none focus:border-accent/50 max-w-[240px]"
                 />
               )}
 
@@ -158,24 +158,24 @@ export function TopBar() {
                   </button>
 
                   {menuOpen && (
-                    <div className="popover-surface absolute top-full left-0 mt-1 w-[180px] rounded-lg overflow-hidden animate-[fadeIn_100ms_ease] z-50">
+                    <div className="popover-surface motion-popover-in absolute top-full left-0 mt-1 w-[180px] rounded-lg overflow-hidden z-50">
                       <button
                         onClick={handleRename}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#d5d5d5] hover:bg-white/[0.06] transition-colors text-left"
+                        className="motion-row flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-text-2 hover:bg-white/5 transition-colors text-left"
                       >
-                        <Pencil size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
+                        <Pencil size={13} strokeWidth={1.75} className="text-text-3" />
                         Rename chat
                       </button>
                       <button
                         onClick={handleEditSystemPrompt}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#d5d5d5] hover:bg-white/[0.06] transition-colors text-left"
+                        className="motion-row flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-text-2 hover:bg-white/5 transition-colors text-left"
                       >
-                        <Terminal size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
+                        <Terminal size={13} strokeWidth={1.75} className="text-text-3" />
                         System prompt
                       </button>
                       <button
                         onClick={handleDelete}
-                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-[#f87171] hover:bg-white/[0.06] transition-colors text-left"
+                        className="motion-row flex items-center gap-2.5 w-full px-3 py-2 text-[12.5px] text-error hover:bg-white/5 transition-colors text-left"
                       >
                         <Trash2 size={13} strokeWidth={1.75} />
                         Delete chat
@@ -197,18 +197,18 @@ export function TopBar() {
       {/* System prompt editor modal */}
       {editingSystemPrompt && activeId && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-[#111112]/70 backdrop-blur-md animate-[fadeIn_150ms_ease]"
+          className="motion-reveal fixed inset-0 z-[200] flex items-center justify-center bg-bg/70 backdrop-blur-md"
           onClick={() => setEditingSystemPrompt(false)}
         >
           <div
-            className="modal-surface w-[500px] max-w-[90vw] rounded-2xl overflow-hidden animate-[contextMenuIn_180ms_ease]"
+            className="modal-surface motion-surface-in w-[500px] max-w-[90vw] rounded-2xl overflow-hidden"
             role="dialog"
             aria-modal="true"
             aria-labelledby="system-prompt-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-              <h3 id="system-prompt-title" className="text-[15px] font-semibold text-[#ececec]">System prompt</h3>
+              <h3 id="system-prompt-title" className="text-[15px] font-semibold text-text-1">System prompt</h3>
               <button
                 onClick={() => setEditingSystemPrompt(false)}
                 className="control-icon w-7 h-7 flex items-center justify-center rounded-md transition-colors"
@@ -218,7 +218,7 @@ export function TopBar() {
               </button>
             </div>
             <div className="p-5">
-              <p className="text-[12.5px] text-[#a0a0a0] mb-3">
+              <p className="text-[12.5px] text-text-3 mb-3">
                 Custom instructions for this conversation. Leave empty to use the default. Appended to the built-in system prompt.
               </p>
               <textarea
@@ -227,7 +227,7 @@ export function TopBar() {
                 onChange={(e) => setSystemPromptValue(e.target.value)}
                 placeholder="e.g., Be concise. Focus on security implications."
                 rows={4}
-                className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 resize-none outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/25"
+                className="w-full px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-4 resize-none outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25"
               />
               <div className="flex justify-end gap-2 mt-4">
                 <button
@@ -309,12 +309,12 @@ function ChatAssetsMenu() {
       >
         <MoreHorizontal size={16} strokeWidth={1.75} />
         {hasContent && (
-          <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-[#f59e42]" />
+          <span className="absolute top-1 right-1 w-[5px] h-[5px] rounded-full bg-accent" />
         )}
       </button>
 
       {open && (
-        <div className="popover-surface absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl z-50 animate-[fadeIn_100ms_ease]">
+        <div className="popover-surface motion-popover-in absolute top-full right-0 mt-1.5 w-[300px] max-h-[420px] overflow-y-auto rounded-xl z-50">
           {/* Workspace file tree (agent mode) — shows files the agent created/modified */}
           {agentMode && (
             <>
@@ -344,7 +344,7 @@ function ChatAssetsMenu() {
           {/* Artifacts section */}
           {artifacts && artifacts.length > 0 && (
             <div className="p-1.5">
-              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-text-3 font-semibold">
                 Artifacts
               </div>
               {artifacts.map((art) => {
@@ -353,11 +353,11 @@ function ChatAssetsMenu() {
                   <button
                     key={art.id}
                     onClick={() => { setActiveArtifact(art.id); setOpen(false); }}
-                    className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left hover:bg-white/[0.06] transition-colors"
+                    className="motion-row flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left hover:bg-white/5 transition-colors"
                   >
-                    <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
-                    <span className="text-[12.5px] text-[#d5d5d5] truncate flex-1">{art.title}</span>
-                    <span className="text-[10px] text-[#888] bg-white/5 px-1.5 py-0.5 rounded shrink-0">
+                    <Icon size={13} strokeWidth={1.75} className="text-text-3 shrink-0" />
+                    <span className="text-[12.5px] text-text-2 truncate flex-1">{art.title}</span>
+                    <span className="text-[10px] text-text-4 bg-white/5 px-1.5 py-0.5 rounded shrink-0">
                       {art.kind === "html" ? "HTML" : art.kind === "python" ? "Python" : "LaTeX"}
                     </span>
                   </button>
@@ -374,7 +374,7 @@ function ChatAssetsMenu() {
           {/* Files section (user-uploaded attachments) — hide in plain chat mode */}
           {attachments.length > 0 && (agentMode || designMode) && (
             <div className="p-1.5">
-              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-[#8e8e8e] font-semibold">
+              <div className="px-2.5 py-1.5 text-[10.5px] uppercase tracking-wider text-text-3 font-semibold">
                 Attached files
               </div>
               {attachments.map((att, i) => {
@@ -383,7 +383,7 @@ function ChatAssetsMenu() {
                 return (
                   <div
                     key={`${att.messageId}-${i}`}
-                    className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg hover:bg-white/[0.06] transition-colors"
+                    className="motion-row flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg hover:bg-white/5 transition-colors"
                   >
                     {isImage ? (
                       <img
@@ -392,10 +392,10 @@ function ChatAssetsMenu() {
                         className="w-6 h-6 rounded object-cover shrink-0 border border-white/10"
                       />
                     ) : (
-                      <Icon size={13} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" />
+                      <Icon size={13} strokeWidth={1.75} className="text-text-3 shrink-0" />
                     )}
-                    <span className="text-[12.5px] text-[#d5d5d5] truncate flex-1">{att.filename}</span>
-                    <span className="text-[10px] text-[#888] shrink-0">
+                    <span className="text-[12.5px] text-text-2 truncate flex-1">{att.filename}</span>
+                    <span className="text-[10px] text-text-4 shrink-0">
                       {att.mimeType.split("/")[1]?.toUpperCase() ?? "FILE"}
                     </span>
                   </div>
@@ -407,8 +407,8 @@ function ChatAssetsMenu() {
           {/* Empty state */}
           {!hasContent && (
             <div className="flex flex-col items-center gap-2 py-6 px-4 text-center">
-              <Paperclip size={16} strokeWidth={1.5} className="text-[#666]" />
-              <p className="text-[12px] text-[#888]">No artifacts or files in this chat yet.</p>
+              <Paperclip size={16} strokeWidth={1.5} className="text-text-4" />
+              <p className="text-[12px] text-text-4">No artifacts or files in this chat yet.</p>
             </div>
           )}
         </div>

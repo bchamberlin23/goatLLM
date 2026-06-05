@@ -42,7 +42,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
               type="button"
               onClick={() => setProfile(item.id)}
               className={`rounded px-2 py-1 text-[10.5px] font-medium transition-colors ${
-                profile === item.id ? "bg-[#f59e42]/15 text-[#f5c18c]" : "text-text-3 hover:bg-white/[0.06]"
+                profile === item.id ? "bg-accent/15 text-accent" : "text-text-3 hover:bg-white/5"
               }`}
             >
               {item.label}
@@ -79,7 +79,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             }
           }}
           placeholder="Add required check"
-          className="min-w-0 flex-1 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+          className="min-w-0 flex-1 rounded-md border border-hairline-strong bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none placeholder:text-text-4 focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
         />
         <button
           type="button"
@@ -92,7 +92,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
       {policy.customCommands.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {policy.customCommands.map((command) => (
-            <span key={command} className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-3">
+            <span key={command} className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/5 px-1.5 py-0.5 text-[10.5px] text-text-3">
               {command}
               <button
                 type="button"
@@ -111,7 +111,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
           <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Learned checks</div>
           <div className="flex flex-wrap gap-1">
             {projectCheckMemory.successfulCommands.map((command) => (
-              <span key={command} className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-3">
+              <span key={command} className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/5 px-1.5 py-0.5 text-[10.5px] text-text-3">
                 {command}
                 <button
                   type="button"
@@ -133,7 +133,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
         <div className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">Path rules</div>
         <div className="flex flex-wrap gap-1">
           {pathRules.map((rule) => (
-            <span key={`${rule.pattern}-${rule.action}`} className="rounded-md border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-3">
+            <span key={`${rule.pattern}-${rule.action}`} className="rounded-md border border-hairline bg-white/5 px-1.5 py-0.5 text-[10.5px] text-text-3">
               {rule.pattern}: {rule.action}
             </span>
           ))}
@@ -151,7 +151,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={1}
             value={budget.maxToolCalls}
             onChange={(event) => setBudget({ ...budget, maxToolCalls: Number(event.currentTarget.value) || 1 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+            className="min-w-0 rounded-md border border-hairline-strong bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
           />
           <input
             aria-label="Max subagents"
@@ -159,7 +159,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={0}
             value={budget.maxSubagents}
             onChange={(event) => setBudget({ ...budget, maxSubagents: Number(event.currentTarget.value) || 0 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+            className="min-w-0 rounded-md border border-hairline-strong bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
           />
           <input
             aria-label="Max minutes"
@@ -167,7 +167,7 @@ export function AgentPolicyPanel({ embedded = false }: { embedded?: boolean }) {
             min={1}
             value={budget.maxMinutes}
             onChange={(event) => setBudget({ ...budget, maxMinutes: Number(event.currentTarget.value) || 1 })}
-            className="min-w-0 rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+            className="min-w-0 rounded-md border border-hairline-strong bg-black/20 px-2 py-1 text-[11px] text-text-2 outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
           />
         </div>
         <div className="text-[10.5px] text-text-4">{applyBudgetControls(budget)}</div>

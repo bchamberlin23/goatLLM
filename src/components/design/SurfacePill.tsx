@@ -48,7 +48,7 @@ export function SurfacePill() {
         title={`Surface — ${active?.name ?? "none picked"}`}
         className={`flex items-center gap-1.5 px-2 h-7 rounded-full border text-[12px] font-medium transition-colors shrink-0 ${
           active
-            ? "bg-[#f59e42]/[0.08] border-[#f59e42]/30 text-[#ececec] hover:bg-[#f59e42]/[0.12]"
+            ? "bg-accent/[0.08] border-accent/30 text-text-1 hover:bg-accent/[0.12]"
             : "control-pill"
         }`}
       >
@@ -59,19 +59,19 @@ export function SurfacePill() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-[fadeIn_120ms_ease]">
+        <div className="motion-reveal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div
             role="dialog"
             aria-label="Pick a surface"
-            className="modal-surface relative w-full max-w-[960px] max-h-[85vh] overflow-y-auto rounded-2xl m-4 animate-[fadeIn_150ms_ease]"
+            className="modal-surface motion-surface-in relative w-full max-w-[960px] max-h-[85vh] overflow-y-auto rounded-2xl m-4"
           >
             {/* Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[#1c1c1e]/90 backdrop-blur-xl border-b border-white/[0.06] rounded-t-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-surface-3/90 backdrop-blur-xl border-b border-hairline rounded-t-2xl">
               <div>
-                <h1 className="text-[18px] font-medium text-[#ececec]">
+                <h1 className="text-[18px] font-medium text-text-1">
                   Pick a surface to design.
                 </h1>
-                <p className="mt-1 text-[12px] text-[#a0a0a0]">
+                <p className="mt-1 text-[12px] text-text-3">
                   Each skill ships a seed template, brand checklist, and anti-slop rules.
                 </p>
               </div>
@@ -147,7 +147,7 @@ function SurfaceGrid({
           <section key={scenario} aria-labelledby={`surface-grid-${scenario}`}>
             <h2
               id={`surface-grid-${scenario}`}
-              className="text-[10px] uppercase tracking-[0.12em] font-semibold text-[#888] mb-2.5"
+              className="text-[10px] uppercase tracking-[0.12em] font-semibold text-text-4 mb-2.5"
             >
               {SCENARIO_META[scenario].label}
             </h2>
@@ -186,26 +186,26 @@ function SkillCard({
       aria-pressed={active}
       className={`soft-card group relative flex flex-col text-left rounded-xl overflow-hidden transition-all ${
         active
-          ? "border-[#f59e42]/60 bg-[#f59e42]/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
-          : "hover:border-white/[0.12] hover:bg-white/[0.06]"
+          ? "border-accent/60 bg-accent/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
+          : "hover:border-hairline-strong hover:bg-white/5"
       }`}
     >
       <div
-        className="relative w-full bg-sunken border-b border-white/[0.04]"
+        className="relative w-full bg-sunken border-b border-hairline"
         style={{ aspectRatio: "16/10" }}
       >
         <SkillPreviewSketch skill={skill} />
       </div>
       <div className="px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] font-medium text-[#ececec]">
+          <span className="text-[13px] font-medium text-text-1">
             {skill.name}
           </span>
-          <span className="text-[10px] uppercase tracking-wider text-[#888] font-mono">
+          <span className="text-[10px] uppercase tracking-wider text-text-4 font-mono">
             {skill.mode}
           </span>
         </div>
-        <p className="mt-1 text-[11.5px] text-[#a0a0a0] leading-snug line-clamp-2">
+        <p className="mt-1 text-[11.5px] text-text-3 leading-snug line-clamp-2">
           {skill.description}
         </p>
       </div>

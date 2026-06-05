@@ -23,7 +23,7 @@ export function ToggleRow({
         <div className="flex items-center gap-2.5">
           <span className="text-[14px] font-medium text-text-1">{title}</span>
           <span className={`flex items-center gap-1.5 text-[11px] ${enabled ? "text-accent" : "text-text-3"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${enabled ? "bg-accent" : "bg-[#4a4a4a]"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${enabled ? "bg-accent" : "bg-text-4"}`} />
             {enabled ? "On" : "Off"}
           </span>
         </div>
@@ -37,14 +37,14 @@ export function ToggleRow({
           aria-checked={enabled}
           aria-label={title}
           onClick={() => onToggle(!enabled)}
-          className={`relative w-10 h-6 rounded-full border transition-all ${
+          className={`motion-feedback relative w-10 h-6 rounded-full border transition-all ${
             enabled
               ? "bg-accent border-accent shadow-[0_8px_20px_-10px_rgba(245,158,66,0.9)]"
-              : "bg-white/[0.10] border-white/[0.08] hover:bg-white/[0.14]"
+              : "bg-white/5 border-hairline-strong hover:bg-white/10"
           }`}
         >
           <span
-            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-[#f7f3ed] shadow-[0_2px_8px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.65)] transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`}
+            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-bg shadow-[0_2px_8px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.65)] transition-transform duration-[var(--d-short)] ease-[var(--ease-move)] ${enabled ? "translate-x-4" : "translate-x-0"}`}
           />
         </button>
       </div>

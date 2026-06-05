@@ -30,14 +30,14 @@ export function AgentTurnTimelineHeader({
       <ChevronRight
         size={14}
         strokeWidth={2}
-        className={`shrink-0 text-[#777] transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+        className={`shrink-0 text-text-4 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
         aria-hidden
       />
       <span>Run timeline</span>
       {durationLabel !== "0s" && (
         <>
-          <span className="text-[#555] font-light">•</span>
-          <span className="font-mono text-[11px] text-[#777] tabular-nums">{durationLabel}</span>
+          <span className="text-text-4 font-light">•</span>
+          <span className="font-mono text-[11px] text-text-4 tabular-nums">{durationLabel}</span>
         </>
       )}
     </button>
@@ -106,9 +106,9 @@ export function AgentTurnRollbackButton({ message }: { message: Message }) {
           <div className="text-[12px] font-medium text-text-2">Rollback preview</div>
           <div className="mt-2 flex flex-col gap-1">
             {rollbackPreview.map((file) => (
-              <div key={file.path} className="rounded-md border border-white/[0.06] bg-white/[0.025] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
+              <div key={file.path} className="rounded-md border border-hairline bg-white/[0.025] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)]">
                 <div className="flex min-w-0 items-center gap-2 text-[11.5px] text-text-3">
-                  <span className="rounded border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-4">
+                  <span className="rounded border border-hairline bg-white/5 px-1.5 py-0.5 text-[10.5px] text-text-4">
                     {file.action}
                   </span>
                   <code className="min-w-0 truncate font-mono">{file.path}</code>

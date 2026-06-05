@@ -54,7 +54,7 @@ export function WorkspaceHealthPanel() {
   };
 
   return (
-    <div className="w-full max-w-[720px] rounded-lg border border-white/[0.07] bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+    <div className="w-full max-w-[720px] rounded-lg border border-hairline bg-white/5 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Activity size={13} strokeWidth={1.8} className="shrink-0 text-text-4" aria-hidden />
@@ -68,7 +68,7 @@ export function WorkspaceHealthPanel() {
         </div>
       </div>
       <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.06] bg-white/[0.04] px-1.5 py-0.5 text-[10.5px] text-text-3">
+        <span className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/5 px-1.5 py-0.5 text-[10.5px] text-text-3">
           <FileDiff size={10} strokeWidth={1.8} aria-hidden />
           {summary.changedFiles.length} {summary.changedFiles.length === 1 ? "file" : "files"} changed
         </span>

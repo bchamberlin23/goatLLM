@@ -80,7 +80,7 @@ export function McpSettingsSection({ embedded = false }: { embedded?: boolean })
       )}
 
       {servers.length === 0 && (
-        <div className="text-[13px] text-[#8e8e8e] py-3 text-center border border-dashed border-white/5 rounded-lg">
+        <div className="text-[13px] text-text-3 py-3 text-center border border-dashed border-white/5 rounded-lg">
           No MCP servers configured.
         </div>
       )}
@@ -127,14 +127,14 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
   );
 
   return (
-    <div className="bg-[#2a2a2c] border border-white/5 rounded-lg p-3">
+    <div className="bg-surface-1 border border-white/5 rounded-lg p-3">
       {isEditing ? (
         <div className="flex flex-col gap-2">
           <input
             type="text"
             value={server.label}
             onChange={(e) => onUpdate({ label: e.target.value })}
-            className="bg-[#1a1a1c] border border-white/10 rounded px-2 py-1 text-[13px] text-[#ececec] focus:outline-none focus:border-[#f59e42]/50"
+            className="bg-bg border border-white/10 rounded px-2 py-1 text-[13px] text-text-1 focus:outline-none focus:border-accent/50"
             placeholder="Server label"
           />
           <div className="flex gap-2">
@@ -142,8 +142,8 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
               onClick={() => onUpdate({ transport: "http" })}
               className={`flex items-center gap-1 px-2 py-1 rounded text-[12px] transition-colors ${
                 server.transport === "http"
-                  ? "bg-[#f59e42]/15 text-[#f59e42] border border-[#f59e42]/30"
-                  : "bg-white/5 text-[#a0a0a0] border border-transparent hover:text-[#ececec]"
+                  ? "bg-accent/15 text-accent border border-accent/30"
+                  : "bg-white/5 text-text-3 border border-transparent hover:text-text-1"
               }`}
             >
               <Wifi size={12} />
@@ -153,8 +153,8 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
               onClick={() => onUpdate({ transport: "stdio" })}
               className={`flex items-center gap-1 px-2 py-1 rounded text-[12px] transition-colors ${
                 server.transport === "stdio"
-                  ? "bg-[#f59e42]/15 text-[#f59e42] border border-[#f59e42]/30"
-                  : "bg-white/5 text-[#a0a0a0] border border-transparent hover:text-[#ececec]"
+                  ? "bg-accent/15 text-accent border border-accent/30"
+                  : "bg-white/5 text-text-3 border border-transparent hover:text-text-1"
               }`}
             >
               <Terminal size={12} />
@@ -167,7 +167,7 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
               type="text"
               value={server.url ?? ""}
               onChange={(e) => onUpdate({ url: e.target.value })}
-              className="bg-[#1a1a1c] border border-white/10 rounded px-2 py-1 text-[12px] text-[#ececec] focus:outline-none focus:border-[#f59e42]/50 font-mono"
+              className="bg-bg border border-white/10 rounded px-2 py-1 text-[12px] text-text-1 focus:outline-none focus:border-accent/50 font-mono"
               placeholder="http://localhost:3000/mcp"
             />
           ) : (
@@ -176,30 +176,30 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
                 type="text"
                 value={server.command ?? ""}
                 onChange={(e) => onUpdate({ command: e.target.value })}
-                className="flex-1 bg-[#1a1a1c] border border-white/10 rounded px-2 py-1 text-[12px] text-[#ececec] focus:outline-none focus:border-[#f59e42]/50 font-mono"
+                className="flex-1 bg-bg border border-white/10 rounded px-2 py-1 text-[12px] text-text-1 focus:outline-none focus:border-accent/50 font-mono"
                 placeholder="command"
               />
               <input
                 type="text"
                 value={(server.args ?? []).join(" ")}
                 onChange={(e) => onUpdate({ args: e.target.value.split(/\s+/).filter(Boolean) })}
-                className="flex-1 bg-[#1a1a1c] border border-white/10 rounded px-2 py-1 text-[12px] text-[#ececec] focus:outline-none focus:border-[#f59e42]/50 font-mono"
+                className="flex-1 bg-bg border border-white/10 rounded px-2 py-1 text-[12px] text-text-1 focus:outline-none focus:border-accent/50 font-mono"
                 placeholder="args"
               />
             </div>
           )}
 
           <div className="flex items-center justify-between pt-1">
-            <label className="flex items-center gap-1.5 text-[12px] text-[#a0a0a0] cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-[12px] text-text-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={server.trusted ?? false}
                 onChange={(e) => onUpdate({ trusted: e.target.checked })}
-                className="accent-[#f59e42]"
+                className="accent-accent"
               />
               Trusted (auto-approve read-only tools)
             </label>
-            <span className="text-[11px] text-[#888888]">
+            <span className="text-[11px] text-text-4">
               {formatTokenEstimate(tokenEst)}
             </span>
           </div>
@@ -207,14 +207,14 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
           <div className="flex justify-between pt-1">
             <button
               onClick={onRemove}
-              className="flex items-center gap-1 text-[12px] text-[#f87171]/70 hover:text-[#f87171] transition-colors"
+              className="flex items-center gap-1 text-[12px] text-error/70 hover:text-error transition-colors"
             >
               <Trash2 size={12} />
               Remove
             </button>
             <button
               onClick={onToggleEdit}
-              className="text-[12px] text-[#a0a0a0] hover:text-[#ececec] transition-colors"
+              className="text-[12px] text-text-3 hover:text-text-1 transition-colors"
             >
               Done
             </button>
@@ -223,20 +223,20 @@ function McpServerCard({ server, isEditing, onToggleEdit, onUpdate, onRemove }: 
       ) : (
         <div className="flex items-center justify-between cursor-pointer" onClick={onToggleEdit}>
           <div className="flex items-center gap-2">
-            {server.transport === "http" ? <Wifi size={13} className="text-[#a0a0a0]" /> : <Terminal size={13} className="text-[#a0a0a0]" />}
+            {server.transport === "http" ? <Wifi size={13} className="text-text-3" /> : <Terminal size={13} className="text-text-3" />}
             <div>
-              <div className="text-[13px] text-[#ececec]">{server.label}</div>
-              <div className="text-[11px] text-[#8e8e8e] font-mono">
+              <div className="text-[13px] text-text-1">{server.label}</div>
+              <div className="text-[11px] text-text-3 font-mono">
                 {server.transport === "http" ? server.url : (server.command ?? "")}
               </div>
             </div>
             {server.trusted && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/20">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20">
                 trusted
               </span>
             )}
           </div>
-          <span className="text-[11px] text-[#888888]">{formatTokenEstimate(tokenEst)}</span>
+          <span className="text-[11px] text-text-4">{formatTokenEstimate(tokenEst)}</span>
         </div>
       )}
     </div>

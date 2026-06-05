@@ -52,7 +52,7 @@ export function CritiqueButton({ code }: { code: string }) {
         <span>{running ? "Scoring…" : result ? `${result.overall.toFixed(1)}/5` : "Critique"}</span>
       </button>
       {error && (
-        <div className="popover-surface absolute top-full right-0 mt-1.5 w-[260px] rounded-lg border-[#f87171]/30 px-3 py-2 z-50 text-[11.5px] text-[#f87171]">
+        <div className="popover-surface absolute top-full right-0 mt-1.5 w-[260px] rounded-lg border-error/30 px-3 py-2 z-50 text-[11.5px] text-error">
           {error}
         </div>
       )}
@@ -79,13 +79,13 @@ function CritiquePopover({
     <div
       role="dialog"
       aria-label="Critique scores"
-      className="popover-surface absolute top-full right-0 mt-1.5 w-[300px] rounded-xl z-50 animate-[fadeIn_120ms_ease] overflow-hidden"
+      className="popover-surface motion-popover-in absolute top-full right-0 mt-1.5 w-[300px] rounded-xl z-50 overflow-hidden"
     >
-      <div className="px-3.5 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
-        <span className="text-[10.5px] uppercase tracking-[0.12em] text-[#888] font-semibold">
+      <div className="px-3.5 py-2.5 border-b border-hairline flex items-center justify-between">
+        <span className="text-[10.5px] uppercase tracking-[0.12em] text-text-4 font-semibold">
           Critique
         </span>
-        <span className="font-mono text-[12px] tabular-nums text-[#ececec]">
+        <span className="font-mono text-[12px] tabular-nums text-text-1">
           {result.overall.toFixed(1)} / 5
         </span>
       </div>
@@ -95,7 +95,7 @@ function CritiquePopover({
           const low = score < 3;
           return (
             <div key={key} className="flex items-baseline justify-between gap-3">
-              <dt className={low ? "text-[#f87171]" : "text-[#a0a0a0]"}>
+              <dt className={low ? "text-error" : "text-text-3"}>
                 {label}
               </dt>
               <dd className="flex items-center gap-2">
@@ -108,14 +108,14 @@ function CritiquePopover({
                         background:
                           n <= score
                             ? low
-                              ? "#f87171"
-                              : "#f59e42"
+                              ? "var(--error)"
+                              : "var(--accent)"
                             : "rgba(255,255,255,0.08)",
                       }}
                     />
                   ))}
                 </span>
-                <span className="font-mono text-[11px] tabular-nums text-[#ececec] w-3 text-right">
+                <span className="font-mono text-[11px] tabular-nums text-text-1 w-3 text-right">
                   {score}
                 </span>
               </dd>
@@ -123,11 +123,11 @@ function CritiquePopover({
           );
         })}
       </dl>
-      <div className="px-3.5 pb-3 pt-1 text-[11px] text-[#a0a0a0] leading-relaxed">
+      <div className="px-3.5 pb-3 pt-1 text-[11px] text-text-3 leading-relaxed">
         {result.summary}
       </div>
       {result.belowBar.length > 0 && (
-        <div className="px-3.5 py-2 border-t border-white/[0.06] bg-[#f87171]/[0.04] flex items-start gap-1.5 text-[10.5px] text-[#f87171]">
+        <div className="px-3.5 py-2 border-t border-hairline bg-error/[0.04] flex items-start gap-1.5 text-[10.5px] text-error">
           <AlertTriangle size={11} strokeWidth={2} className="mt-px shrink-0" aria-hidden />
           <span>
             {result.belowBar.length} dimension{result.belowBar.length === 1 ? "" : "s"} below the
@@ -138,7 +138,7 @@ function CritiquePopover({
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-2 right-2 text-[10px] text-[#888] hover:text-[#ececec]"
+        className="absolute top-2 right-2 text-[10px] text-text-4 hover:text-text-1"
       >
         ✕
       </button>

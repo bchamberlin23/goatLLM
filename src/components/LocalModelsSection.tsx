@@ -246,12 +246,12 @@ export function LocalModelsSection() {
       )}
 
       {error && (
-        <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-500/[0.06] border border-amber-500/15 rounded-lg text-[12px] text-[#fcd34d] leading-relaxed">
-          <AlertCircle size={13} strokeWidth={1.75} className="shrink-0 mt-px text-[#f59e42]" />
+        <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-500/[0.06] border border-amber-500/15 rounded-lg text-[12px] text-accent leading-relaxed">
+          <AlertCircle size={13} strokeWidth={1.75} className="shrink-0 mt-px text-accent" />
           <span className="whitespace-pre-wrap">{error}</span>
           <button
             onClick={() => setError(null)}
-            className="ml-auto shrink-0 text-[#a0a0a0] hover:text-[#ececec]"
+            className="ml-auto shrink-0 text-text-3 hover:text-text-1"
             aria-label="Dismiss"
           >
             <X size={11} strokeWidth={2} />
@@ -264,11 +264,11 @@ export function LocalModelsSection() {
       {isInstalled && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#888] uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-text-4 uppercase tracking-wider">
               Recommended for your machine
             </span>
             {!isRunning && (
-              <span className="text-[10.5px] text-[#a0a0a0]">
+              <span className="text-[10.5px] text-text-3">
                 Start Ollama to download models
               </span>
             )}
@@ -298,7 +298,7 @@ export function LocalModelsSection() {
           <div className="mt-2 flex items-center gap-1.5">
             <input
               type="text"
-              className="flex-1 h-[28px] px-2.5 bg-[#2c2c2e] border border-white/5 rounded-md text-[12px] text-[#ececec] font-mono outline-none focus:border-white/15 placeholder:text-[#666]"
+              className="flex-1 h-[28px] px-2.5 bg-surface-2 border border-white/5 rounded-md text-[12px] text-text-1 font-mono outline-none focus:border-white/15 placeholder:text-text-4"
               placeholder="Pull any model: e.g. mistral:7b, phi3.5"
               value={customPull}
               onChange={(e) => setCustomPull(e.target.value)}
@@ -313,7 +313,7 @@ export function LocalModelsSection() {
             <button
               onClick={() => void handleCustomPull()}
               disabled={!customPull.trim() || !isRunning}
-              className="shrink-0 h-[28px] px-3 rounded-md text-[12px] font-medium bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="shrink-0 h-[28px] px-3 rounded-md text-[12px] font-medium bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Pull
             </button>
@@ -337,25 +337,25 @@ export function LocalModelsSection() {
 function HardwareCard({ info }: { info: OllamaSystemInfo }) {
   const ramGb = info.ramBytes ? (info.ramBytes / 1024 ** 3).toFixed(0) : "?";
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 bg-[#212122] border border-white/5 rounded-lg">
-      <Cpu size={14} strokeWidth={1.75} className="shrink-0 text-[#a0a0a0]" />
+    <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-3 border border-white/5 rounded-lg">
+      <Cpu size={14} strokeWidth={1.75} className="shrink-0 text-text-3" />
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[12px] text-[#d5d5d5] truncate">
+        <span className="text-[12px] text-text-2 truncate">
           {info.cpuBrand ?? `${info.os} ${info.arch}`}
         </span>
-        <div className="flex items-center gap-3 text-[10.5px] text-[#888] mt-0.5">
+        <div className="flex items-center gap-3 text-[10.5px] text-text-4 mt-0.5">
           <span className="flex items-center gap-1">
             <HardDrive size={10} strokeWidth={1.75} />
             <span className="font-mono tabular-nums">{ramGb} GB RAM</span>
           </span>
           {info.hasGpu && info.gpuName && (
             <span className="flex items-center gap-1 truncate">
-              <Sparkles size={10} strokeWidth={1.75} className="text-[#f59e42]" />
+              <Sparkles size={10} strokeWidth={1.75} className="text-accent" />
               <span className="truncate">{info.gpuName}</span>
             </span>
           )}
           {!info.hasGpu && (
-            <span className="text-[#666]">CPU-only inference</span>
+            <span className="text-text-4">CPU-only inference</span>
           )}
         </div>
       </div>
@@ -386,13 +386,13 @@ function DaemonControlCard({
   let stateColor: string;
   if (isRunning) {
     stateLabel = `Running${status?.version ? ` · v${status.version}` : ""}`;
-    stateColor = "bg-[#34d399]";
+    stateColor = "bg-success";
   } else if (isInstalled) {
     stateLabel = "Installed · stopped";
-    stateColor = "bg-[#a0a0a0]";
+    stateColor = "bg-text-3";
   } else {
     stateLabel = "Not installed";
-    stateColor = "bg-[#4a4a4a]";
+    stateColor = "bg-text-4";
   }
 
   // Sub-line under the title — context-aware so the user knows what we know.
@@ -408,17 +408,17 @@ function DaemonControlCard({
   }
 
   return (
-    <div className="bg-[#212122] border border-white/5 rounded-lg overflow-hidden">
+    <div className="bg-surface-3 border border-white/5 rounded-lg overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-[#ececec]">Ollama</span>
-            <span className="flex items-center gap-1.5 text-[11px] text-[#a0a0a0]">
+            <span className="text-[13px] font-medium text-text-1">Ollama</span>
+            <span className="flex items-center gap-1.5 text-[11px] text-text-3">
               <span className={`w-1.5 h-1.5 rounded-full ${stateColor}`} />
               {stateLabel}
             </span>
           </div>
-          <span className="text-[10.5px] text-[#888] mt-0.5 truncate" title={subline}>
+          <span className="text-[10.5px] text-text-4 mt-0.5 truncate" title={subline}>
             {subline}
           </span>
         </div>
@@ -457,7 +457,7 @@ function DaemonControlCard({
             <button
               onClick={onStop}
               disabled={!!busy}
-              className="h-7 px-3 rounded-md text-[12px] font-medium bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] disabled:opacity-60 transition-colors flex items-center gap-1.5"
+              className="h-7 px-3 rounded-md text-[12px] font-medium bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 disabled:opacity-60 transition-colors flex items-center gap-1.5"
             >
               {busy?.kind === "stop" ? (
                 <Loader2 size={12} strokeWidth={2} className="animate-spin" />
@@ -534,31 +534,31 @@ function SetupGuideCard({
     <div className="soft-card rounded-lg overflow-hidden">
       <div className="px-3 py-2.5 flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
-          <Terminal size={13} strokeWidth={1.75} className="shrink-0 text-[#f59e42]" />
-          <span className="text-[12.5px] font-medium text-[#ececec]">
+          <Terminal size={13} strokeWidth={1.75} className="shrink-0 text-accent" />
+          <span className="text-[12.5px] font-medium text-text-1">
             Install Ollama with one command
           </span>
-          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a0a0a0] uppercase tracking-wider font-mono">
+          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-3 uppercase tracking-wider font-mono">
             {guide.shellLabel}
           </span>
         </div>
 
-        <p className="text-[11.5px] text-[#a0a0a0] leading-relaxed">
+        <p className="text-[11.5px] text-text-3 leading-relaxed">
           {platformBlurb}
         </p>
 
         {/* The command box. Selectable, copyable, monospaced — same shape as
             a terminal line so it's instantly recognizable. */}
         <div className="group relative flex items-stretch gap-1.5">
-          <code className="flex-1 px-2.5 py-2 bg-sunken border border-white/5 rounded-md text-[12px] text-[#ececec] font-mono leading-snug select-all break-all">
+          <code className="flex-1 px-2.5 py-2 bg-sunken border border-white/5 rounded-md text-[12px] text-text-1 font-mono leading-snug select-all break-all">
             {guide.command}
           </code>
           <button
             onClick={handleCopy}
             className={`shrink-0 px-2.5 rounded-md text-[11.5px] font-medium flex items-center gap-1.5 transition-colors ${
               copied
-                ? "bg-[#34d399]/10 text-[#34d399] border border-[#34d399]/30"
-                : "bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] border border-white/5"
+                ? "bg-success/10 text-success border border-success/30"
+                : "bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 border border-white/5"
             }`}
             aria-label="Copy install command"
             title={copied ? "Copied" : "Copy command"}
@@ -577,14 +577,14 @@ function SetupGuideCard({
           </button>
         </div>
 
-        <ol className="text-[11.5px] text-[#a0a0a0] leading-relaxed pl-4 list-decimal flex flex-col gap-0.5 marker:text-[#666]">
+        <ol className="text-[11.5px] text-text-3 leading-relaxed pl-4 list-decimal flex flex-col gap-0.5 marker:text-text-4">
           <li>
-            Open <span className="text-[#d5d5d5]">{guide.shellLabel}</span>
+            Open <span className="text-text-2">{guide.shellLabel}</span>
             {guide.platform === "windows" ? " (Win+R, type 'powershell', Enter)." : "."}
           </li>
           <li>Paste the command and press Enter.</li>
           <li>
-            Come back here and click <span className="text-[#d5d5d5]">Recheck</span>.
+            Come back here and click <span className="text-text-2">Recheck</span>.
             We'll detect it automatically too.
           </li>
         </ol>
@@ -606,7 +606,7 @@ function SetupGuideCard({
             href={guide.docsUrl}
             target="_blank"
             rel="noreferrer"
-            className="h-7 px-2.5 rounded-md text-[11.5px] font-medium bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] transition-colors flex items-center gap-1.5"
+            className="h-7 px-2.5 rounded-md text-[11.5px] font-medium bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 transition-colors flex items-center gap-1.5"
           >
             <ExternalLink size={11} strokeWidth={1.75} />
             Read upstream docs
@@ -644,15 +644,15 @@ function ModelRow({
       : null;
 
   return (
-    <div className="bg-[#212122] border border-white/5 rounded-lg overflow-hidden">
+    <div className="bg-surface-3 border border-white/5 rounded-lg overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[13px] font-medium text-[#ececec]">{model.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#888] font-mono">
+            <span className="text-[13px] font-medium text-text-1">{model.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-4 font-mono">
               {model.params}
             </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#888]">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-4">
               {model.use}
             </span>
             {fit !== "fits" && (
@@ -661,14 +661,14 @@ function ModelRow({
               </span>
             )}
             {installed && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#34d399]/10 text-[#34d399] font-medium flex items-center gap-1">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium flex items-center gap-1">
                 <Check size={9} strokeWidth={2.5} />
                 Installed
               </span>
             )}
           </div>
-          <div className="text-[11px] text-[#a0a0a0] mt-0.5 truncate">{model.blurb}</div>
-          <div className="text-[10.5px] text-[#666] mt-0.5 font-mono tabular-nums">
+          <div className="text-[11px] text-text-3 mt-0.5 truncate">{model.blurb}</div>
+          <div className="text-[10.5px] text-text-4 mt-0.5 font-mono tabular-nums">
             {model.id} · ~{model.sizeGb}GB · needs ~{model.ramGb}GB RAM
           </div>
         </div>
@@ -677,14 +677,14 @@ function ModelRow({
           {isPulling ? (
             <button
               onClick={onCancel}
-              className="h-7 px-2.5 rounded-md text-[11.5px] font-medium bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] transition-colors"
+              className="h-7 px-2.5 rounded-md text-[11.5px] font-medium bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 transition-colors"
             >
               Cancel
             </button>
           ) : installed ? (
             <button
               onClick={onDelete}
-              className="w-7 h-7 flex items-center justify-center rounded text-[#666] hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded text-text-4 hover:text-error hover:bg-red-500/10 transition-colors"
               aria-label={`Remove ${model.name}`}
               title="Remove"
             >
@@ -696,8 +696,8 @@ function ModelRow({
               disabled={!daemonRunning || fit === "too-big"}
               className={`h-7 px-3 rounded-md text-[12px] font-medium transition-colors flex items-center gap-1.5 ${
                 fit === "too-big"
-                  ? "bg-white/5 text-[#666] cursor-not-allowed"
-                  : "bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] disabled:opacity-40 disabled:cursor-not-allowed"
+                  ? "bg-white/5 text-text-4 cursor-not-allowed"
+                  : "bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 disabled:opacity-40 disabled:cursor-not-allowed"
               }`}
               title={
                 !daemonRunning
@@ -717,7 +717,7 @@ function ModelRow({
       {/* Pull progress */}
       {isPulling && pullProgress && (
         <div className="border-t border-white/5 px-3 py-2 flex flex-col gap-1.5 bg-black/10">
-          <div className="flex items-center justify-between text-[11px] text-[#a0a0a0]">
+          <div className="flex items-center justify-between text-[11px] text-text-3">
             <span className="truncate">{pullProgress.status || "Pulling…"}</span>
             {pullProgress.total && (
               <span className="font-mono tabular-nums shrink-0 ml-2">
@@ -727,7 +727,7 @@ function ModelRow({
           </div>
           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#f59e42] transition-[width] duration-200"
+              className="h-full bg-accent transition-[width] duration-200"
               style={{ width: pullPct != null ? `${pullPct}%` : "8%" }}
             />
           </div>
@@ -750,22 +750,22 @@ function ExtraInstalledList({
   if (extras.length === 0) return null;
   return (
     <div className="mt-2 flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold text-[#888] uppercase tracking-wider">
+      <span className="text-[11px] font-semibold text-text-4 uppercase tracking-wider">
         Other installed
       </span>
       <div className="flex flex-col gap-1">
         {extras.map((m) => (
           <div
             key={m.id}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 bg-[#212122] border border-white/5 rounded-md"
+            className="flex items-center gap-2.5 px-2.5 py-1.5 bg-surface-3 border border-white/5 rounded-md"
           >
-            <span className="text-[12px] text-[#d5d5d5] font-mono truncate flex-1">{m.id}</span>
-            <span className="text-[10.5px] text-[#888] font-mono tabular-nums">
+            <span className="text-[12px] text-text-2 font-mono truncate flex-1">{m.id}</span>
+            <span className="text-[10.5px] text-text-4 font-mono tabular-nums">
               {formatBytes(m.size)}
             </span>
             <button
               onClick={() => onDelete(m.id)}
-              className="w-6 h-6 flex items-center justify-center rounded text-[#666] hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded text-text-4 hover:text-error hover:bg-red-500/10 transition-colors"
               aria-label={`Remove ${m.id}`}
               title="Remove"
             >
@@ -781,13 +781,13 @@ function ExtraInstalledList({
 function fitDisplay(fit: ModelFit): { label: string; classes: string } {
   switch (fit) {
     case "recommended":
-      return { label: "Recommended", classes: "bg-[#34d399]/10 text-[#34d399]" };
+      return { label: "Recommended", classes: "bg-success/10 text-success" };
     case "fits":
-      return { label: "Will run", classes: "bg-white/5 text-[#a0a0a0]" };
+      return { label: "Will run", classes: "bg-white/5 text-text-3" };
     case "tight":
-      return { label: "Tight fit", classes: "bg-[#f59e42]/10 text-[#f59e42]" };
+      return { label: "Tight fit", classes: "bg-accent/10 text-accent" };
     case "too-big":
-      return { label: "Not enough RAM", classes: "bg-[#f87171]/10 text-[#f87171]" };
+      return { label: "Not enough RAM", classes: "bg-error/10 text-error" };
   }
 }
 

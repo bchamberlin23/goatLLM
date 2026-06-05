@@ -117,12 +117,12 @@ export function FileReferencePicker({
 
   return (
     <div
-      className="popover-surface fixed z-[150] w-[320px] max-h-[240px] overflow-hidden rounded-xl animate-[fadeIn_100ms_ease]"
+      className="popover-surface motion-menu-in fixed z-[150] w-[320px] max-h-[240px] overflow-hidden rounded-xl"
       style={{ top: position.top, left: position.left }}
     >
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] bg-white/[0.02]">
-        <Search size={12} className="text-[#9a9a9a] shrink-0" />
-        <span className="text-[11px] text-[#9a9a9a]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-hairline bg-white/[0.02]">
+        <Search size={12} className="text-text-3 shrink-0" />
+        <span className="text-[11px] text-text-3">
           {loading ? "Loading files…" : `Files matching "${query || '*'}"`}
         </span>
       </div>
@@ -130,25 +130,25 @@ export function FileReferencePicker({
         {filtered.map((file, i) => (
           <button
             key={file.path}
-            className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-[12.5px] transition-colors ${
+            className={`motion-row flex items-center gap-2 w-full px-3 py-1.5 text-left text-[12.5px] transition-colors ${
               i === selectedIndex
-                ? "bg-white/[0.08] text-[#ececec]"
-                : "text-[#d5d5d5] hover:bg-white/[0.05]"
+                ? "bg-white/5 text-text-1"
+                : "text-text-2 hover:bg-white/5"
             }`}
             onClick={() => onSelect(file.path)}
             onMouseEnter={() => setSelectedIndex(i)}
           >
             {file.isDir ? (
-              <Folder size={13} className="text-[#a0a0a0] shrink-0" />
+              <Folder size={13} className="text-text-3 shrink-0" />
             ) : (
-              <File size={13} className="text-[#a0a0a0] shrink-0" />
+              <File size={13} className="text-text-3 shrink-0" />
             )}
             <span className="truncate">{file.path}</span>
           </button>
         ))}
       </div>
-      <div className="px-3 py-1.5 border-t border-white/[0.06] bg-white/[0.02]">
-        <span className="text-[10px] text-[#888]">
+      <div className="px-3 py-1.5 border-t border-hairline bg-white/[0.02]">
+        <span className="text-[10px] text-text-4">
           ↑↓ navigate · Tab/Enter select · Esc dismiss
         </span>
       </div>

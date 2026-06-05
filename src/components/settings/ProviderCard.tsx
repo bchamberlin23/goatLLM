@@ -86,7 +86,7 @@ export function ProviderCard({
   return (
     <div className={`soft-card rounded-xl overflow-hidden transition-all ${hasKey ? "border-green-500/20" : ""}`}>
       <div
-        className={`flex items-center gap-2.5 px-3 py-2.5 ${hasKey ? "cursor-pointer hover:bg-white/[0.045]" : ""} transition-colors`}
+        className={`flex items-center gap-2.5 px-3 py-2.5 ${hasKey ? "cursor-pointer hover:bg-white/5" : ""} transition-colors`}
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.closest("input, button")) return;
@@ -101,15 +101,15 @@ export function ProviderCard({
             aria-hidden="true"
           />
         )}
-        <span className="text-[13px] font-medium text-[#ececec]">{provider.name}</span>
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasKey ? "bg-[#34d399]" : "bg-[#4a4a4a]"}`} />
+        <span className="text-[13px] font-medium text-text-1">{provider.name}</span>
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${hasKey ? "bg-success" : "bg-text-4"}`} />
         {hasKey && allModels.length > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-text-4 font-mono">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-4 font-mono">
             {enabledCount}/{allModels.length}
           </span>
         )}
         {justSaved && (
-          <span className="text-[10px] text-[#34d399] font-medium animate-[fadeIn_180ms_ease-out]">Saved</span>
+          <span className="motion-reveal text-[10px] text-success font-medium">Saved</span>
         )}
         <div className="flex-1" />
         {!provider.noKey && (
@@ -125,7 +125,7 @@ export function ProviderCard({
               <div className="flex items-center gap-1">
                 <input
                   type={showKey ? "text" : "password"}
-                  className="w-[160px] h-[26px] px-2 bg-white/[0.06] border border-white/10 rounded text-[11px] text-[#ececec] placeholder:text-text-4 font-mono outline-none focus:border-[#f59e42]/45 focus:ring-1 focus:ring-[#f59e42]/20"
+                  className="w-[160px] h-[26px] px-2 bg-white/5 border border-white/10 rounded text-[11px] text-text-1 placeholder:text-text-4 font-mono outline-none focus:border-accent/45 focus:ring-1 focus:ring-accent/20"
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
                   onPaste={handlePasteKey}
@@ -135,7 +135,7 @@ export function ProviderCard({
                   aria-label={`${provider.name} API key`}
                 />
                 <button
-                  className={`control-icon w-6 h-6 flex items-center justify-center rounded transition-colors ${canSaveKey ? "text-[#34d399] hover:bg-[#34d399]/10" : "opacity-45 cursor-not-allowed"}`}
+                  className={`control-icon w-6 h-6 flex items-center justify-center rounded transition-colors ${canSaveKey ? "text-success hover:bg-success/10" : "opacity-45 cursor-not-allowed"}`}
                   onClick={handleSaveKey}
                   disabled={!canSaveKey}
                   aria-label="Save key"
@@ -151,7 +151,7 @@ export function ProviderCard({
                   {showKey ? <EyeOff size={12} strokeWidth={1.5} /> : <Eye size={12} strokeWidth={1.5} />}
                 </button>
                 <button
-                  className="control-icon w-6 h-6 flex items-center justify-center rounded hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
+                  className="control-icon w-6 h-6 flex items-center justify-center rounded hover:text-error hover:bg-red-500/10 transition-colors"
                   onClick={() => { setKey(""); onRemove(); setShowKeyInput(false); }}
                   aria-label="Remove"
                 >
@@ -164,14 +164,14 @@ export function ProviderCard({
       </div>
 
       {hasKey && expanded && allModels.length > 0 && (
-        <div className="border-t border-white/[0.06] px-3 py-2.5 flex flex-col gap-1.5 bg-black/10">
+        <div className="motion-expand-content border-t border-hairline px-3 py-2.5 flex flex-col gap-1.5 bg-black/10">
           {allModels.length > 6 && (
             <div className="flex items-center gap-1.5">
-              <div className="flex-1 flex items-center gap-1.5 px-2 h-[26px] bg-white/[0.055] border border-white/10 rounded">
+              <div className="flex-1 flex items-center gap-1.5 px-2 h-[26px] bg-white/5 border border-white/10 rounded">
                 <Search size={10} strokeWidth={2} className="text-text-4 shrink-0" />
                 <input
                   type="text"
-                  className="flex-1 bg-transparent text-[11px] text-[#ececec] placeholder:text-text-4 outline-none border-0"
+                  className="flex-1 bg-transparent text-[11px] text-text-1 placeholder:text-text-4 outline-none border-0"
                   placeholder="Filter…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -185,16 +185,16 @@ export function ProviderCard({
               return (
                 <label
                   key={m.id}
-                  className="flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-white/[0.03] border-b border-white/[0.02] last:border-b-0 transition-colors"
+                  className="motion-row flex items-center gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-white/[0.03] border-b border-hairline last:border-b-0 transition-colors"
                 >
                   <span
                     className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center transition-colors ${
                       checked
-                        ? "bg-[#f59e42] border border-[#f59e42]"
+                        ? "bg-accent border border-accent"
                         : "border border-white/15 bg-white/[0.02]"
                     }`}
                   >
-                    {checked && <Check size={9} strokeWidth={3} className="text-bg" />}
+                    {checked && <Check size={9} strokeWidth={3} className="motion-pop-in text-bg" />}
                   </span>
                   <input
                     type="checkbox"
@@ -202,7 +202,7 @@ export function ProviderCard({
                     checked={checked}
                     onChange={() => toggleModel(m.id)}
                   />
-                  <span className="text-[11.5px] text-[#d5d5d5] truncate">{m.name}</span>
+                  <span className="text-[11.5px] text-text-2 truncate">{m.name}</span>
                   <span className="text-[10px] font-mono text-text-4 truncate ml-auto">{m.id}</span>
                 </label>
               );

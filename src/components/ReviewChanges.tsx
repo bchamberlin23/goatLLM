@@ -70,41 +70,41 @@ export function ReviewChanges({ message }: { message: Message }) {
   const showCounts = gitAvailable && entries.length > 0 && !loading;
 
   return (
-    <div className="mt-3 rounded-xl border border-white/[0.06] bg-[#161618] overflow-hidden">
+    <div className="mt-3 rounded-xl border border-hairline bg-sunken overflow-hidden">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 w-full px-3.5 py-2.5 text-left hover:bg-white/[0.04] transition-colors"
+        className="flex items-center gap-2 w-full px-3.5 py-2.5 text-left hover:bg-white/5 transition-colors"
         aria-expanded={expanded}
       >
         <ChevronRight
           size={12}
           strokeWidth={2}
-          className={`text-[#888] shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+          className={`text-text-4 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
           aria-hidden
         />
-        <FileDiff size={14} strokeWidth={1.75} className="text-[#a0a0a0] shrink-0" aria-hidden />
-        <span className="text-[12.5px] font-medium text-[#c9c9c9]">Review changes</span>
+        <FileDiff size={14} strokeWidth={1.75} className="text-text-3 shrink-0" aria-hidden />
+        <span className="text-[12.5px] font-medium text-text-2">Review changes</span>
         {showCounts && (
-          <span className="text-[11px] font-mono tabular-nums text-[#a0a0a0] ml-auto">
-            <span className="text-[#4ade80]">+{totalAdded}</span>
+          <span className="text-[11px] font-mono tabular-nums text-text-3 ml-auto">
+            <span className="text-success">+{totalAdded}</span>
             {" "}
-            <span className="text-[#f87171]">−{totalRemoved}</span>
+            <span className="text-error">−{totalRemoved}</span>
             {" · "}
             {files.length} {files.length === 1 ? "file" : "files"}
           </span>
         )}
         {!showCounts && (
-          <span className="text-[11px] text-[#a0a0a0] ml-auto tabular-nums">
+          <span className="text-[11px] text-text-3 ml-auto tabular-nums">
             {files.length} {files.length === 1 ? "file" : "files"}
           </span>
         )}
       </button>
 
       {expanded && (
-        <div className="border-t border-white/[0.06] px-3 py-2 flex flex-col gap-1 max-h-[420px] overflow-y-auto">
+        <div className="border-t border-hairline px-3 py-2 flex flex-col gap-1 max-h-[420px] overflow-y-auto">
           {loading && (
-            <span className="text-[11.5px] text-[#a0a0a0] py-2">Loading diffs…</span>
+            <span className="text-[11.5px] text-text-3 py-2">Loading diffs…</span>
           )}
           {!loading &&
             (entries.length > 0 ? entries : files.map((path) => ({ path, added: 0, removed: 0, diffText: null, parsed: null }))).map(
@@ -115,24 +115,24 @@ export function ReviewChanges({ message }: { message: Message }) {
                     onClick={() =>
                       setOpenPath((p) => (p === entry.path ? null : entry.path))
                     }
-                    className="flex items-center gap-2 w-full px-2.5 py-2 text-left hover:bg-white/[0.04] rounded-lg transition-colors"
+                    className="flex items-center gap-2 w-full px-2.5 py-2 text-left hover:bg-white/5 rounded-lg transition-colors"
                   >
                     <ChevronRight
                       size={11}
                       strokeWidth={2}
-                      className={`text-[#888] shrink-0 transition-transform ${openPath === entry.path ? "rotate-90" : ""}`}
+                      className={`text-text-4 shrink-0 transition-transform ${openPath === entry.path ? "rotate-90" : ""}`}
                       aria-hidden
                     />
-                    <code className="text-[11.5px] text-[#ececec] font-mono truncate flex-1">
+                    <code className="text-[11.5px] text-text-1 font-mono truncate flex-1">
                       {entry.path}
                     </code>
                     {entry.parsed && (entry.added > 0 || entry.removed > 0) ? (
-                      <span className="text-[10.5px] font-mono tabular-nums shrink-0 text-[#a0a0a0]">
-                        <span className="text-[#4ade80]">+{entry.added}</span>{" "}
-                        <span className="text-[#f87171]">−{entry.removed}</span>
+                      <span className="text-[10.5px] font-mono tabular-nums shrink-0 text-text-3">
+                        <span className="text-success">+{entry.added}</span>{" "}
+                        <span className="text-error">−{entry.removed}</span>
                       </span>
                     ) : (
-                      <span className="text-[10.5px] text-[#888] shrink-0">edited</span>
+                      <span className="text-[10.5px] text-text-4 shrink-0">edited</span>
                     )}
                   </button>
                   {openPath === entry.path && entry.parsed && (

@@ -75,7 +75,7 @@ function VisualStylePill() {
         title={`Visual style — ${hasActive ? label : "none (model auto-picks)"}`}
         className={`flex items-center gap-1.5 px-2 h-7 rounded-full border text-[12px] font-medium transition-colors shrink-0 ${
           hasActive
-            ? "bg-[#f59e42]/[0.08] border-[#f59e42]/30 text-[#ececec] hover:bg-[#f59e42]/[0.12]"
+            ? "bg-accent/[0.08] border-accent/30 text-text-1 hover:bg-accent/[0.12]"
             : "control-pill"
         }`}
       >
@@ -175,22 +175,22 @@ function VisualStylePopover({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-[fadeIn_120ms_ease]"
+      className="motion-reveal fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-label="Pick a visual style"
-        className="relative w-full max-w-[760px] max-h-[85vh] overflow-y-auto rounded-2xl bg-[#1c1c1e] border border-white/[0.08] shadow-2xl shadow-black/60 m-4 animate-[fadeIn_150ms_ease]"
+        className="motion-surface-in relative w-full max-w-[760px] max-h-[85vh] overflow-y-auto rounded-2xl bg-surface-3 border border-hairline-strong shadow-2xl shadow-black/60 m-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-[#1c1c1e] border-b border-white/[0.06] rounded-t-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-surface-3 border-b border-hairline rounded-t-2xl">
           <div>
-            <h1 className="text-[18px] font-medium text-[#ececec]">
+            <h1 className="text-[18px] font-medium text-text-1">
               Visual style
             </h1>
-            <p className="mt-1 text-[12px] text-[#a0a0a0]">
+            <p className="mt-1 text-[12px] text-text-3">
               {DESIGN_SYSTEMS.length} design systems + {directions.length} quick directions. Design systems include full palettes, type scales, and motion; directions are lightweight palette + font picks for when you want something fast.
             </p>
           </div>
@@ -199,7 +199,7 @@ function VisualStylePopover({
               <button
                 type="button"
                 onClick={onClear}
-                className="text-[12px] text-[#a0a0a0] hover:text-[#ececec] transition-colors px-2"
+                className="text-[12px] text-text-3 hover:text-text-1 transition-colors px-2"
               >
                 Clear
               </button>
@@ -207,7 +207,7 @@ function VisualStylePopover({
             <button
               onClick={onClose}
               aria-label="Close"
-              className="p-2 rounded-lg text-[#a0a0a0] hover:text-[#ececec] hover:bg-white/[0.06] transition-colors"
+              className="p-2 rounded-lg text-text-3 hover:text-text-1 hover:bg-white/5 transition-colors"
             >
               <X size={16} strokeWidth={1.75} />
             </button>
@@ -217,7 +217,7 @@ function VisualStylePopover({
         {/* Body */}
         <div className="px-6 py-5">
           {/* Design systems section */}
-          <div className="mb-2 px-1 pt-1 pb-2.5 text-[10px] uppercase tracking-[0.12em] text-[#888] font-semibold">
+          <div className="mb-2 px-1 pt-1 pb-2.5 text-[10px] uppercase tracking-[0.12em] text-text-4 font-semibold">
             Design systems
           </div>
           {order.map((cat) => {
@@ -225,7 +225,7 @@ function VisualStylePopover({
             if (!list || list.length === 0) return null;
             return (
               <section key={cat} className="mb-3">
-                <div className="px-1 pt-1 pb-2 text-[10px] uppercase tracking-[0.10em] text-[#666] font-medium">
+                <div className="px-1 pt-1 pb-2 text-[10px] uppercase tracking-[0.10em] text-text-4 font-medium">
                   {SYSTEM_CATEGORY_LABELS[cat]}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -243,10 +243,10 @@ function VisualStylePopover({
           })}
 
           {/* Divider */}
-          <div className="my-5 border-t border-white/[0.06]" />
+          <div className="my-5 border-t border-hairline" />
 
           {/* Directions section */}
-          <div className="mb-3 px-1 pt-1 pb-2.5 text-[10px] uppercase tracking-[0.12em] text-[#888] font-semibold">
+          <div className="mb-3 px-1 pt-1 pb-2.5 text-[10px] uppercase tracking-[0.12em] text-text-4 font-semibold">
             Quick directions
           </div>
           <div className="grid grid-cols-1 gap-2">
@@ -282,8 +282,8 @@ function SystemRow({
       onClick={onPick}
       className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors ${
         active
-          ? "bg-[#f59e42]/[0.10] border border-[#f59e42]/30"
-          : "hover:bg-white/[0.06] border border-transparent"
+          ? "bg-accent/[0.10] border border-accent/30"
+          : "hover:bg-white/5 border border-transparent"
       }`}
     >
       <span className="inline-flex h-5 w-5 rounded shrink-0 overflow-hidden border border-white/10" aria-hidden>
@@ -293,10 +293,10 @@ function SystemRow({
         <span style={{ background: system.swatches[3], width: "25%", height: "100%" }} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12px] text-[#ececec] font-medium truncate">{system.name}</span>
-        <span className="block text-[10.5px] text-[#888] truncate">{system.tagline}</span>
+        <span className="block text-[12px] text-text-1 font-medium truncate">{system.name}</span>
+        <span className="block text-[10.5px] text-text-4 truncate">{system.tagline}</span>
       </span>
-      {active && <Check size={12} strokeWidth={2.5} className="text-[#f59e42] shrink-0" aria-hidden />}
+      {active && <Check size={12} strokeWidth={2.5} className="text-accent shrink-0" aria-hidden />}
     </button>
   );
 }
@@ -317,8 +317,8 @@ function DirectionRow({
       onClick={onPick}
       className={`flex items-stretch gap-3 p-2 rounded-lg text-left transition-colors ${
         active
-          ? "bg-[#f59e42]/[0.08] border border-[#f59e42]/30"
-          : "hover:bg-white/[0.05] border border-transparent"
+          ? "bg-accent/[0.08] border border-accent/30"
+          : "hover:bg-white/5 border border-transparent"
       }`}
     >
       <span className="inline-flex w-12 h-12 rounded-md overflow-hidden border border-white/10 shrink-0" aria-hidden>
@@ -329,10 +329,10 @@ function DirectionRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="text-[12.5px] text-[#ececec] font-medium">{direction.name}</span>
-          {active && <Check size={11} strokeWidth={2.5} className="text-[#f59e42]" aria-hidden />}
+          <span className="text-[12.5px] text-text-1 font-medium">{direction.name}</span>
+          {active && <Check size={11} strokeWidth={2.5} className="text-accent" aria-hidden />}
         </span>
-        <span className="block mt-0.5 text-[11px] text-[#a0a0a0] line-clamp-2">{direction.mood}</span>
+        <span className="block mt-0.5 text-[11px] text-text-3 line-clamp-2">{direction.mood}</span>
       </span>
     </button>
   );

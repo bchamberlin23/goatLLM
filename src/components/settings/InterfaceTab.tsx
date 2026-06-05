@@ -93,7 +93,7 @@ export function InterfaceTab() {
                   className={`px-2 py-1.5 rounded-lg border text-center text-[11px] capitalize font-medium transition-all ${
                     glowBackgroundMode === mode
                       ? "border-accent/35 bg-accent/15 text-accent shadow-[0_4px_12px_-4px_rgba(245,158,66,0.3)]"
-                      : "border-white/[0.06] bg-white/[0.02] text-text-3 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-text-2"
+                      : "border-hairline bg-white/[0.02] text-text-3 hover:border-hairline-strong hover:bg-white/5 hover:text-text-2"
                   }`}
                 >
                   {mode}
@@ -114,7 +114,7 @@ export function InterfaceTab() {
 
       <SettingsGroup title="Plus (+) Menu Customization" description="Configure which shortcuts are visible in the input bar's '+' menu for each mode.">
         <div className="flex flex-col gap-4">
-          <div className="flex gap-1.5 p-1 rounded-xl bg-black/30 border border-white/[0.04] w-fit">
+          <div className="flex gap-1.5 p-1 rounded-xl bg-black/30 border border-hairline w-fit">
             {(["chat", "agent"] as const).map((mode) => (
               <button
                 key={mode}
@@ -122,7 +122,7 @@ export function InterfaceTab() {
                 onClick={() => setCustomModeTab(mode)}
                 className={`px-4 py-1.5 rounded-lg text-center text-[11px] capitalize font-medium transition-all ${
                   customModeTab === mode
-                    ? "bg-white/[0.08] text-text-1 shadow-[0_2px_8px_rgba(0,0,0,0.2)] border border-white/[0.04]"
+                    ? "bg-white/5 text-text-1 shadow-[0_2px_8px_rgba(0,0,0,0.2)] border border-hairline"
                     : "text-text-3 border border-transparent hover:text-text-2 hover:bg-white/[0.02]"
                 }`}
               >
@@ -144,10 +144,10 @@ export function InterfaceTab() {
                   onClick={() => setPlusMenuItemVisible(customModeTab, item.key, !isVisible)}
                   className={`flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl border text-left transition-all duration-200 focus:outline-none ${
                     !isSupported
-                      ? "border-white/[0.03] bg-black/15 opacity-40 cursor-not-allowed"
+                      ? "border-hairline bg-black/15 opacity-40 cursor-not-allowed"
                       : isVisible
                         ? "border-accent/30 bg-accent/[0.04] text-text-1 shadow-[0_8px_20px_-12px_rgba(245,158,66,0.25)] -translate-y-px cursor-pointer"
-                        : "border-white/[0.05] bg-white/[0.01] text-text-3 hover:border-white/[0.12] hover:bg-white/[0.03] hover:-translate-y-px cursor-pointer"
+                        : "border-hairline bg-white/[0.01] text-text-3 hover:border-hairline-strong hover:bg-white/[0.03] hover:-translate-y-px cursor-pointer"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -156,7 +156,7 @@ export function InterfaceTab() {
                         ? "bg-white/[0.02] text-text-4"
                         : isVisible 
                           ? "bg-accent/10 text-accent" 
-                          : "bg-white/[0.04] text-text-3"
+                          : "bg-white/5 text-text-3"
                     }`}>
                       <Icon size={14} strokeWidth={2} />
                     </div>
@@ -175,14 +175,14 @@ export function InterfaceTab() {
                   <div className="shrink-0">
                     {isSupported ? (
                       <div className={`relative w-8 h-4.5 rounded-full border transition-all ${
-                        isVisible ? "bg-accent border-accent" : "bg-white/[0.08] border-white/[0.06]"
+                        isVisible ? "bg-accent border-accent" : "bg-white/5 border-hairline"
                       }`}>
-                        <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-[#f7f3ed] transition-transform duration-200 ${
+                        <span className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-bg transition-transform duration-200 ${
                           isVisible ? "translate-x-3.5" : "translate-x-0"
                         }`} />
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.03] border border-white/[0.05] text-[9.5px] font-medium text-text-4 select-none">
+                      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/[0.03] border border-hairline text-[9.5px] font-medium text-text-4 select-none">
                         <span>Agent Only</span>
                       </div>
                     )}

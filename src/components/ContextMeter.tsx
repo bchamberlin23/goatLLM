@@ -145,10 +145,10 @@ export function ContextMeter() {
   // <70% → neutral, 70–90% → amber accent, ≥90% → red.
   const ringColor =
     ratio >= 0.9
-      ? "#f87171"
+      ? "var(--error)"
       : ratio >= 0.7
-        ? "#f59e42"
-        : "#a0a0a0";
+        ? "var(--accent)"
+        : "var(--text-3)";
   const trackColor = "rgba(255,255,255,0.08)";
 
   // SVG geometry — small enough to nestle next to the assets menu.
@@ -211,7 +211,10 @@ export function ContextMeter() {
             strokeLinecap="round"
             strokeDasharray={`${dash} ${c}`}
             transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            style={{ transition: "stroke-dasharray 240ms ease, stroke 240ms ease" }}
+            style={{
+              transition:
+                "stroke-dasharray var(--d-medium) var(--ease-out), stroke var(--d-medium) var(--ease-out)",
+            }}
           />
         </svg>
       </button>
@@ -220,7 +223,7 @@ export function ContextMeter() {
         <div
           role="dialog"
           aria-label="Context window details"
-          className="popover-surface absolute top-full left-0 mt-1.5 w-[260px] rounded-xl z-50 animate-[fadeIn_100ms_ease] overflow-hidden"
+          className="popover-surface motion-popover-in absolute top-full left-0 mt-1.5 w-[260px] rounded-xl z-50 overflow-hidden"
         >
           <div className="px-3.5 pt-3 pb-2.5 flex items-start gap-3">
             {/* Larger ring inside the popover for legibility */}
@@ -240,23 +243,23 @@ export function ContextMeter() {
                 />
               </svg>
               <div
-                className="absolute inset-0 flex items-center justify-center text-[11px] font-mono tabular-nums text-[#ececec]"
+                className="absolute inset-0 flex items-center justify-center text-[11px] font-mono tabular-nums text-text-1"
               >
                 {pct}%
               </div>
             </div>
 
             <div className="min-w-0 flex-1 pt-0.5">
-              <div className="text-[12.5px] font-medium text-[#ececec]">
+              <div className="text-[12.5px] font-medium text-text-1">
                 Context window
               </div>
-              <div className="mt-0.5 text-[11.5px] text-[#a0a0a0] truncate">
+              <div className="mt-0.5 text-[11.5px] text-text-3 truncate">
                 {modelName ?? "No model selected"}
               </div>
             </div>
           </div>
 
-          <div className="h-px bg-white/[0.06] mx-3" />
+          <div className="h-px bg-white/5 mx-3" />
 
           <dl className="px-3.5 py-2.5 space-y-1.5 text-[12px]">
             <Row label="Used" value={`${formatTokens(tokens)} tok`} />
@@ -275,7 +278,7 @@ export function ContextMeter() {
             />
             {costUsd > 0 && (
               <>
-                <div className="h-px bg-white/[0.06] my-1" />
+                <div className="h-px bg-white/5 my-1" />
                 <Row label="Cost" value={`$${costUsd.toFixed(4)}`} />
                 {usageSettings.monthlyBudgetUsd > 0 && (
                   <Row 
@@ -292,7 +295,7 @@ export function ContextMeter() {
               {budgetAlerts.map((alert, i) => (
                 <div 
                   key={i}
-                  className="text-[10.5px] text-[#f59e42] bg-[#f59e42]/10 border border-[#f59e42]/20 rounded px-2 py-1 mb-1"
+                  className="text-[10.5px] text-accent bg-accent/10 border border-accent/20 rounded px-2 py-1 mb-1"
                 >
                   {alert.message}
                 </div>
@@ -300,7 +303,7 @@ export function ContextMeter() {
             </div>
           )}
 
-          <div className="px-3.5 pb-2 pt-1 text-[10.5px] text-[#888] leading-relaxed">
+          <div className="px-3.5 pb-2 pt-1 text-[10.5px] text-text-4 leading-relaxed">
             {!windowKnown
               ? "Window size estimated — no authoritative size was found for this model. You can set an explicit value in the model's gear menu."
               : ratio >= 0.9
@@ -325,8 +328,8 @@ export function ContextMeter() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-[#a0a0a0]">{label}</dt>
-      <dd className="font-mono tabular-nums text-[#ececec] text-[11.5px]">
+      <dt className="text-text-3">{label}</dt>
+      <dd className="font-mono tabular-nums text-text-1 text-[11.5px]">
         {value}
       </dd>
     </div>
@@ -408,7 +411,7 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             placeholder="Optional: focus instructions (e.g., 'auth flow')"
-            className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[11.5px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
+            className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[11.5px] text-text-1 placeholder:text-text-4 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
             onKeyDown={(e) => { if (e.key === "Enter") handleCompact(); }}
             autoFocus
           />

@@ -41,10 +41,10 @@ export function AutoApproveToggle() {
         const active = permissionMode === id;
         const accent =
           id === "yolo"
-            ? "bg-[#f87171]/15 text-[#fca5a5] shadow-[0_0_8px_rgba(248,113,113,0.15)]"
+            ? "bg-error/15 text-error shadow-[0_0_8px_rgba(248,113,113,0.15)]"
             : id === "auto"
-              ? "bg-[#f59e42]/15 text-[#f59e42] shadow-[0_0_8px_rgba(245,158,66,0.15)]"
-              : "bg-white/10 text-[#ececec]";
+              ? "bg-accent/15 text-accent shadow-[0_0_8px_rgba(245,158,66,0.15)]"
+              : "bg-white/10 text-text-1";
         return (
           <button
             key={id}
@@ -54,7 +54,7 @@ export function AutoApproveToggle() {
             title={help}
             onClick={() => setPermissionMode(id)}
             className={`flex items-center gap-1 px-2 py-1 rounded-[5px] text-[11.5px] font-medium transition-all ${
-              active ? accent : "text-[#8e8e8e] hover:text-[#ececec] hover:bg-white/5"
+              active ? accent : "text-text-3 hover:text-text-1 hover:bg-white/5"
             }`}
           >
             <Icon size={11} strokeWidth={2} aria-hidden="true" />

@@ -231,7 +231,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={`group flex min-w-0 items-center gap-1.5 px-2.5 py-1 rounded-md border text-[13px] transition-[background,border-color,color] max-w-[220px] max-[520px]:max-w-[calc(100vw-112px)] ${
-          isOpen ? "bg-white/[0.065] border-white/[0.08]" : "border-transparent hover:bg-white/[0.055] hover:border-white/[0.07] active:bg-white/[0.09]"
+          isOpen ? "bg-white/5 border-hairline-strong" : "border-transparent hover:bg-white/5 hover:border-hairline active:bg-white/5"
         } ${selectedModel ? "text-text-1" : "text-text-3"}`}
         title={triggerTitle}
       >
@@ -254,20 +254,20 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
 
       {isOpen && (
         <div
-          className="popover-surface absolute bottom-full right-0 mb-2 w-[360px] max-w-[calc(100vw-32px)] rounded-xl z-[200] animate-[dropdownIn_110ms_ease] flex flex-col overflow-hidden"
+          className="popover-surface motion-popover-in absolute bottom-full right-0 mb-2 w-[360px] max-w-[calc(100vw-32px)] rounded-xl z-[200] flex flex-col overflow-hidden"
           onKeyDown={handleKeyDown}
         >
           {pendingModelId ? (
             <div className="p-4 flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <p className="text-[13px] font-medium text-[#ececec]">Switch models?</p>
-                <p className="text-[12.5px] text-[#8e8e8e] leading-relaxed">
+                <p className="text-[13px] font-medium text-text-1">Switch models?</p>
+                <p className="text-[12.5px] text-text-3 leading-relaxed">
                   The new model will see the full conversation history.
                 </p>
               </div>
               <div className="flex gap-2">
                 <button
-                  className="flex-1 py-1.5 rounded-md text-[13px] text-[#b4b4b4] hover:bg-white/5 hover:text-[#ececec] transition-colors"
+                  className="flex-1 py-1.5 rounded-md text-[13px] text-text-2 hover:bg-white/5 hover:text-text-1 transition-colors"
                   onClick={() => setPendingModelId(null)}
                 >
                   Cancel
@@ -300,18 +300,18 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
             <>
               {/* Search */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 bg-white/[0.02]">
-                <Search size={13} strokeWidth={2} className="text-[#9a9a9a] shrink-0" />
+                <Search size={13} strokeWidth={2} className="text-text-3 shrink-0" />
                 <input
                   ref={searchInputRef}
                   type="text"
-                  className="flex-1 bg-transparent text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none border-0"
+                  className="flex-1 bg-transparent text-[13px] text-text-1 placeholder:text-text-3 outline-none border-0"
                   placeholder="Search models…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
                 {query && (
                   <button
-                    className="text-[#9a9a9a] hover:text-[#ececec] text-[10.5px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors"
+                    className="text-text-3 hover:text-text-1 text-[10.5px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors"
                     onClick={() => setQuery("")}
                   >
                     Clear
@@ -364,8 +364,8 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                 ) : (
                   grouped.map(({ provider, models: providerModels }) => (
                     <div key={provider.id} className="mb-1 last:mb-0">
-                      <div className="px-3 pt-2 pb-1 flex items-center justify-between sticky top-0 bg-[#2c2c2e]/92 backdrop-blur-md z-10">
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[#9a9a9a]">
+                      <div className="px-3 pt-2 pb-1 flex items-center justify-between sticky top-0 bg-surface-2/92 backdrop-blur-md z-10">
+                        <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-text-3">
                           <ProviderIcon provider={provider} size={11} />
                           <span>{provider.name}</span>
                         </div>
@@ -373,18 +373,18 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                           className={`flex items-center gap-1 text-[10px] ${
                             provider.healthChecked
                               ? provider.isOnline
-                                ? "text-[#34d399]"
-                                : "text-[#f87171]"
-                              : "text-[#a0a0a0]"
+                                ? "text-success"
+                                : "text-error"
+                              : "text-text-3"
                           }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
                               provider.healthChecked
                                 ? provider.isOnline
-                                  ? "bg-[#34d399]"
-                                  : "bg-[#f87171]"
-                                : "bg-[#a0a0a0] animate-[dot-pulse_1.5s_ease-in-out_infinite]"
+                                  ? "bg-success"
+                                  : "bg-error"
+                                : "bg-text-3 animate-[dot-pulse_1.5s_ease-in-out_infinite]"
                             }`}
                           />
                           {provider.healthChecked
@@ -401,14 +401,14 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                           <button
                             key={model.id}
                             data-model-id={model.id}
-                            className={`flex items-center justify-between w-full px-3 py-[7px] text-left text-[13px] transition-colors ${
+                            className={`motion-row flex items-center justify-between w-full px-3 py-[7px] text-left text-[13px] transition-colors ${
                               !model.isAvailable ? "opacity-40 cursor-not-allowed" : ""
                             } ${
                               isHighlighted && model.isAvailable
-                                ? "bg-white/[0.08] text-[#ececec]"
+                                ? "bg-white/5 text-text-1"
                                 : isSelected
-                                  ? "text-[#ececec] bg-white/[0.04]"
-                                  : "text-[#d5d5d5] hover:bg-white/[0.05]"
+                                  ? "text-text-1 bg-white/5"
+                                  : "text-text-2 hover:bg-white/5"
                             }`}
                             onClick={() => model.isAvailable && handleModelSelect(model.id)}
                             onMouseEnter={() =>
@@ -419,13 +419,13 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                             <span className="truncate flex-1">{model.name}</span>
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
                               {!model.isAvailable && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-[#f87171] rounded font-semibold">
+                                <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-error rounded font-semibold">
                                   Offline
                                 </span>
                               )}
                               {model.isAvailable && (
                                 <button
-                                  className="p-0.5 rounded hover:bg-white/[0.08] text-text-3 hover:text-text-2 transition-colors"
+                                  className="p-0.5 rounded hover:bg-white/5 text-text-3 hover:text-text-2 transition-colors"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSettingsModelId(model.id);
@@ -436,7 +436,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
                                   <SettingsIcon size={12} strokeWidth={1.5} />
                                 </button>
                               )}
-                              {isSelected && <Check size={13} className="text-[#f59e42]" />}
+                              {isSelected && <Check size={13} className="text-accent" />}
                             </div>
                           </button>
                         );
@@ -447,20 +447,20 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
               </div>
 
               {/* Footer */}
-              <div className="px-3 py-2 border-t border-white/5 bg-black/20 flex items-center justify-between text-[10.5px] text-[#9a9a9a]">
+              <div className="px-3 py-2 border-t border-white/5 bg-black/20 flex items-center justify-between text-[10.5px] text-text-3">
                 <button
-                  className="flex items-center gap-1.5 hover:text-[#ececec] transition-colors"
+                  className="flex items-center gap-1.5 hover:text-text-1 transition-colors"
                   onClick={() => setShowCompare(true)}
                 >
                   <GitCompareArrows size={12} strokeWidth={1.5} />
                   Compare models
                 </button>
                 <span className="flex items-center gap-1.5">
-                  <kbd className="font-mono text-[10px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#9a9a9a]">
+                  <kbd className="font-mono text-[10px] px-1.5 py-px rounded bg-white/5 border border-hairline text-text-3">
                     ↑↓
                   </kbd>
-                  <span className="text-[#a0a0a0]">to navigate</span>
-                  <kbd className="font-mono text-[10px] px-1.5 py-px rounded bg-white/[0.06] border border-white/[0.06] text-[#9a9a9a] ml-1">
+                  <span className="text-text-3">to navigate</span>
+                  <kbd className="font-mono text-[10px] px-1.5 py-px rounded bg-white/5 border border-hairline text-text-3 ml-1">
                     ↵
                   </kbd>
                 </span>
@@ -535,10 +535,10 @@ function CompareModelsPanel({ models, onClose }: CompareModelsPanelProps) {
   return (
     <div className="p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-[13px] font-medium text-[#ececec]">Compare Models</p>
+        <p className="text-[13px] font-medium text-text-1">Compare Models</p>
         <button onClick={onClose} className="p-1 rounded-md text-text-3 hover:text-text-2" aria-label="Close compare"><X size={14} strokeWidth={1.5} /></button>
       </div>
-      <p className="text-[11px] text-[#9a9a9a]">Pick 2-4 models, enter a prompt, and run them in parallel.</p>
+      <p className="text-[11px] text-text-3">Pick 2-4 models, enter a prompt, and run them in parallel.</p>
       
       {/* Prompt first */}
       <textarea
@@ -546,7 +546,7 @@ function CompareModelsPanel({ models, onClose }: CompareModelsPanelProps) {
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="What should each model respond to?"
         rows={3}
-        className="w-full px-3 py-2 rounded-lg border border-white/[0.08] bg-black/20 text-[13px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
+        className="w-full px-3 py-2 rounded-lg border border-hairline-strong bg-black/20 text-[13px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
       />
 
       {/* Model selection */}
@@ -559,7 +559,7 @@ function CompareModelsPanel({ models, onClose }: CompareModelsPanelProps) {
               onClick={() => toggleModel(model.id)}
               disabled={!isSelected && selectedModelIds.length >= 4}
               className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-left text-[12px] border transition-colors ${
-                isSelected ? "bg-accent/20 border-accent/40 text-text-1" : "bg-white/[0.06] border-white/10 text-text-2 hover:bg-white/[0.08]"
+                isSelected ? "bg-accent/20 border-accent/40 text-text-1" : "bg-white/5 border-white/10 text-text-2 hover:bg-white/5"
               } disabled:opacity-40`}
             >
               {isSelected && <Check size={11} className="text-accent shrink-0" />}
@@ -580,7 +580,7 @@ function CompareModelsPanel({ models, onClose }: CompareModelsPanelProps) {
       {results.length > 0 && (
         <div className="flex flex-col gap-2">
           {results.map((r) => (
-            <div key={r.modelId} className="rounded-lg border border-white/[0.06] bg-black/20 p-3">
+            <div key={r.modelId} className="rounded-lg border border-hairline bg-black/20 p-3">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <span className="text-[12px] font-medium text-text-1 truncate">{r.modelName}</span>
                 <span className="text-[10px] text-text-3">{Math.round(r.latencyMs)}ms</span>
@@ -651,15 +651,15 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <p className="text-[13px] font-medium text-[#ececec] truncate">
+          <p className="text-[13px] font-medium text-text-1 truncate">
             Settings: {model.name}
           </p>
-          <p className="text-[11px] text-[#9a9a9a]">
+          <p className="text-[11px] text-text-3">
             Override auto-detected values for this model
           </p>
         </div>
         <button
-          className="p-1 rounded-md text-text-3 hover:text-text-2 hover:bg-white/[0.06] transition-colors shrink-0"
+          className="p-1 rounded-md text-text-3 hover:text-text-2 hover:bg-white/5 transition-colors shrink-0"
           onClick={onClose}
           aria-label="Close settings"
         >
@@ -669,10 +669,10 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
 
       {/* Context Window */}
       <label className="flex flex-col gap-1">
-        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Context Window (tokens)</span>
+        <span className="text-[11.5px] font-medium text-text-2">Context Window (tokens)</span>
         <input
           type="number"
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
           placeholder={
             autoDetectedCtx > 0
               ? `Auto-detected: ${autoDetectedCtx.toLocaleString()}`
@@ -683,7 +683,7 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
           value={ctx}
           onChange={(e) => setCtx(e.target.value)}
         />
-        <span className="text-[10px] text-[#9a9a9a]">
+        <span className="text-[10px] text-text-3">
           {autoDetectedCtx > 0
             ? `Auto-detected: ${autoDetectedCtx.toLocaleString()} tokens`
             : model.contextWindow > 0
@@ -694,10 +694,10 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
 
       {/* Max Response Tokens */}
       <label className="flex flex-col gap-1">
-        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Max Response Tokens</span>
+        <span className="text-[11.5px] font-medium text-text-2">Max Response Tokens</span>
         <input
           type="number"
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-[#a0a0a0] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors"
           placeholder="Provider default"
           value={maxResp}
           onChange={(e) => setMaxResp(e.target.value)}
@@ -706,9 +706,9 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
 
       {/* Reasoning Level */}
       <label className="flex flex-col gap-1">
-        <span className="text-[11.5px] font-medium text-[#b4b4b4]">Reasoning Level</span>
+        <span className="text-[11.5px] font-medium text-text-2">Reasoning Level</span>
         <select
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors appearance-none"
+          className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors appearance-none"
           value={reasoning}
           onChange={(e) => setReasoning(e.target.value)}
         >
@@ -726,7 +726,7 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
       <div className="flex gap-2 mt-1">
         {hasAnyOverride && (
           <button
-            className="flex-1 py-1.5 rounded-md text-[12px] text-[#f87171] hover:bg-red-500/10 hover:text-[#fca5a5] transition-colors"
+            className="flex-1 py-1.5 rounded-md text-[12px] text-error hover:bg-red-500/10 hover:text-error transition-colors"
             onClick={handleClear}
           >
             Clear overrides

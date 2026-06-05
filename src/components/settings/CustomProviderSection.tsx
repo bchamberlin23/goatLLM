@@ -103,7 +103,7 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
       ) : (
         <div className="soft-card p-4 rounded-xl flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-[#ececec]">New custom provider</span>
+            <span className="text-[13px] font-medium text-text-1">New custom provider</span>
             <button
               onClick={() => { setShowAdd(false); setNewName(""); setNewBaseUrl(""); setNewApiKey(""); }}
               className="control-icon flex h-7 w-7 items-center justify-center rounded-md transition-colors"
@@ -114,36 +114,36 @@ export function CustomProviderSection({ embedded = false }: { embedded?: boolean
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11.5px] font-medium text-[#b4b4b4]">Name</span>
+            <span className="text-[11.5px] font-medium text-text-2">Name</span>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g., Together AI"
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20"
+              className="px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-4 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
             />
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11.5px] font-medium text-[#b4b4b4]">Base URL</span>
+            <span className="text-[11.5px] font-medium text-text-2">Base URL</span>
             <input
               type="text"
               value={newBaseUrl}
               onChange={(e) => setNewBaseUrl(e.target.value)}
               placeholder="https://api.together.xyz/v1"
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 font-mono text-[12px]"
+              className="px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-4 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 font-mono text-[12px]"
             />
-            <span className="text-[10px] text-[#888]">Must be OpenAI-compatible (/v1/chat/completions)</span>
+            <span className="text-[10px] text-text-4">Must be OpenAI-compatible (/v1/chat/completions)</span>
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11.5px] font-medium text-[#b4b4b4]">API Key (optional)</span>
+            <span className="text-[11.5px] font-medium text-text-2">API Key (optional)</span>
             <input
               type="password"
               value={newApiKey}
               onChange={(e) => setNewApiKey(e.target.value)}
               placeholder="sk-..."
-              className="px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/10 text-[13px] text-[#ececec] placeholder:text-text-4 outline-none focus:border-[#f59e42]/50 focus:ring-1 focus:ring-[#f59e42]/20 font-mono text-[12px]"
+              className="px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 placeholder:text-text-4 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 font-mono text-[12px]"
             />
           </label>
 

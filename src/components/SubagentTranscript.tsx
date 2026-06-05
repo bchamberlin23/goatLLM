@@ -13,7 +13,7 @@ export const SubagentTranscriptView = memo(function SubagentTranscriptView({
   return (
     <div className="soft-card ml-5 mt-2 rounded-xl overflow-hidden">
       <div className="px-3 py-2 bg-white/[0.035] border-b border-white/5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4">
           Subagent conversation
         </span>
       </div>
@@ -21,12 +21,12 @@ export const SubagentTranscriptView = memo(function SubagentTranscriptView({
       <div className="p-3 flex flex-col gap-3 max-h-[500px] overflow-auto">
         {transcript.map((entry, i) => (
           <div key={i}>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#777] mb-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-text-4 mb-1.5">
               {entry.role === "user" ? "Task" : "Subagent"}
             </div>
 
             {entry.content && (
-              <div className="text-[12.5px] text-[#b4b4b4] leading-relaxed whitespace-pre-wrap">
+              <div className="text-[12.5px] text-text-2 leading-relaxed whitespace-pre-wrap">
                 {entry.content}
               </div>
             )}

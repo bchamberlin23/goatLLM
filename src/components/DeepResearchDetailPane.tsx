@@ -38,12 +38,12 @@ export function DeepResearchDetailPane({
 
   return (
     <div
-      className="dr-detail-pane popover-surface fixed right-4 bottom-20 top-20 z-50 flex w-[380px] flex-col rounded-2xl border border-white/[0.12] p-4 shadow-[0_22px_70px_rgba(0,0,0,0.66)]"
+      className="dr-detail-pane popover-surface fixed right-4 bottom-20 top-20 z-50 flex w-[380px] flex-col rounded-2xl border border-hairline-strong p-4 shadow-[0_22px_70px_rgba(0,0,0,0.66)]"
       role="dialog"
       aria-label="Deep Research details"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+      <div className="flex items-center justify-between border-b border-hairline pb-3">
         <h3 className="m-0 text-sm font-semibold text-text-1">Research Details</h3>
         <button
           onClick={onClose}
@@ -60,7 +60,7 @@ export function DeepResearchDetailPane({
           onClick={() => setActiveTab("sources")}
           className={`flex-1 rounded-md py-1.5 text-center text-xs font-medium transition-all ${
             activeTab === "sources"
-              ? "bg-white/[0.08] text-text-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+              ? "bg-white/5 text-text-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
               : "text-text-3 hover:text-text-2"
           }`}
         >
@@ -70,7 +70,7 @@ export function DeepResearchDetailPane({
           onClick={() => setActiveTab("findings")}
           className={`flex-1 rounded-md py-1.5 text-center text-xs font-medium transition-all ${
             activeTab === "findings"
-              ? "bg-white/[0.08] text-text-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+              ? "bg-white/5 text-text-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
               : "text-text-3 hover:text-text-2"
           }`}
         >
@@ -91,7 +91,7 @@ export function DeepResearchDetailPane({
               {sources.map((url, i) => (
                 <li
                   key={i}
-                  className="dr-event-enter flex items-center justify-between rounded-lg border border-white/[0.04] bg-white/[0.02] p-2.5 hover:bg-white/[0.04] transition-colors"
+                  className="dr-event-enter flex items-center justify-between rounded-lg border border-hairline bg-white/[0.02] p-2.5 hover:bg-white/5 transition-colors"
                   style={{ animationDelay: `${i * 30}ms` }}
                 >
                   <div className="min-w-0 flex-1 pr-2">
@@ -127,7 +127,7 @@ export function DeepResearchDetailPane({
             {findings.map((finding, i) => (
               <li
                 key={i}
-                className="dr-event-enter rounded-lg border border-white/[0.04] bg-white/[0.015] p-3 text-xs leading-relaxed text-text-2 hover:bg-white/[0.03] transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+                className="dr-event-enter rounded-lg border border-hairline bg-white/[0.015] p-3 text-xs leading-relaxed text-text-2 hover:bg-white/[0.03] transition-colors shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="flex items-center gap-1.5 mb-1.5 font-medium text-text-3">

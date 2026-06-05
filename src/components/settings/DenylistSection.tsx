@@ -56,7 +56,7 @@ export function DenylistSection() {
 
   if (!workspacePath) {
     return (
-      <div className="p-3.5 bg-[#212122] border border-white/5 rounded-xl text-[12px] text-[#a0a0a0]">
+      <div className="p-3.5 bg-surface-3 border border-white/5 rounded-xl text-[12px] text-text-3">
         Select a workspace to configure its file denylist.
       </div>
     );
@@ -64,14 +64,14 @@ export function DenylistSection() {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="p-3.5 bg-[#212122] border border-white/5 rounded-xl flex flex-col gap-2">
+      <div className="p-3.5 bg-surface-3 border border-white/5 rounded-xl flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <Shield size={13} strokeWidth={1.75} className="text-[#a0a0a0]" />
-          <span className="text-[12px] text-[#b4b4b4]">Always enforced</span>
+          <Shield size={13} strokeWidth={1.75} className="text-text-3" />
+          <span className="text-[12px] text-text-2">Always enforced</span>
         </div>
         <div className="flex flex-wrap gap-1">
           {BUILT_IN_DENY_PATTERNS.map((p) => (
-            <span key={p} className="px-2 py-0.5 bg-white/5 rounded-md text-[11px] font-mono text-[#a0a0a0]">
+            <span key={p} className="px-2 py-0.5 bg-white/5 rounded-md text-[11px] font-mono text-text-3">
               {p}
             </span>
           ))}
@@ -82,14 +82,14 @@ export function DenylistSection() {
         <input
           type="text"
           aria-label="New denylist pattern"
-          className="flex-1 h-[32px] px-2.5 bg-[#2c2c2e] border border-white/5 rounded-md text-[12px] text-[#ececec] font-mono outline-none focus:border-white/15"
+          className="flex-1 h-[32px] px-2.5 bg-surface-2 border border-white/5 rounded-md text-[12px] text-text-1 font-mono outline-none focus:border-white/15"
           placeholder="Add pattern (e.g. **/*.log)"
           value={newPattern}
           onChange={(e) => setNewPattern(e.target.value)}
           onKeyDown={handleKeyDown}
         />
         <button
-          className="shrink-0 h-[32px] w-[32px] flex items-center justify-center rounded-md bg-white/5 text-[#b4b4b4] hover:bg-white/10 hover:text-[#ececec] transition-colors"
+          className="shrink-0 h-[32px] w-[32px] flex items-center justify-center rounded-md bg-white/5 text-text-2 hover:bg-white/10 hover:text-text-1 transition-colors"
           onClick={handleAdd}
           aria-label="Add denylist pattern"
         >
@@ -100,10 +100,10 @@ export function DenylistSection() {
       {patterns.length > 0 ? (
         <div className="flex flex-col gap-1">
           {patterns.map((p) => (
-            <div key={p} className="flex items-center justify-between gap-2 p-2.5 bg-[#212122] border border-white/5 rounded-lg">
-              <span className="text-[12px] font-mono text-[#d5d5d5]">{p}</span>
+            <div key={p} className="flex items-center justify-between gap-2 p-2.5 bg-surface-3 border border-white/5 rounded-lg">
+              <span className="text-[12px] font-mono text-text-2">{p}</span>
               <button
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-[#a0a0a0] hover:text-[#f87171] hover:bg-red-500/10 transition-colors"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-error hover:bg-red-500/10 transition-colors"
                 onClick={() => handleRemove(p)}
                 aria-label={`Remove pattern ${p}`}
               >
@@ -113,7 +113,7 @@ export function DenylistSection() {
           ))}
         </div>
       ) : loaded ? (
-        <p className="text-[11px] text-[#a0a0a0] px-1">No custom patterns configured for this workspace.</p>
+        <p className="text-[11px] text-text-3 px-1">No custom patterns configured for this workspace.</p>
       ) : null}
     </div>
   );

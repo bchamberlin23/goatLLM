@@ -4,7 +4,8 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
 import { ArtifactCard, ArtifactPlaceholderCard } from "./ArtifactPanel";
 import { InlineWidget, InlineWidgetPlaceholder } from "./InlineWidget";
-import { splitContentByArtifacts, type ContentSegment, type InlineWidgetKind } from "../lib/artifact-segments";
+import { splitContentByArtifacts } from "../lib/artifact-segments";
+import type { ContentSegment, InlineWidgetKind } from "../lib/artifact-segments";
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
@@ -27,6 +28,8 @@ import {
 } from "../lib/thinking-ui";
 import { shouldShowToolCall } from "../lib/tool-visibility";
 import "./MessageBubble.css";
+
+const EMPTY_MESSAGES: Message[] = [];
 
 function stripMarkdown(md: string): string {
   return md
@@ -97,31 +100,31 @@ function ThinkingBlock({ messageId, content, elapsed, running }: {
           <ChevronRight
             size={12}
             strokeWidth={2}
-            className={`text-[#888] shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+            className={`text-text-4 shrink-0 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
             aria-hidden
           />
         )}
         {running ? (
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f59e42] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#f59e42]" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
             </span>
             <Shimmer text={`Thinking · ${elapsed}`} className="text-[13px] font-medium" />
           </div>
         ) : elapsed !== "0s" ? (
-          <span className="text-[12px] font-medium text-[#888]">
+          <span className="text-[12px] font-medium text-text-4">
             Thought for {elapsed}
           </span>
         ) : (
-          <span className="text-[12px] font-medium text-[#888]">
+          <span className="text-[12px] font-medium text-text-4">
             Thoughts
           </span>
         )}
       </button>
       {expanded && hasContent && (
         <div
-          className="mt-1.5 ml-4 max-h-[420px] overflow-y-auto rounded-lg bg-[#161618]/90 border border-white/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-[#b4b4b4] break-words animate-[fadeIn_180ms_ease] thinking-prose shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+          className="mt-1.5 ml-4 max-h-[420px] overflow-y-auto rounded-lg bg-sunken/90 border border-hairline px-4 py-3 text-[12.5px] leading-relaxed text-text-2 break-words animate-[fadeIn_180ms_ease] thinking-prose shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
           style={{ scrollbarGutter: "stable" }}
         >
           <MarkdownRenderer content={content!} />
@@ -139,7 +142,7 @@ function ThinkingBlock({ messageId, content, elapsed, running }: {
 function SkillBadge({ name, variant }: { name: string; variant: "static" | "streaming" }) {
   if (variant === "streaming") {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-accent/[0.08] border border-accent/20 text-[11.5px] text-[#d4944a]">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-accent/[0.08] border border-accent/20 text-[11.5px] text-accent">
         <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden="true">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-60" />
           <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
@@ -149,7 +152,7 @@ function SkillBadge({ name, variant }: { name: string; variant: "static" | "stre
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/[0.04] text-text-3 border border-white/[0.06]">
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-white/5 text-text-3 border border-hairline">
       <Sparkles size={9} strokeWidth={1.75} className="text-accent/60 shrink-0" aria-hidden="true" />
       {name}
     </span>
@@ -297,7 +300,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   }, [message.conversationId, message.id]);
 
   // Branch navigation: find siblings (messages with same parent)
-  const allMessages = useChatStore((s) => s.messages[message.conversationId] ?? []);
+  const allMessages = useChatStore((s) => s.messages[message.conversationId] ?? EMPTY_MESSAGES);
   const branchInfo = useMemo(() => {
     if (!message.parentId) return null;
     
@@ -340,11 +343,11 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     <div className={`group px-6 py-1.5 w-full ${isUser ? "flex justify-end" : ""}`}>
       <div className={`flex flex-col gap-1 ${isUser ? "items-end" : "items-stretch"} w-full max-w-[720px] mx-auto`}>
         <div className={`flex items-center gap-1.5 min-h-[16px] ${isUser ? "flex-row-reverse" : ""}`}>
-          <span className="text-[11px] font-medium text-[#a0a0a0] uppercase tracking-wider">
+          <span className="text-[11px] font-medium text-text-3 uppercase tracking-wider">
             {isUser ? "You" : "goatLLM"}
           </span>
           <span
-            className="text-[10.5px] text-[#888888] tabular-nums"
+            className="text-[10.5px] text-text-4 tabular-nums"
             title={formatLongDateTime(message.createdAt)}
             aria-label={formatLongDateTime(message.createdAt)}
           >
@@ -355,19 +358,19 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
               <button
                 onClick={handlePrevBranch}
                 disabled={branchInfo.currentIndex === 0}
-                className="p-0.5 rounded hover:bg-white/[0.08] text-[#888] hover:text-[#ececec] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-0.5 rounded hover:bg-white/5 text-text-4 hover:text-text-1 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Previous branch"
                 aria-label="Previous branch"
               >
                 <ChevronLeft size={12} strokeWidth={2} />
               </button>
-              <span className="text-[10px] text-[#888] tabular-nums px-1">
+              <span className="text-[10px] text-text-4 tabular-nums px-1">
                 {branchInfo.currentIndex + 1}/{branchInfo.total}
               </span>
               <button
                 onClick={handleNextBranch}
                 disabled={branchInfo.currentIndex === branchInfo.total - 1}
-                className="p-0.5 rounded hover:bg-white/[0.08] text-[#888] hover:text-[#ececec] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="p-0.5 rounded hover:bg-white/5 text-text-4 hover:text-text-1 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Next branch"
                 aria-label="Next branch"
               >
@@ -377,7 +380,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
           )}
           {isUser && message.steered && (
             <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f59e42]/10 text-[#f59e42] border border-[#f59e42]/20"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent border border-accent/20"
               title="This message steered the conversation mid-response"
             >
               <Navigation size={9} strokeWidth={2} />
@@ -440,7 +443,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             {editing ? (
               <textarea
                 ref={textareaRef}
-                className="w-full min-w-[320px] bg-[#2c2c2e]/85 border border-white/10 rounded-xl text-[14px] text-[#ececec] p-2.5 resize-none outline-none leading-relaxed focus:border-accent/45 focus:ring-2 focus:ring-accent/10"
+                className="w-full min-w-[320px] bg-surface-2/85 border border-white/10 rounded-xl text-[14px] text-text-1 p-2.5 resize-none outline-none leading-relaxed focus:border-accent/45 focus:ring-2 focus:ring-accent/10"
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onKeyDown={handleEditKeyDown}
@@ -464,7 +467,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         )}
         {isAssistant && message.interrupted && (
           <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-[12px] text-[#a0a0a0]">Response stopped early.</span>
+            <span className="text-[12px] text-text-3">Response stopped early.</span>
             <button
               type="button"
               className="primary-action px-2.5 py-1 rounded-md text-[12px] font-medium"
@@ -493,7 +496,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                     title={copied ? "Copied" : "Copy"}
                   >
                     {copied ? (
-                      <Check size={13} strokeWidth={2} className="text-[#34d399]" aria-hidden="true" />
+                      <Check size={13} strokeWidth={2} className="text-success" aria-hidden="true" />
                     ) : (
                       <Copy size={13} strokeWidth={1.6} aria-hidden="true" />
                     )}
@@ -515,7 +518,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
                 {isAssistant && message.content.trim().length > 0 && voiceSettings.enabled && (
                   <button
-                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${speaking ? "text-[#f59e42] border-[#f59e42]/25 bg-[#f59e42]/10" : ""}`}
+                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${speaking ? "text-accent border-accent/25 bg-accent/10" : ""}`}
                     onClick={handleSpeak}
                     aria-label={speaking ? "Stop response playback" : "Play response"}
                     title={speaking ? "Stop playback" : "Play response"}
@@ -529,7 +532,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
                 {message.content.trim().length > 0 && (
                   <button
-                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-[#f59e42] border-[#f59e42]/25 bg-[#f59e42]/10" : ""}`}
+                    className={`control-icon w-6 h-6 flex items-center justify-center rounded-md transition-colors ${message.pinned ? "text-accent border-accent/25 bg-accent/10" : ""}`}
                     onClick={handleTogglePin}
                     aria-label={message.pinned ? "Unpin from context" : "Pin to context"}
                     title={message.pinned ? "Pinned — survives auto-compaction" : "Pin to context"}
@@ -553,7 +556,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
                 )}
               </div>
               {showStats && (
-                <div className="flex items-center gap-2 text-[10.5px] text-[#a0a0a0] tabular-nums shrink-0">
+                <div className="flex items-center gap-2 text-[10.5px] text-text-3 tabular-nums shrink-0">
                   {message.outputTokens != null && message.outputTokens > 0 && (
                     <span>{message.outputTokens} tokens</span>
                   )}
@@ -773,7 +776,7 @@ function AgentTurnView({
         />
         <AgentTurnRollbackButton message={message} />
         {traceExpanded && (
-          <div className="mt-2 ml-4 flex flex-col gap-1 border-l border-white/[0.06] pl-3">
+          <div className="mt-2 ml-4 flex flex-col gap-1 border-l border-hairline pl-3">
             {hasThinking && (
               <ThinkingBlock
                 messageId={messageId}
@@ -860,17 +863,17 @@ function UserMessageContent({ message }: { message: Message }) {
     <div className="flex flex-col">
       {hasAttachments && <AttachmentChips attachments={message.attachments!} />}
       {isFormSubmission ? (
-        <div className="flex items-center gap-1.5 text-[12px] text-[#888] italic">
-          <ListChecks size={13} strokeWidth={1.6} className="text-[#666]" />
+        <div className="flex items-center gap-1.5 text-[12px] text-text-4 italic">
+          <ListChecks size={13} strokeWidth={1.6} className="text-text-4" />
           Form submitted
         </div>
       ) : cleaned.length > 0 && (
         useRichRender ? (
-          <div className="text-[14px] leading-relaxed text-[#ececec] select-text">
+          <div className="text-[14px] leading-relaxed text-text-1 select-text">
             <MarkdownRenderer content={cleaned} />
           </div>
         ) : (
-          <div className="text-[14px] leading-relaxed text-[#ececec] whitespace-pre-wrap break-words select-text">{cleaned}</div>
+          <div className="text-[14px] leading-relaxed text-text-1 whitespace-pre-wrap break-words select-text">{cleaned}</div>
         )
       )}
     </div>
@@ -950,6 +953,69 @@ function findIncompleteTable(text: string): number {
   return hasSeparator ? -1 : Math.max(0, paragraphStart);
 }
 
+function findUnclosedDelimitedRange(text: string, open: string, close: string): number {
+  let cursor = 0;
+  while (cursor < text.length) {
+    const openIndex = text.indexOf(open, cursor);
+    if (openIndex === -1) return -1;
+    if (isEscaped(text, openIndex)) {
+      cursor = openIndex + open.length;
+      continue;
+    }
+    let closeIndex = text.indexOf(close, openIndex + open.length);
+    while (closeIndex !== -1 && isEscaped(text, closeIndex)) {
+      closeIndex = text.indexOf(close, closeIndex + close.length);
+    }
+    if (closeIndex === -1) return openIndex;
+    cursor = closeIndex + close.length;
+  }
+  return -1;
+}
+
+function findIncompleteDollarMath(text: string): number {
+  let openIndex = -1;
+  let cursor = 0;
+  while (cursor < text.length) {
+    const index = text.indexOf("$$", cursor);
+    if (index === -1) break;
+    if (!isEscaped(text, index)) openIndex = openIndex === -1 ? index : -1;
+    cursor = index + 2;
+  }
+  if (openIndex !== -1) return openIndex;
+
+  cursor = 0;
+  while (cursor < text.length) {
+    const index = text.indexOf("$", cursor);
+    if (index === -1) break;
+    if (text[index + 1] === "$" || text[index - 1] === "$" || isEscaped(text, index)) {
+      cursor = index + 1;
+      continue;
+    }
+    openIndex = openIndex === -1 ? index : -1;
+    cursor = index + 1;
+  }
+  return openIndex;
+}
+
+function findIncompleteLatexCommand(text: string): number {
+  const command = /\\[A-Za-z]+(?:\*?)?(?:\{[^}\n]*)*$/.exec(text);
+  if (command?.index == null) return -1;
+  const tail = text.slice(command.index);
+  const opens = (tail.match(/\{/g) ?? []).length;
+  const closes = (tail.match(/\}/g) ?? []).length;
+  return opens > closes ? command.index : -1;
+}
+
+function findIncompleteMath(text: string): number {
+  const indices = [
+    findUnclosedDelimitedRange(text, "\\(", "\\)"),
+    findUnclosedDelimitedRange(text, "\\[", "\\]"),
+    findIncompleteDollarMath(text),
+    findIncompleteLatexCommand(text),
+  ].filter((index) => index >= 0);
+  return indices.length > 0 ? Math.min(...indices) : -1;
+}
+
 function stableStreamingMarkdown(text: string): string {
   if (!text) return text;
   const holdIndices = [
@@ -958,6 +1024,7 @@ function stableStreamingMarkdown(text: string): string {
     findUnmatchedMarker(text, "__"),
     findIncompleteLink(text),
     findIncompleteTable(text),
+    findIncompleteMath(text),
   ].filter((index) => index >= 0);
   if (holdIndices.length === 0) return text;
   const holdIndex = Math.min(...holdIndices);
@@ -1019,7 +1086,7 @@ function DesignAwareText({
         return (
           <div
             key={`fseg-${messageId}-${i}`}
-            className="soft-card my-3 rounded-xl px-4 py-3 text-[12px] text-[#a0a0a0] thinking-line"
+            className="soft-card my-3 rounded-xl px-4 py-3 text-[12px] text-text-3 thinking-line"
           >
             Composing form…
           </div>
@@ -1135,7 +1202,7 @@ function SegmentedAssistantText({
       {/* If the bubble is mid-stream and the last segment is an open fence,
           add a subtle "writing" hint below the placeholder. */}
       {isStreaming && parts.length > 0 && parts[parts.length - 1].type === "artifact" && (
-        <div className="text-[11px] text-[#a0a0a0] mt-1 thinking-line">Writing…</div>
+        <div className="text-[11px] text-text-3 mt-1 thinking-line">Writing…</div>
       )}
     </>
   );
@@ -1242,22 +1309,22 @@ function PlanBuildCTA({ message }: { message: Message }) {
   };
 
   return (
-    <div className="mt-4 rounded-2xl border border-[#f59e42]/30 bg-[#f59e42]/[0.055] p-4 flex items-start gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className="shrink-0 w-9 h-9 rounded-xl bg-[#f59e42]/15 flex items-center justify-center">
-        <ListChecks size={16} strokeWidth={1.75} className="text-[#f59e42]" aria-hidden="true" />
+    <div className="mt-4 rounded-2xl border border-accent/30 bg-accent/[0.055] p-4 flex items-start gap-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="shrink-0 w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
+        <ListChecks size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-[#ececec] leading-tight">
+        <div className="text-[13px] font-medium text-text-1 leading-tight">
           Plan ready{planMode ? " — read-only investigation done" : ""}
         </div>
-        <div className="text-[11.5px] text-[#a0a0a0] mt-0.5 leading-snug">
+        <div className="text-[11.5px] text-text-3 mt-0.5 leading-snug">
           Review the steps above. Build executes the plan with full write tools.
         </div>
       </div>
       <button
         onClick={handleBuild}
         disabled={isStreaming}
-        className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full bg-[#f59e42] text-[#1a1a1c] text-[13px] font-semibold hover:bg-[#f0903a] active:bg-[#e88a32] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-full bg-accent text-bg text-[13px] font-semibold hover:bg-accent-hover active:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         aria-label="Build the plan"
         title="Switch to write mode and execute the plan"
       >
