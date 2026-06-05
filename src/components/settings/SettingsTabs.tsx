@@ -242,7 +242,7 @@ function FeatureFlagSettings() {
   const featureFlags = useChatStore((s) => s.featureFlags);
   const setFeatureFlag = useChatStore((s) => s.setFeatureFlag);
   return (
-    <SettingsGroup title="Product modules" description="Control which expansion features appear in the + menu and workspace panel.">
+    <SettingsGroup title="Product modules" description="Enable or disable features across the app. Usage, comparison, browser, notebook, images, prompts, sync, memory, watcher, and schedules are integrated directly into the app.">
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {(Object.keys(FEATURE_LABELS) as (keyof ProductFeatureFlags)[]).map((key) => (
           <ToggleRow
