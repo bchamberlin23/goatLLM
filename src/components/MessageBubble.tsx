@@ -337,7 +337,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
   const isWorking = isAssistant && isStreaming && (anyToolRunning || message.content.trim().length === 0);
   const startedAt = isAssistant ? message.createdAt : null;
   const thinkingElapsed = useElapsedLabel(isWorking ? startedAt : null, isWorking);
-  const hasDeepResearchProgress = isAssistant && !!message.deepResearch && isStreaming;
+  const hasDeepResearchProgress = isAssistant && !!message.deepResearch;
 
   return (
     <div className={`group px-6 py-1.5 w-full ${isUser ? "flex justify-end" : ""}`}>

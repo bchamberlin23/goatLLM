@@ -151,4 +151,62 @@ describe("Deep Research UI", () => {
     fireEvent.click(screen.getByRole("button", { name: /close details pane/i }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  it("supports search filtering and copy controls inside the drawer", async () => {
+    const mockWriteText = vi.fn().mockImplementation(() => Promise.resolve());
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: mockWriteText,
+      },
+    });
+
+    resetStore();
+    render(
+      <MessageBubble
+        message={assistantMessage({
+          isStreaming: true,
+          deepResearch: {
+            query: "compare search providers",
+            phase: "reading",
+            startedAt: Date.now() - 5000,
+            round: 2,
+            queries: 4,
+            sourceCount: 2,
+            findingCount: 2,
+            sources: ["https://example.com/one", "https://example.com/two"],
+            findings: ["First finding summary", "Second finding summary"],
+            events: [],
+          },
+        } as Partial<Message>)}
+      />,
+    );
+
+    // Open detail pane
+    fireEvent.click(screen.getByText("2 sources"));
+
+    // Verify both sources are displayed initially
+    expect(screen.getByText("https://example.com/one")).toBeInTheDocument();
+    expect(screen.getByText("https://example.com/two")).toBeInTheDocument();
+
+    // Type query to filter to "one"
+    const searchInput = screen.getByPlaceholderText("Search sources by domain or URL...");
+    fireEvent.change(searchInput, { target: { value: "one" } });
+
+    // Verify filtering
+    expect(screen.getByText("https://example.com/one")).toBeInTheDocument();
+    expect(screen.queryByText("https://example.com/two")).not.toBeInTheDocument();
+
+    // Test individual copy button
+    const copyButton = screen.getAllByRole("button", { name: /copy source url/i })[0];
+    fireEvent.click(copyButton);
+    expect(mockWriteText).toHaveBeenCalledWith("https://example.com/one");
+
+    // Clear search
+    fireEvent.click(screen.getByRole("button", { name: /clear filter/i }));
+    expect(screen.getByText("https://example.com/two")).toBeInTheDocument();
+
+    // Type query that matches nothing
+    fireEvent.change(searchInput, { target: { value: "nomatch" } });
+    expect(screen.getByText("No matching sources")).toBeInTheDocument();
+  });
 });

@@ -974,12 +974,12 @@ button:not(:disabled):active {
 
 @keyframes dr-card-glow {
   0%, 100% {
-    border-color: rgba(255, 255, 255, 0.05);
-    box-shadow: 0 0 16px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    border-color: rgba(245, 158, 66, 0.06);
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
   50% {
-    border-color: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 0 24px rgba(255, 255, 255, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border-color: rgba(245, 158, 66, 0.15);
+    box-shadow: 0 0 24px rgba(245, 158, 66, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 }
 
@@ -990,8 +990,6 @@ button:not(:disabled):active {
 .dr-progress-bar-glow {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08));
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.12);
 }
 
 .dr-progress-bar-glow::after {
@@ -1001,7 +999,7 @@ button:not(:disabled):active {
   left: 0;
   bottom: 0;
   width: 50%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
   animation: dr-shimmer-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
@@ -1025,6 +1023,21 @@ button:not(:disabled):active {
   animation: dr-event-slide-in 0.4s var(--ease-out) both;
 }
 
-.dr-detail-pane {
-  animation: slideIn var(--d-medium) var(--ease-out);
+@keyframes dr-drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
+
+@keyframes dr-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dr-drawer-panel {
+  animation: dr-drawer-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.dr-drawer-backdrop {
+  animation: dr-fade-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
+}
+

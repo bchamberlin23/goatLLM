@@ -956,7 +956,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const wordCount = finalReport.split(/\s+/).length;
         updateMessage(convId!, assistantMsg.id, {
           content: finalReport,
-          deepResearch: undefined,
           isStreaming: false,
           streamingDurationMs: performance.now() - streamStartTime,
           turnDurationMs: performance.now() - streamStartTime,
@@ -984,10 +983,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
         }
       } catch (err) {
+        const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+        const currentDr = currentMsg?.deepResearch;
         if (ac.signal.aborted) {
           updateMessage(convId!, assistantMsg.id, {
             content: "Deep Research aborted.",
-            deepResearch: undefined,
+            deepResearch: currentDr ? {
+              ...currentDr,
+              phase: "error",
+              error: "Deep Research aborted.",
+            } : undefined,
             isStreaming: false,
             interrupted: true,
           });
@@ -997,7 +1002,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         const errMsg = err instanceof Error ? err.message : String(err);
         updateMessage(convId!, assistantMsg.id, {
           content: `Deep Research Error: ${errMsg}`,
-          deepResearch: undefined,
+          deepResearch: currentDr ? {
+            ...currentDr,
+            phase: "error",
+            error: errMsg,
+          } : undefined,
           isStreaming: false,
         });
         logError(convId!, errMsg, "deep-research");

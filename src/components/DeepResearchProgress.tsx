@@ -101,11 +101,70 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
 
   const progressPercent = PHASE_PERCENT[state.phase] ?? 0;
 
+  // Render a clean, minimized finished summary card once research completes
+  if (!isWorking) {
+    const isError = state.phase === "error";
+    const statusText = isError ? "Deep Research stopped" : "Deep Research complete";
+    const StatusIcon = isError ? AlertTriangle : CheckCircle;
+    const iconColor = isError ? "text-error" : "text-success";
+    const borderColor = isError ? "border-error/20" : "border-white/[0.04]";
+
+    return (
+      <>
+        <section
+          aria-label="Deep Research results"
+          className={`my-1.5 w-full rounded-xl border ${borderColor} bg-[#0b0b0c] px-3.5 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]`}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.02] ${iconColor}`}>
+                <StatusIcon size={12} strokeWidth={2.2} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="m-0 text-[12.5px] font-semibold text-text-1">{statusText}</h4>
+                  <span className="text-[10px] text-text-3 tabular-nums font-mono bg-white/5 px-1 py-0.5 rounded">
+                    {elapsed}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {metric(state.queries, "queries", Search)}
+              {metric(
+                state.sourceCount,
+                state.sourceCount === 1 ? "source" : "sources",
+                Globe,
+                sources.length > 0 ? () => setDetailTab("sources") : undefined
+              )}
+              {metric(
+                state.findingCount,
+                state.findingCount === 1 ? "finding" : "findings",
+                FileText,
+                findings.length > 0 ? () => setDetailTab("findings") : undefined
+              )}
+            </div>
+          </div>
+        </section>
+
+        {detailTab && (
+          <DeepResearchDetailPane
+            sources={sources}
+            findings={findings}
+            initialTab={detailTab}
+            onClose={() => setDetailTab(null)}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <>
       <section
         aria-label="Deep Research progress"
-        className={`my-1.5 w-full rounded-xl border border-white/[0.05] bg-[#0f0f10] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] ${
+        className={`my-1.5 w-full rounded-xl border border-white/[0.04] bg-[#0b0b0c] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] ${
           isWorking ? "dr-active-card" : ""
         }`}
       >
@@ -114,10 +173,10 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
           <div className="flex min-w-0 items-start gap-2.5">
             <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border bg-white/[0.02] text-text-2 transition-all duration-300 ${
               isWorking
-                ? "border-white/[0.12] shadow-[0_0_12px_rgba(255,255,255,0.06)]"
-                : "border-white/[0.06]"
+                ? "border-white/[0.1] shadow-[0_0_12px_rgba(255,255,255,0.03)]"
+                : "border-white/[0.04]"
             }`}>
-              <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
+              <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +187,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
               </div>
               <div className="m-0 mt-0.5 text-[12px] leading-5 text-text-2">
                 {isWorking ? (
-                  <Shimmer text={PHASE_LABEL[state.phase]} />
+                  <TextShimmer text={PHASE_LABEL[state.phase]} />
                 ) : (
                   <span>{PHASE_LABEL[state.phase]}</span>
                 )}
@@ -153,10 +212,10 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
         </div>
 
         {/* Progress Bar */}
-        <div className="mt-3.5 h-0.5 w-full overflow-hidden rounded-full bg-white/[0.03]">
+        <div className="mt-3.5 h-[1.5px] w-full overflow-hidden rounded-full bg-white/[0.02]">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              isWorking ? "dr-progress-bar bg-white/40" : "bg-success"
+            className={`h-full rounded-full transition-all duration-500 relative overflow-hidden ${
+              isWorking ? "bg-accent dr-progress-bar-glow" : "bg-success"
             }`}
             style={{ width: `${progressPercent}%` }}
           />
@@ -182,14 +241,14 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
 
         {/* Current Source (Active/Loading) */}
         {state.currentSource && (
-          <div className="skeleton-sheen mt-3 rounded-lg border border-white/[0.055] bg-white/[0.015] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+          <div className="skeleton-sheen mt-3 rounded-lg border border-white/[0.04] bg-white/[0.01] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.01)]">
             <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-4">
               <BookOpen size={11} strokeWidth={1.7} aria-hidden="true" />
               Reading source
             </div>
             <div className="mt-1 truncate text-[12px] font-medium text-text-2">
               {isWorking ? (
-                <Shimmer text={state.currentSource.title || state.currentSource.url} className="font-medium text-text-2" />
+                <TextShimmer text={state.currentSource.title || state.currentSource.url} className="font-medium text-text-2" />
               ) : (
                 state.currentSource.title || state.currentSource.url
               )}
@@ -234,7 +293,7 @@ export function DeepResearchProgress({ state }: { state: DeepResearchState }) {
                     />
                   )}
                   {isCurrentTask ? (
-                    <Shimmer text={event.message} className="min-w-0 truncate font-normal text-text-2" />
+                    <TextShimmer text={event.message} className="min-w-0 truncate font-normal text-text-2" />
                   ) : (
                     <span className="min-w-0 truncate">{event.message}</span>
                   )}
