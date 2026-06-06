@@ -2,7 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InputBar } from "../components/InputBar";
 import { MessageBubble } from "../components/MessageBubble";
+import { ToolsTab } from "../components/settings/ToolsTab";
 import { NEW_CHAT_DRAFT_KEY, useChatStore, type Message } from "../stores/chat";
+import { planResolvers } from "../lib/deep-research";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -95,8 +97,8 @@ describe("Deep Research UI", () => {
       />,
     );
 
-    expect(screen.getByText("Deep Research")).toBeInTheDocument();
-    expect(screen.getByText("Reading sources")).toBeInTheDocument();
+    expect(screen.getByText("Researching Goal")).toBeInTheDocument();
+    expect(screen.getByText(/Reading sources/)).toBeInTheDocument();
     expect(screen.getByText("Round 2")).toBeInTheDocument();
     expect(screen.getByText("3 sources")).toBeInTheDocument();
     expect(screen.getByText("2 findings")).toBeInTheDocument();
@@ -208,5 +210,173 @@ describe("Deep Research UI", () => {
     // Type query that matches nothing
     fireEvent.change(searchInput, { target: { value: "nomatch" } });
     expect(screen.getByText("No matching sources")).toBeInTheDocument();
+  });
+
+  it("renders planning draft and supports editing and starting the plan", () => {
+    resetStore();
+    const mockResolve = vi.fn();
+    const msgId = "msg-planning";
+    const convId = "conv-planning";
+    
+    // Seed the global planResolvers map
+    planResolvers.set(msgId, mockResolve);
+
+    // Initial state setup in store
+    useChatStore.setState({
+      conversations: [{ id: convId, title: "New Conversation", createdAt: Date.now(), lastMessagePreview: "", lastMessageAt: Date.now(), modelId: "gpt-4", systemPrompt: "" }],
+      messages: {
+        [convId]: [
+          assistantMessage({
+            id: msgId,
+            conversationId: convId,
+            isStreaming: true,
+            deepResearch: {
+              query: "undervalued stocks",
+              phase: "planning",
+              startedAt: Date.now() - 1000,
+              planTitle: "Undervalued stocks research",
+              planSteps: ["Step one", "Step two"],
+              planApproved: false,
+              events: [],
+            },
+          }),
+        ],
+      },
+    });
+
+    function TestWrapper() {
+      const messages = useChatStore((s) => s.messages[convId] ?? []);
+      return <MessageBubble message={messages[0]} />;
+    }
+
+    render(<TestWrapper />);
+
+    // 1. Verify Draft Card is displayed
+    expect(screen.getByText("Draft Research Plan")).toBeInTheDocument();
+    expect(screen.getByText("Undervalued stocks research")).toBeInTheDocument();
+    expect(screen.getByText("Step one")).toBeInTheDocument();
+    expect(screen.getByText("Step two")).toBeInTheDocument();
+
+    // 2. Click Edit to switch to edit mode
+    fireEvent.click(screen.getByRole("button", { name: /edit plan/i }));
+    expect(screen.getByLabelText("Edit Research Plan")).toBeInTheDocument();
+
+    // Verify inputs are visible
+    const titleInput = screen.getByPlaceholderText("e.g. Undervalued stocks with high upside");
+    expect(titleInput).toHaveValue("Undervalued stocks research");
+    
+    // Change title
+    fireEvent.change(titleInput, { target: { value: "Modified stock title" } });
+
+    // Save changes
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    // Verify it saved and returned to preview mode
+    expect(screen.getByText("Draft Research Plan")).toBeInTheDocument();
+    expect(screen.getByText("Modified stock title")).toBeInTheDocument();
+
+    // 3. Click Start to approve and run the plan
+    fireEvent.click(screen.getByRole("button", { name: /start/i }));
+    
+    // Verify that the resolver was called with the latest steps
+    expect(mockResolve).toHaveBeenCalledWith(["Step one", "Step two"]);
+    
+    // Verify that the message deepResearch phase is now updated to approved
+    const updatedMsg = useChatStore.getState().messages[convId][0];
+    expect(updatedMsg.deepResearch?.planApproved).toBe(true);
+  });
+
+  it("supports editing/updating the plan steps while research is running", () => {
+    resetStore();
+    const msgId = "msg-running";
+    const convId = "conv-running";
+
+    useChatStore.setState({
+      conversations: [{ id: convId, title: "New Conversation", createdAt: Date.now(), lastMessagePreview: "", lastMessageAt: Date.now(), modelId: "gpt-4", systemPrompt: "" }],
+      messages: {
+        [convId]: [
+          assistantMessage({
+            id: msgId,
+            conversationId: convId,
+            isStreaming: true,
+            deepResearch: {
+              query: "undervalued stocks",
+              phase: "searching",
+              startedAt: Date.now() - 1000,
+              planTitle: "Running stock research",
+              planSteps: ["Task one", "Task two"],
+              planApproved: true,
+              round: 1,
+              queries: 2,
+              events: [],
+            },
+          }),
+        ],
+      },
+    });
+
+    function TestWrapper() {
+      const messages = useChatStore((s) => s.messages[convId] ?? []);
+      return <MessageBubble message={messages[0]} />;
+    }
+
+    render(<TestWrapper />);
+
+    // 1. Verify running progress card and steps
+    expect(screen.getByText("Researching Goal")).toBeInTheDocument();
+    expect(screen.getByText("Running stock research")).toBeInTheDocument();
+    expect(screen.getByText("Task one")).toBeInTheDocument();
+    expect(screen.getByText("Task two")).toBeInTheDocument();
+    expect(screen.getByText("Searching web...")).toBeInTheDocument();
+
+    // 2. Click Update to edit the plan
+    fireEvent.click(screen.getByRole("button", { name: /update/i }));
+    expect(screen.getByLabelText("Edit Research Plan")).toBeInTheDocument();
+
+    // Verify input has the current steps
+    const stepInputs = screen.getAllByPlaceholderText(/step/i);
+    expect(stepInputs[0]).toHaveValue("Task one");
+
+    // Change step 1 value
+    fireEvent.change(stepInputs[0], { target: { value: "Task one updated" } });
+
+    // Save changes
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    // Verify it updated on the progress card
+    expect(screen.getByText("Researching Goal")).toBeInTheDocument();
+    expect(screen.getByText("Task one updated")).toBeInTheDocument();
+
+    // Verify state in store is updated
+    const updatedMsg = useChatStore.getState().messages[convId][0];
+    expect(updatedMsg.deepResearch?.planSteps).toEqual(["Task one updated", "Task two"]);
+  });
+
+  it("supports configuring deep research max rounds and max searches in settings", () => {
+    resetStore();
+
+    // 1. Verify store defaults
+    expect(useChatStore.getState().deepResearchMaxRounds).toBe(4);
+    expect(useChatStore.getState().deepResearchMaxSearches).toBe(3);
+
+    render(<ToolsTab />);
+
+    // 2. Locate the inputs within the Deep Research section
+    const section = screen.getByText("Deep Research").closest("section")!;
+    const inputs = section.querySelectorAll('input[type="number"]');
+    expect(inputs).toHaveLength(2);
+    const roundsInput = inputs[0] as HTMLInputElement;
+    const searchesInput = inputs[1] as HTMLInputElement;
+
+    expect(roundsInput).toHaveValue(4);
+    expect(searchesInput).toHaveValue(3);
+
+    // 3. Change max rounds
+    fireEvent.change(roundsInput, { target: { value: "6" } });
+    expect(useChatStore.getState().deepResearchMaxRounds).toBe(6);
+
+    // 4. Change max searches per round
+    fireEvent.change(searchesInput, { target: { value: "5" } });
+    expect(useChatStore.getState().deepResearchMaxSearches).toBe(5);
   });
 });

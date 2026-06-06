@@ -410,7 +410,7 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
         )}
 
         {hasDeepResearchProgress && message.deepResearch && (
-          <DeepResearchProgress state={message.deepResearch} />
+          <DeepResearchProgress message={message} state={message.deepResearch} />
         )}
 
         {/* Auto-trigger skill badges — streaming only */}

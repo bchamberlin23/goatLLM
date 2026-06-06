@@ -3,7 +3,7 @@ import { X, Globe, FileText, ExternalLink, Search, Copy, Check } from "lucide-re
 
 interface DeepResearchDetailPaneProps {
   sources: string[];
-  findings: string[];
+  findings: any[];
   initialTab: "sources" | "findings";
   onClose: () => void;
 }
@@ -27,6 +27,11 @@ export function DeepResearchDetailPane({
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // Keep activeTab in sync with initialTab changes (e.g. clicking badges on progress card)
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Close on escape key
   useEffect(() => {
@@ -60,7 +65,11 @@ export function DeepResearchDetailPane({
   const getFilteredFindings = () => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return findings;
-    return findings.filter((finding) => finding.toLowerCase().includes(query));
+    return findings.filter((finding) => {
+      const isStr = typeof finding === "string";
+      const text = isStr ? finding : `${finding.summary || ""} ${finding.evidence || ""} ${finding.rational || ""}`;
+      return text.toLowerCase().includes(query);
+    });
   };
 
   const filteredSources = getFilteredSources();
@@ -70,7 +79,12 @@ export function DeepResearchDetailPane({
     const textToCopy =
       activeTab === "sources"
         ? filteredSources.join("\n")
-        : filteredFindings.map((f, i) => `Finding ${i + 1}:\n${f}`).join("\n\n");
+        : filteredFindings.map((f, i) => {
+            const isStr = typeof f === "string";
+            const summaryText = isStr ? f : (f.summary || f.evidence || "");
+            const sourceInfo = isStr ? "" : (f.url ? `\nSource: ${f.title || f.url}` : "");
+            return `Finding ${i + 1}:\n${summaryText}${sourceInfo}`;
+          }).join("\n\n");
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopiedAll(true);
@@ -91,7 +105,7 @@ export function DeepResearchDetailPane({
 
       {/* Drawer Container */}
       <div
-        className="fixed right-0 top-0 bottom-0 z-50 flex w-[420px] max-w-full flex-col bg-[#0b0b0c] border-l border-white/[0.06] shadow-[var(--shadow-float)] dr-drawer-panel"
+        className="fixed right-0 top-0 bottom-0 z-50 flex w-[500px] max-w-full flex-col bg-[#0b0b0c] border-l border-white/[0.06] shadow-[var(--shadow-float)] dr-drawer-panel"
         role="dialog"
         aria-label="Deep Research details"
       >
@@ -244,33 +258,77 @@ export function DeepResearchDetailPane({
             </div>
           ) : (
             <ul className="m-0 space-y-2.5 p-0 list-none">
-              {filteredFindings.map((finding, i) => (
-                <li
-                  key={finding}
-                  className="dr-event-enter relative rounded-lg border border-white/[0.05] bg-white/[0.008] p-3 text-xs leading-relaxed text-text-2 hover:bg-white/[0.02] hover:border-white/[0.08] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.01)]"
-                  style={{ animationDelay: `${i * 25}ms` }}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-1.5 font-semibold text-text-3">
-                      <FileText size={11} className="shrink-0" />
-                      <span className="font-mono text-[10px] tracking-wider uppercase">Finding {i + 1}</span>
+              {filteredFindings.map((finding, i) => {
+                const isString = typeof finding === "string";
+                const summary = isString ? finding : (finding.summary || finding.evidence || "");
+                const rational = isString ? "" : finding.rational;
+                const evidence = isString ? "" : finding.evidence;
+                const url = isString ? "" : finding.url;
+                const title = isString ? "" : finding.title;
+                const findingKey = isString ? finding : `${finding.url}-${i}`;
+
+                return (
+                  <li
+                    key={findingKey}
+                    className="dr-event-enter relative rounded-xl border border-white/[0.05] bg-white/[0.008] p-3 text-xs leading-relaxed text-text-2 hover:bg-white/[0.02] hover:border-white/[0.08] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.01)]"
+                    style={{ animationDelay: `${i * 25}ms` }}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-text-3">
+                        <FileText size={11} className="shrink-0" />
+                        <span className="font-mono text-[10px] tracking-wider uppercase text-text-3">Finding {i + 1}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopy(summary)}
+                        className="control-icon flex h-5.5 w-5.5 items-center justify-center rounded hover:text-text-1 cursor-pointer"
+                        title="Copy finding text"
+                        aria-label={`Copy finding ${i + 1}`}
+                      >
+                        {copiedKey === summary ? (
+                          <Check size={11} className="text-success" />
+                        ) : (
+                          <Copy size={11} />
+                        )}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleCopy(finding)}
-                      className="control-icon flex h-5.5 w-5.5 items-center justify-center rounded hover:text-text-1 cursor-pointer"
-                      title="Copy finding text"
-                      aria-label={`Copy finding ${i + 1}`}
-                    >
-                      {copiedKey === finding ? (
-                        <Check size={11} className="text-success" />
-                      ) : (
-                        <Copy size={11} />
-                      )}
-                    </button>
-                  </div>
-                  <div className="text-text-2 pr-1 select-text selection:bg-accent/20">{finding}</div>
-                </li>
-              ))}
+
+                    <div className="text-text-2 pr-1 select-text selection:bg-accent/20 font-medium">
+                      {summary}
+                    </div>
+
+                    {url && (
+                      <div className="mt-2 flex items-center gap-1 text-[10.5px] text-text-3">
+                        <Globe size={10} className="shrink-0" />
+                        <span className="text-text-4">Source:</span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent hover:underline truncate max-w-[280px]"
+                        >
+                          {title || getDomain(url)}
+                        </a>
+                        <ExternalLink size={8} className="text-text-4" />
+                      </div>
+                    )}
+
+                    {rational && (
+                      <div className="mt-2 text-[11px] text-text-3 border-l-2 border-accent/40 pl-2 py-0.5">
+                        <span className="font-semibold text-text-2">Relevance:</span> {rational}
+                      </div>
+                    )}
+
+                    {evidence && (
+                      <div className="mt-2.5 space-y-1">
+                        <div className="text-[9.5px] font-semibold text-text-4 uppercase tracking-wider">Supporting Quote</div>
+                        <blockquote className="m-0 border-l border-white/20 pl-2.5 font-mono text-[10.5px] text-text-3 italic select-text whitespace-pre-wrap leading-normal">
+                          {evidence}
+                        </blockquote>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

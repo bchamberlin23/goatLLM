@@ -249,6 +249,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const toggleResearchMode = useChatStore((s) => s.toggleResearchMode);
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const searchBackend = useChatStore((s) => s.searchBackend);
+  const deepResearchMaxRounds = useChatStore((s) => s.deepResearchMaxRounds);
+  const deepResearchMaxSearches = useChatStore((s) => s.deepResearchMaxSearches);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
   const featureFlags = useChatStore((s) => s.featureFlags);
   const pursueGoalMode = useChatStore((s) => s.pursueGoalMode);
@@ -903,7 +905,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     if (isResearchMode) {
       try {
-        const { runDeepResearch } = await import("../lib/deep-research");
+        const { runDeepResearch, planResolvers } = await import("../lib/deep-research");
         let eventCounter = 0;
         const events: DeepResearchEvent[] = [];
         const startedAt = Date.now();
@@ -954,14 +956,46 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             error: progress.phase === "error" ? progress.message : undefined,
           };
 
-          updateMessage(convId!, assistantMsg.id, { content: "", deepResearch });
+          const updates: Partial<Message> = { deepResearch };
+          if (progress.phase !== "done" && progress.phase !== "error") {
+            updates.content = "";
+          }
+          updateMessage(convId!, assistantMsg.id, updates);
         };
 
         const finalReport = await runDeepResearch(
           trimmed,
           llmConfig,
           updateLog,
-          ac.signal
+          ac.signal,
+          deepResearchMaxRounds,
+          undefined,
+          {
+            maxUrlsPerRound: deepResearchMaxSearches,
+            onPlanReady: ({ title, steps }) => {
+              return new Promise<string[]>((resolve) => {
+                planResolvers.set(assistantMsg.id, resolve);
+                updateMessage(convId!, assistantMsg.id, {
+                  deepResearch: {
+                    query: trimmed,
+                    phase: "planning",
+                    startedAt,
+                    events: events.slice(-8),
+                    planTitle: title,
+                    planSteps: steps,
+                    planApproved: false,
+                  }
+                });
+              });
+            },
+            getLatestPlan: () => {
+              const latestMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+              return {
+                title: latestMsg?.deepResearch?.planTitle || trimmed,
+                steps: latestMsg?.deepResearch?.planSteps || [],
+              };
+            }
+          }
         );
 
         const wordCount = finalReport.split(/\s+/).length;

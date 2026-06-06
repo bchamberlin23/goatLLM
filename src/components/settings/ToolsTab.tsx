@@ -36,6 +36,10 @@ export function ToolsTab() {
   const setChatCodeExec = useChatStore((s) => s.setChatCodeExec);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
   const setSubagentsEnabled = useChatStore((s) => s.setSubagentsEnabled);
+  const deepResearchMaxRounds = useChatStore((s) => s.deepResearchMaxRounds);
+  const setDeepResearchMaxRounds = useChatStore((s) => s.setDeepResearchMaxRounds);
+  const deepResearchMaxSearches = useChatStore((s) => s.deepResearchMaxSearches);
+  const setDeepResearchMaxSearches = useChatStore((s) => s.setDeepResearchMaxSearches);
 
   const searchBackend = useChatStore((s) => s.searchBackend);
   const setSearchBackend = useChatStore((s) => s.setSearchBackend);
@@ -392,6 +396,38 @@ export function ToolsTab() {
             )}
           </div>
         )}
+      </SettingsGroup>
+
+      <SettingsGroup title="Deep Research" description="Configure sequential search limits and depths.">
+        <div className="flex items-center justify-between gap-3 p-3.5 bg-surface-3 border border-white/5 rounded-xl transition-colors">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-medium text-text-1">Max Rounds</span>
+            <span className="text-[11px] text-text-3">The maximum number of sequential research loops to execute.</span>
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={deepResearchMaxRounds}
+            onChange={(e) => setDeepResearchMaxRounds(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-[80px] h-[32px] px-3 bg-surface-2 border border-white/5 rounded-lg text-[13px] text-text-1 text-center outline-none focus:border-white/15 font-mono"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 p-3.5 bg-surface-3 border border-white/5 rounded-xl transition-colors">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[14px] font-medium text-text-1">Max Searches per Round</span>
+            <span className="text-[11px] text-text-3">Maximum queries/URLs to scrape per query in each round.</span>
+          </div>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={deepResearchMaxSearches}
+            onChange={(e) => setDeepResearchMaxSearches(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-[80px] h-[32px] px-3 bg-surface-2 border border-white/5 rounded-lg text-[13px] text-text-1 text-center outline-none focus:border-white/15 font-mono"
+          />
+        </div>
       </SettingsGroup>
 
       <SettingsGroup title="Memory" description="Long-term memory management for the agent.">

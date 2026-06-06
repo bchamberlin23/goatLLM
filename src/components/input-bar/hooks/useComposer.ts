@@ -752,7 +752,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
 
     if (isResearchMode) {
       try {
-        const { runDeepResearch } = await import("../../../lib/deep-research");
+        const { runDeepResearch, planResolvers } = await import("../../../lib/deep-research");
         let eventCounter = 0;
         const events: DeepResearchEvent[] = [];
         const startedAt = Date.now();
@@ -803,14 +803,50 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
             error: progress.phase === "error" ? progress.message : undefined,
           };
 
-          updateMessage(convId!, assistantMsg.id, { content: "", deepResearch });
+          const updates: Partial<Message> = { deepResearch };
+          if (progress.phase !== "done" && progress.phase !== "error") {
+            updates.content = "";
+          }
+          updateMessage(convId!, assistantMsg.id, updates);
         };
+
+        const store = getStore();
+        const deepResearchMaxRounds = store.deepResearchMaxRounds;
+        const deepResearchMaxSearches = store.deepResearchMaxSearches;
 
         const finalReport = await runDeepResearch(
           trimmed,
           llmConfig,
           updateLog,
-          ac.signal
+          ac.signal,
+          deepResearchMaxRounds,
+          undefined,
+          {
+            maxUrlsPerRound: deepResearchMaxSearches,
+            onPlanReady: ({ title, steps }) => {
+              return new Promise<string[]>((resolve) => {
+                planResolvers.set(assistantMsg.id, resolve);
+                updateMessage(convId!, assistantMsg.id, {
+                  deepResearch: {
+                    query: trimmed,
+                    phase: "planning",
+                    startedAt,
+                    events: events.slice(-8),
+                    planTitle: title,
+                    planSteps: steps,
+                    planApproved: false,
+                  }
+                });
+              });
+            },
+            getLatestPlan: () => {
+              const latestMsg = getStore().messages[convId!]?.find((m) => m.id === assistantMsg.id);
+              return {
+                title: latestMsg?.deepResearch?.planTitle || trimmed,
+                steps: latestMsg?.deepResearch?.planSteps || [],
+              };
+            }
+          }
         );
 
         const wordCount = finalReport.split(/\s+/).length;

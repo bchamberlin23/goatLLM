@@ -15,8 +15,11 @@ export interface ResearchProgress {
   total_sources?: number;
   total_findings?: number;
   sources?: string[];
-  findings?: string[];
+  findings?: (string | ResearchFinding)[];
   message?: string;
+  planTitle?: string;
+  planSteps?: string[];
+  planApproved?: boolean;
 }
 
 export interface DeepResearchOptions {
@@ -27,7 +30,11 @@ export interface DeepResearchOptions {
   maxEmptyRounds?: number;
   synthesisWindow?: number;
   maxReportTokens?: number;
+  onPlanReady?: (plan: { title: string; steps: string[] }) => Promise<string[]>;
+  getLatestPlan?: () => { title: string; steps: string[] };
 }
+
+export const planResolvers = new Map<string, (steps: string[]) => void>();
 
 interface ResearchFinding {
   url: string;
@@ -88,21 +95,22 @@ const RESEARCH_PLAN_PROMPT = `You are a research strategist. Before searching, a
 
 **Question:** {question}
 
-Break this question down:
-1. What are the key sub-topics that need to be covered for a comprehensive answer?
-2. What specific data points, facts, or perspectives should we look for?
-3. What would a complete, high-quality answer include?
+Break this question down and create a list of 3-6 actionable research steps.
 
 Return a JSON object with:
-- "sub_questions": Array of 3-6 specific sub-questions to investigate
-- "key_topics": Array of key topics/angles to cover
-- "success_criteria": One sentence describing what a complete answer looks like
+- "title": A short, clear title summarizing the research goal (e.g., "Undervalued stocks with high upside")
+- "steps": Array of 3-6 specific, actionable research steps to investigate (each step should be a clear, one-sentence action)
 
 Example:
 {
-  "sub_questions": ["What is the cost of living in X?", "How is the healthcare system?"],
-  "key_topics": ["economy", "healthcare", "safety", "culture"],
-  "success_criteria": "A balanced comparison covering cost, quality of life, and practical considerations."
+  "title": "Undervalued stocks with high upside",
+  "steps": [
+    "Collect recent market screens for low valuation and strong growth metrics.",
+    "Analyze financials and cash flow trends for shortlisted companies.",
+    "Review analyst reports, insider activity, and institutional ownership changes.",
+    "Assess industry catalysts, competitive position, and macro risks.",
+    "Rank candidates by upside potential and summarize investment theses."
+  ]
 }
 `;
 
@@ -397,11 +405,17 @@ export async function runDeepResearch(
 ): Promise<string> {
   const startTime = Date.now();
   
+  let planTitle = question;
+  let planSteps: string[] = [];
+  
   const onProgress = (p: ResearchProgress) => {
     rawOnProgress({
+      planTitle,
+      planSteps,
+      planApproved: p.phase === "planning" ? (p.planApproved ?? false) : true,
       ...p,
       sources: Array.from(urlsFetched),
-      findings: findings.map((f) => f.summary || f.evidence || ""),
+      findings: [...findings],
     });
   };
   const maxUrlsPerRound = clampInt(options.maxUrlsPerRound ?? 3, 1, 20);
@@ -431,22 +445,33 @@ export async function runDeepResearch(
     const planResponse = await callLlm([{ role: "user", content: planPrompt }], config, 0.3, 1024, abortSignal);
     const parsedPlan = parseJsonObject(planResponse);
     if (isRecord(parsedPlan)) {
-      const parts: string[] = [];
-      const subQuestions = stringArray(parsedPlan.sub_questions);
-      const keyTopics = stringArray(parsedPlan.key_topics);
-      const successCriteria = optionalString(parsedPlan.success_criteria);
-      if (subQuestions?.length) parts.push("Sub-questions: " + subQuestions.join("; "));
-      if (keyTopics?.length) parts.push("Key topics: " + keyTopics.join(", "));
-      if (successCriteria) parts.push("Success: " + successCriteria);
-      researchPlan = parts.join("\n") || planResponse;
-    } else {
-      researchPlan = planResponse;
+      planTitle = optionalString(parsedPlan.title) || question;
+      planSteps = stringArray(parsedPlan.steps) || [];
     }
   } catch (e) {
     log.warn("Planning failed", withError("deep-research", undefined, e));
     onProgress({ phase: "warning", message: "Planning step failed, proceeding to direct search." });
-    researchPlan = "(No plan - search broadly.)";
   }
+
+  if (planSteps.length === 0) {
+    planSteps = [`Search broadly for information to answer: ${question}`];
+  }
+
+  // Notify UI of draft plan, approved is false
+  onProgress({ phase: "planning", planTitle, planSteps, planApproved: false });
+
+  if (options.onPlanReady) {
+    try {
+      planSteps = await options.onPlanReady({ title: planTitle, steps: planSteps });
+      // Notify UI of approved plan, approved is true
+      onProgress({ phase: "planning", planTitle, planSteps, planApproved: true });
+    } catch (e) {
+      log.warn("Plan approval failed/cancelled", withError("deep-research", undefined, e));
+      throw e;
+    }
+  }
+
+  researchPlan = `Research Title: ${planTitle}\nSteps to cover:\n${planSteps.map((s, idx) => `${idx + 1}. ${s}`).join("\n")}`;
 
   // 2. CLASSIFY CATEGORY
   try {
@@ -477,6 +502,13 @@ Respond with ONLY the category name, nothing else.`;
   // 3. ITERATIVE ROUNDS LOOP
   for (let roundNum = 1; roundNum <= maxRounds; roundNum++) {
     if (abortSignal?.aborted || isTimeExceeded()) break;
+
+    if (options.getLatestPlan) {
+      const latest = options.getLatestPlan();
+      planTitle = latest.title;
+      planSteps = latest.steps;
+      researchPlan = `Research Title: ${planTitle}\nSteps to cover:\n${planSteps.map((s, idx) => `${idx + 1}. ${s}`).join("\n")}`;
+    }
 
     onProgress({ phase: "searching", round: roundNum, total_sources: urlsFetched.size, total_findings: findings.length });
 
@@ -732,26 +764,37 @@ Respond with ONLY the category name, nothing else.`;
     finalReport = await callLlm([{ role: "user", content: finalPrompt }], config, 0.3, maxReportTokens, abortSignal);
 
     const wordCount = finalReport.split(/\s+/).length;
-    if (wordCount < 400 && !abortSignal?.aborted) {
+    if (wordCount > 0 && wordCount < 400 && !abortSignal?.aborted) {
       onProgress({ phase: "writing", message: "Expanding report..." });
-      finalReport = await callLlm([
-        { role: "user", content: finalPrompt },
-        { role: "assistant", content: finalReport },
-        {
-          role: "user",
-          content:
-            "This report is too brief. Please expand it significantly:\n" +
-            "- Add detailed paragraphs for each section (not just bullet points)\n" +
-            "- Include specific data, numbers, and comparisons from the evidence\n" +
-            "- Explain context and significance — don't just list facts\n" +
-            "- Use ## headings and ### subheadings\n" +
-            "- Target at least 1000 words\n" +
-            "Write the full expanded report now."
+      try {
+        const expandedReport = await callLlm([
+          { role: "user", content: finalPrompt },
+          { role: "assistant", content: finalReport },
+          {
+            role: "user",
+            content:
+              "This report is too brief. Please expand it significantly:\n" +
+              "- Add detailed paragraphs for each section (not just bullet points)\n" +
+              "- Include specific data, numbers, and comparisons from the evidence\n" +
+              "- Explain context and significance — don't just list facts\n" +
+              "- Use ## headings and ### subheadings\n" +
+              "- Target at least 1000 words\n" +
+              "Write the full expanded report now."
+          }
+        ], config, 0.4, maxReportTokens, abortSignal);
+        if (expandedReport.trim()) {
+          finalReport = expandedReport;
         }
-      ], config, 0.4, maxReportTokens, abortSignal);
+      } catch (e) {
+        log.warn("Report expansion failed, using original report", withError("deep-research", undefined, e));
+      }
     }
   } catch (e) {
     log.error("Final report generation failed", withError("deep-research", undefined, e));
+    finalReport = report || "Failed to generate Deep Research report.";
+  }
+
+  if (!finalReport.trim()) {
     finalReport = report || "Failed to generate Deep Research report.";
   }
 

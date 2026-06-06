@@ -124,9 +124,8 @@ describe("runDeepResearch Orchestrator", () => {
     const mockResponses = [
       // 1. Planning Response
       JSON.stringify({
-        sub_questions: ["What was Apple's 2023 revenue?"],
-        key_topics: ["finance"],
-        success_criteria: "Clear revenue figure.",
+        title: "Apple 2023 Revenue",
+        steps: ["What was Apple's 2023 revenue?"],
       }),
       // 2. Classification Response
       "general",
@@ -200,9 +199,8 @@ describe("runDeepResearch Orchestrator", () => {
 
     const mockResponses = [
       JSON.stringify({
-        sub_questions: ["What was Apple's 2023 revenue?"],
-        key_topics: ["finance"],
-        success_criteria: "Clear revenue figure.",
+        title: "Apple 2023 Revenue",
+        steps: ["What was Apple's 2023 revenue?"],
       }),
       "general",
       JSON.stringify(["apple revenue 2023"]),
@@ -295,7 +293,7 @@ describe("runDeepResearch Orchestrator", () => {
     });
 
     const responses = [
-      JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }),
+      JSON.stringify({ title: "Question", steps: ["one"] }),
       "general",
       JSON.stringify(["query one", "query two"]),
       ...Array.from({ length: 6 }, () => JSON.stringify({
@@ -333,7 +331,7 @@ describe("runDeepResearch Orchestrator", () => {
       text: maxOutputTokens === 20
         ? "general"
         : maxOutputTokens === 1024
-          ? JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" })
+          ? JSON.stringify({ title: "Question", steps: ["one"] })
           : JSON.stringify(["empty query"]),
       finishReason: "stop",
       usage: { promptTokens: 1, completionTokens: 1 },
@@ -360,7 +358,7 @@ describe("runDeepResearch Orchestrator", () => {
       callIndex++;
       if (callIndex === 1) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
-        return { text: JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }) } as any;
+        return { text: JSON.stringify({ title: "Question", steps: ["one"] }) } as any;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
       if (callIndex === 2) return { text: "general" } as any;
@@ -389,7 +387,7 @@ describe("runDeepResearch Orchestrator", () => {
     const { generateText } = await import("ai");
     let callIndex = 0;
     const mockResponses = [
-      JSON.stringify({ sub_questions: ["one"], key_topics: ["topic"], success_criteria: "complete" }),
+      JSON.stringify({ title: "Question", steps: ["one"] }),
       "general",
       JSON.stringify(["apple revenue 2023"]),
       JSON.stringify({ rational: "relevant", evidence: "evidence", summary: "summary" }),

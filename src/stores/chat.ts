@@ -386,13 +386,16 @@ export interface DeepResearchState {
   sourceCount?: number;
   findingCount?: number;
   sources?: string[];
-  findings?: string[];
+  findings?: any[];
   currentSource?: {
     title?: string;
     url: string;
   };
   events: DeepResearchEvent[];
   error?: string;
+  planTitle?: string;
+  planSteps?: string[];
+  planApproved?: boolean;
 }
 
 export interface Message {
@@ -1276,6 +1279,12 @@ export interface ChatStore {
   firecrawlApiKey: string;
   setFirecrawlApiKey: (key: string) => void;
 
+  // Deep Research Config
+  deepResearchMaxRounds: number;
+  setDeepResearchMaxRounds: (rounds: number) => void;
+  deepResearchMaxSearches: number;
+  setDeepResearchMaxSearches: (searches: number) => void;
+
   // Free web search (deepcode-style endpoint, no API key needed)
   freeWebSearch: boolean;
   setFreeWebSearch: (enabled: boolean) => void;
@@ -1628,6 +1637,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       messageSearchLoading: false,
       tavilyApiKey: "",
       firecrawlApiKey: "",
+      deepResearchMaxRounds: 4,
+      deepResearchMaxSearches: 3,
       freeWebSearch: false,
       chatCodeExec: false,
       freeWebSearchToken: "",
@@ -3651,6 +3662,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ firecrawlApiKey: key });
         try { localStorage.setItem("goatllm-firecrawl-key", key); } catch {}
       },
+      setDeepResearchMaxRounds: (rounds) => {
+        set({ deepResearchMaxRounds: rounds });
+        try { localStorage.setItem("goatllm-deep-research-max-rounds", String(rounds)); } catch {}
+      },
+      setDeepResearchMaxSearches: (searches) => {
+        set({ deepResearchMaxSearches: searches });
+        try { localStorage.setItem("goatllm-deep-research-max-searches", String(searches)); } catch {}
+      },
 
       setFreeWebSearch: (enabled) => {
         set({ freeWebSearch: enabled });
@@ -4230,6 +4249,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const firecrawlKey = localStorage.getItem("goatllm-firecrawl-key") || "";
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
+          const deepResearchMaxRounds = parseInt(localStorage.getItem("goatllm-deep-research-max-rounds") || "4") || 4;
+          const deepResearchMaxSearches = parseInt(localStorage.getItem("goatllm-deep-research-max-searches") || "3") || 3;
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
           let searchBackend = localStorage.getItem("goatllm-search-backend") as any;
@@ -4270,6 +4291,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                     tc.state = "done";
                   }
                 }
+              }
+              // Clean up runtime deep research states on hydrate
+              if (m.deepResearch && m.deepResearch.phase !== "done" && m.deepResearch.phase !== "error") {
+                m.deepResearch = {
+                  ...m.deepResearch,
+                  phase: "error",
+                  error: "Deep Research interrupted.",
+                };
               }
             }
           }
@@ -4410,6 +4439,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             firecrawlApiKey: firecrawlKey,
             freeWebSearch,
             chatCodeExec,
+            deepResearchMaxRounds,
+            deepResearchMaxSearches,
             freeWebSearchToken,
             searchBackend,
             memoryEnabled,
@@ -4496,6 +4527,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
           const firecrawlKey = localStorage.getItem("goatllm-firecrawl-key") || "";
           const freeWebSearch = localStorage.getItem("goatllm-free-web-search") === "true";
+          const deepResearchMaxRounds = parseInt(localStorage.getItem("goatllm-deep-research-max-rounds") || "4") || 4;
+          const deepResearchMaxSearches = parseInt(localStorage.getItem("goatllm-deep-research-max-searches") || "3") || 3;
           const chatCodeExec = localStorage.getItem("goatllm-chat-code-exec") === "true";
           let freeWebSearchToken = localStorage.getItem("goatllm-free-web-search-token") || "";
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
@@ -4531,6 +4564,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             tavilyApiKey: tavilyKey,
             firecrawlApiKey: firecrawlKey,
             freeWebSearch,
+            deepResearchMaxRounds,
+            deepResearchMaxSearches,
             chatCodeExec,
             freeWebSearchToken,
             searchBackend,
