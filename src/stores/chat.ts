@@ -312,6 +312,27 @@ export interface Attachment {
   sizeBytes: number;
 }
 
+/** A source the assistant drew on for a chat-mode reply. Surfaced as a
+ *  clickable "Sources" element under the message. Only the sources the model
+ *  actually referenced inline (via a `[n]` marker matching the source number)
+ *  are stored — availability alone never produces a citation.
+ *
+ *  Chat mode only. Agent/design turns expose their sources as tool-call pills
+ *  instead, so they never populate this field. */
+export interface Citation {
+  /** 1-based number the model cites inline, e.g. `[1]`. Matches the order
+   *  sources were registered this turn (documents first, then web results). */
+  index: number;
+  /** Where the source came from. */
+  type: "web" | "document";
+  /** Display label — page title for web, filename for a document. */
+  title: string;
+  /** Absolute URL for web sources. Undefined for documents. */
+  url?: string;
+  /** Short excerpt of the source content, shown under the title. */
+  snippet?: string;
+}
+
 export interface ToolCallEntry {
   toolCallId: string;
   toolName: string;
@@ -426,6 +447,10 @@ export interface Message {
   steered?: boolean;
   /** Live Deep Research progress metadata. Final reports remain normal markdown content. */
   deepResearch?: DeepResearchState;
+  /** Sources this assistant message cited inline (chat mode only). Populated
+   *  in onDone from the turn's citation registry, filtered to the `[n]`
+   *  markers that actually appear in the final content. */
+  citations?: Citation[];
 }
 
 export interface Conversation {
@@ -1276,6 +1301,16 @@ export interface ChatStore {
   incrementWebSearchCount: () => void;
   resetWebSearchCount: () => void;
 
+  /** Per-turn citation source registry (chat mode). Documents are seeded at
+   *  send; web results append as the search tool runs. Each source gets a
+   *  stable 1-based `index` the model cites inline. Resets on each send and is
+   *  never persisted — it's transient turn state that onDone reads from. */
+  citationSources: Citation[];
+  resetCitationSources: () => void;
+  /** Append sources, assigning each the next sequential index. Returns the
+   *  registered citations (with indices) so callers can label tool output. */
+  addCitationSources: (sources: Omit<Citation, "index">[]) => Citation[];
+
   /** Code execution in chat mode — when true, run_python and run_javascript
    *  surface as approved tools so a student can ask the model to compute
    *  something inline. Off by default; opt-in via Settings. */
@@ -1602,6 +1637,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       workspaceHealthEnabled: false,
       manualTasksEnabled: false,
       webSearchCount: 0,
+      citationSources: [],
       autoArtifacts: true,
       officeArtifacts: true,
       advancedArtifacts: true,
@@ -3690,6 +3726,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
       resetWebSearchCount: () => {
         set({ webSearchCount: 0 });
+      },
+      resetCitationSources: () => {
+        set({ citationSources: [] });
+      },
+      addCitationSources: (sources) => {
+        if (sources.length === 0) return [];
+        const existing = get().citationSources;
+        const registered = sources.map((s, i) => ({
+          ...s,
+          index: existing.length + i + 1,
+        }));
+        set({ citationSources: [...existing, ...registered] });
+        return registered;
       },
       setChatCodeExec: (enabled) => {
         set({ chatCodeExec: enabled });

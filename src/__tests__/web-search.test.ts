@@ -11,6 +11,7 @@ describe("web_search tool", () => {
     store.searchBackend = "searxng";
     store.webSearchCount = 0;
     store.researchMode = false;
+    store.resetCitationSources();
     vi.restoreAllMocks();
   });
 
@@ -84,12 +85,16 @@ describe("web_search tool", () => {
 
     const parsed = JSON.parse(result);
     expect(parsed).toHaveLength(2);
+    // Chat-mode searches are annotated with a `cite` marker the model uses for
+    // inline citations; the title/url/content payload is otherwise unchanged.
     expect(parsed[0]).toEqual({
+      cite: "[1]",
       title: "Google search",
       url: "https://google.com/foo",
       content: "Google is a popular search engine..."
     });
     expect(parsed[1]).toEqual({
+      cite: "[2]",
       title: "Direct Link",
       url: "https://example.org",
       content: "Direct snippet example"

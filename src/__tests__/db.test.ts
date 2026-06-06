@@ -136,6 +136,7 @@ describe("loadAllFromDb", () => {
           turnDurationMs: 1234,
           editedFiles: JSON.stringify(["src/App.tsx"]),
           modelId: "openai:gpt-4o-mini",
+          citations: null,
         },
       });
     });

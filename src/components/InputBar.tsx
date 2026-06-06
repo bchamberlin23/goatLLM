@@ -15,6 +15,7 @@ import { logMessage, logToolCall, logToolResult, logError } from "../lib/event-l
 import { compactMessages, summarizeWithLlm } from "../lib/context-manager";
 import { extractAndAppend } from "../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../lib/url-fetch";
+import { buildCitationInstructions, selectUsedCitations } from "../lib/citations";
 import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { providerSupportsNativePdf } from "../lib/native-pdf";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
@@ -884,6 +885,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
     const ac = new AbortController();
     useChatStore.getState().resetWebSearchCount();
+    // Reset the per-turn citation registry and seed it with the documents the
+    // user attached this turn (chat mode only). Web results append later as the
+    // search tool runs. Each source gets a stable [n] the model cites inline;
+    // onDone keeps only the numbers that actually appear in the reply.
+    useChatStore.getState().resetCitationSources();
+    if (!isAgentMode && !isDesignMode && currentFiles.length > 0) {
+      useChatStore.getState().addCitationSources(
+        currentFiles.map((f) => ({ type: "document" as const, title: f.filename })),
+      );
+    }
     startStreaming(convId!, ac);
 
     const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
@@ -1294,6 +1305,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       }
     }
 
+    // Citation instructions (chat mode only). Tells the model how to cite the
+    // numbered document sources seeded above and the web results that arrive
+    // mid-turn, so onDone can surface a clickable "Sources" element. Agent and
+    // design turns expose their sources as tool-call pills instead.
+    if (!isAgentMode && !isDesignMode) {
+      const documentSources = useChatStore.getState().citationSources;
+      const citationBlock = buildCitationInstructions(documentSources, hasWebSearch);
+      if (citationBlock) finalSystemPrompt += `\n${citationBlock}\n`;
+    }
+
     await streamChat(llmMessages, finalSystemPrompt, llmConfig, {
       onToken: (chunk) => {
         appendToMessage(convId!, assistantMsg.id, chunk);
@@ -1403,6 +1424,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                 .getState()
                 .messages[convId!]
                 ?.find((m) => m.id === assistantMsg.id)?.editedFiles;
+        // Citations (chat mode only): keep only the sources whose [n] marker
+        // the model actually used in the final reply. Availability never
+        // produces a citation — the model has to cite it.
+        const citations =
+          !isAgentMode && !isDesignMode
+            ? selectUsedCitations(
+                useChatStore.getState().citationSources,
+                displayContent,
+              )
+            : [];
         updateMessage(convId!, assistantMsg.id, {
           content: displayContent,
           isStreaming: false,
@@ -1413,6 +1444,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           modelId: selectedModelId ?? undefined,
           editedFiles:
             editedFiles && editedFiles.length > 0 ? editedFiles : undefined,
+          citations: citations.length > 0 ? citations : undefined,
         });
         stopStreaming(convId!);
         // Auto-detect artifacts in completed messages

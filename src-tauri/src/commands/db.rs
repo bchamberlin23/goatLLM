@@ -34,6 +34,7 @@ pub(crate) struct DbMessage {
     turn_duration_ms: Option<i64>,
     edited_files: Option<String>,
     model_id: Option<String>,
+    citations: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -73,6 +74,7 @@ pub(crate) struct SaveMessageRequest {
     turn_duration_ms: Option<i64>,
     edited_files: Option<String>,
     model_id: Option<String>,
+    citations: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,7 +120,7 @@ pub(crate) fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData,
         .collect();
 
     let mut msg_stmt = db
-        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id FROM messages ORDER BY created_at ASC")
+        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations FROM messages ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
 
     let messages: Vec<DbMessage> = msg_stmt
@@ -136,6 +138,7 @@ pub(crate) fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData,
                 turn_duration_ms: row.get(9)?,
                 edited_files: row.get(10)?,
                 model_id: row.get(11)?,
+                citations: row.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -190,7 +193,7 @@ pub(crate) fn save_message(
         0
     };
     db.execute(
-        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             payload.id,
             payload.conversation_id,
@@ -203,7 +206,8 @@ pub(crate) fn save_message(
             payload.thinking_content,
             payload.turn_duration_ms,
             payload.edited_files,
-            payload.model_id
+            payload.model_id,
+            payload.citations
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -221,7 +225,7 @@ pub(crate) fn load_messages_for_conversation(
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut stmt = db
         .prepare(
-            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id \
+            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations \
              FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -240,6 +244,7 @@ pub(crate) fn load_messages_for_conversation(
                 turn_duration_ms: row.get(9)?,
                 edited_files: row.get(10)?,
                 model_id: row.get(11)?,
+                citations: row.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?

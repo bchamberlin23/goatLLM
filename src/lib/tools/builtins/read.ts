@@ -310,6 +310,31 @@ export const READ_ONLY_TOOLS = {
     execute: async ({ query, maxResults }) => {
       const state = useChatStore.getState();
 
+      // Register web results as citation sources (chat mode only) and stamp
+      // each with the [n] number the model should cite inline. Agent/design
+      // turns skip this — they surface sources as tool pills instead.
+      const annotateCitations = (
+        results: { title: string; url: string; content: string }[],
+      ): Array<{ cite?: string; title: string; url: string; content: string }> => {
+        const chatMode = !state.agentMode && !state.designMode;
+        if (!chatMode || results.length === 0) return results;
+        const registered = state.addCitationSources(
+          results
+            .filter((r) => r.url)
+            .map((r) => ({
+              type: "web" as const,
+              title: r.title || r.url,
+              url: r.url,
+              snippet: r.content ? r.content.slice(0, 300) : undefined,
+            })),
+        );
+        const byUrl = new Map(registered.map((c) => [c.url, c.index]));
+        return results.map((r) => {
+          const idx = byUrl.get(r.url);
+          return idx ? { cite: `[${idx}]`, ...r } : r;
+        });
+      };
+
       if (!state.researchMode && state.webSearchCount >= 2) {
         return "Maximum web searches (2) already used this turn. Answer with what you already know.";
       }
@@ -345,7 +370,7 @@ export const READ_ONLY_TOOLS = {
           if (results.length === 0) {
             return `No results found for "${query}" via SearXNG.`;
           }
-          return JSON.stringify(results, null, 2);
+          return JSON.stringify(annotateCitations(results), null, 2);
         } catch (e) {
           return `SearXNG search failed: ${e instanceof Error ? e.message : String(e)}. Check if the SearXNG Docker container is running.`;
         }
@@ -381,11 +406,13 @@ export const READ_ONLY_TOOLS = {
         }
 
         return JSON.stringify(
-          results.map((r: { title: string; url: string; content: string; score: number }) => ({
-            title: r.title,
-            url: r.url,
-            content: r.content,
-          })),
+          annotateCitations(
+            results.map((r: { title: string; url: string; content: string; score: number }) => ({
+              title: r.title,
+              url: r.url,
+              content: r.content,
+            })),
+          ),
           null,
           2
         );

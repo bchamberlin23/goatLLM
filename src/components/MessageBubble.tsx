@@ -19,6 +19,7 @@ import { AgentTurnRollbackButton, AgentTurnTimelineHeader } from "./AgentTurnTim
 import { useThrottledContent } from "../hooks/useThrottledContent";
 import { requestSuggestedCheckApproval } from "../lib/tools/approval";
 import { DeepResearchProgress } from "./DeepResearchProgress";
+import { CitationsBar } from "./CitationsBar";
 import { speakText, stopSpeaking } from "../lib/speech";
 import {
   shouldExpandThinking,
@@ -569,6 +570,9 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
             </div>
           );
         })()}
+        {isAssistant && !isStreaming && renderMode === "chat" && message.citations && message.citations.length > 0 && (
+          <CitationsBar citations={message.citations} />
+        )}
         {isAssistant && !isStreaming && (
           <PlanBuildCTA message={message} />
         )}
