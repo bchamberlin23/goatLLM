@@ -13,11 +13,20 @@ export function exportAsMarkdown(conv: Conversation, messages: Message[]): strin
   ].join("\n");
 
   const body = messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
+    .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "compactionSummary")
     .map((m) => {
-      const roleLabel = m.role === "user" ? "**You**" : "**Assistant**";
+      const roleLabel =
+        m.role === "user"
+          ? "**You**"
+          : m.role === "assistant"
+            ? "**Assistant**"
+            : "**Compaction summary**";
       const time = new Date(m.createdAt).toLocaleTimeString();
-      return `${roleLabel} — ${time}\n\n${m.content}\n`;
+      const detail =
+        m.role === "compactionSummary" && m.compaction
+          ? `\n\n_${m.compaction.summarizedCount} earlier messages summarized; ${m.compaction.tokensBefore.toLocaleString()} tokens before compaction._`
+          : "";
+      return `${roleLabel} — ${time}${detail}\n\n${m.content}\n`;
     })
     .join("\n\n---\n\n");
 
@@ -37,9 +46,10 @@ export function exportAsJson(conv: Conversation, messages: Message[]): string {
       },
       messages: messages.map((m) => ({
         id: m.id,
-        role: m.role,
+        role: m.role === "compactionSummary" ? "compaction_summary" : m.role,
         content: m.content,
         createdAt: new Date(m.createdAt).toISOString(),
+        ...(m.compaction ? { compaction: m.compaction } : {}),
         ...(m.pinned ? { pinned: true } : {}),
         ...(m.attachments ? { attachments: m.attachments } : {}),
       })),

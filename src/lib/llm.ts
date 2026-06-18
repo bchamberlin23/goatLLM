@@ -10,6 +10,10 @@ import { generateText } from "ai";
 import { createModel } from "./model-factory";
 import { agentLoop, type AgentLoopOptions } from "./agentLoop";
 import { log, withError } from "./logger";
+import {
+  isOpenAICodexSubscriptionProvider,
+  streamCodexSubscription,
+} from "./openai-codex-subscription";
 import type {
   LlmConfig,
   LlmMessage,
@@ -58,6 +62,16 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   options?: StreamOptions,
 ): Promise<void> {
+  if (isOpenAICodexSubscriptionProvider(config.provider)) {
+    return streamCodexSubscription(messages, systemPrompt, config, callbacks, {
+      abortSignal: options?.abortSignal,
+      sessionId: options?.sessionId,
+      tools: options?.tools,
+      maxToolRounds: options?.maxToolRounds,
+      subagentsEnabled: options?.subagentsEnabled,
+    });
+  }
+
   return agentLoop(messages, systemPrompt, config, callbacks, {
     abortSignal: options?.abortSignal,
     tools: options?.tools,
@@ -74,6 +88,10 @@ export async function generateTitle(
   config: LlmConfig,
   assistantReply?: string,
 ): Promise<string | null> {
+  if (isOpenAICodexSubscriptionProvider(config.provider)) {
+    return heuristicTitle(firstMessage);
+  }
+
   const user = firstMessage.trim().slice(0, 600);
   const assistant = (assistantReply ?? "").trim().slice(0, 600);
 

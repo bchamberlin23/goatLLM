@@ -26,6 +26,7 @@ export interface ProviderConfig {
   baseUrl: string;
   apiKey: string | null;
   models: ModelConfig[];
+  compat?: ProviderCompat;
 }
 
 export interface ModelConfig {
@@ -36,6 +37,23 @@ export interface ModelConfig {
    *  Used by the send pipeline to warn when the user attaches an image
    *  to a text-only model and offer OCR fallback. */
   vision?: boolean;
+  /** Whether this model supports provider-controlled extended reasoning. */
+  reasoning?: boolean;
+  /** Optional Pi-style per-level map. null means unsupported; string is sent provider-side. */
+  thinkingLevelMap?: ThinkingLevelMap;
+  /** Optional token budgets for providers such as Anthropic. */
+  thinkingBudgets?: ThinkingBudgets;
+}
+
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevelMap = Partial<Record<ThinkingLevel, string | null>>;
+export type ThinkingBudgets = Partial<Record<Exclude<ThinkingLevel, "off">, number>>;
+
+export interface ProviderCompat {
+  /** Set false for OpenAI-compatible proxies/local servers that reject reasoning_effort. */
+  supportsReasoningEffort?: boolean;
+  /** Override the provider payload shape when provider id is not enough. */
+  reasoningApi?: "openai" | "openrouter" | "anthropic" | "qwen" | "none";
 }
 
 /**
@@ -102,7 +120,15 @@ export function providerSupportsDiscovery(providerId: string): boolean {
  */
 export function mergeDiscoveredModels(
   curated: ModelConfig[],
-  discovered: Array<{ id: string; name: string; contextWindow?: number; vision?: boolean }>,
+  discovered: Array<{
+    id: string;
+    name: string;
+    contextWindow?: number;
+    vision?: boolean;
+    reasoning?: boolean;
+    thinkingLevelMap?: ThinkingLevelMap;
+    thinkingBudgets?: ThinkingBudgets;
+  }>,
 ): ModelConfig[] {
   return registryMergeDiscoveredModels(curated, discovered);
 }

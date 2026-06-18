@@ -37,6 +37,7 @@ import {
 import { createModel } from "./model-factory";
 import { getContextWindow } from "./context-window";
 import { log } from "./logger";
+import { resolveReasoningRequest } from "./reasoning";
 import type {
   LlmConfig,
   LlmMessage,
@@ -315,31 +316,7 @@ export async function agentLoop(
   const model = await createModel(config);
   const effectiveSignal = combineSignals(options?.abortSignal, options?.parentSignal);
 
-  // Build provider-specific reasoning/thinking options from the user's
-  // reasoningEffort override (set via the gear icon in the model picker).
-  let providerOptions: ProviderOptions | undefined;
-  const effort = config.reasoningEffort;
-  if (effort && effort !== "off") {
-    const providerKey = config.provider;
-    if (providerKey === "anthropic") {
-      const budget = effort === "minimal" || effort === "low" ? 4000
-        : effort === "medium" ? 8000
-        : effort === "high" ? 16000
-        : 32000; // xhigh
-      providerOptions = {
-        [providerKey]: {
-          thinking: { type: "enabled", budgetTokens: budget },
-        },
-      };
-    } else {
-      // OpenAI and OpenAI-compatible providers accept reasoningEffort.
-      // Clamp xhigh → high (only a subset of models support xhigh natively).
-      const re = effort === "xhigh" ? "high" : effort;
-      providerOptions = {
-        [providerKey]: { reasoningEffort: re },
-      };
-    }
-  }
+  const providerOptions = resolveReasoningRequest({ config }).providerOptions as ProviderOptions | undefined;
 
   try {
     // Inject spawn_subagent into the tool set when depth allows
@@ -458,11 +435,15 @@ export async function agentLoop(
 
       function emitUsage() {
         if (totalOutputTokens > 0 || totalGenerationMs > 0) {
-          callbacks.onUsage?.({
-            inputTokens: lastBatchUsage?.inputTokens ?? 0,
-            outputTokens: totalOutputTokens,
-            cacheRead: lastBatchUsage?.inputTokenDetails.cacheReadTokens ?? undefined,
-            cacheWrite: lastBatchUsage?.inputTokenDetails.cacheWriteTokens ?? undefined,
+        callbacks.onUsage?.({
+          totalTokens:
+            (lastBatchUsage?.totalTokens ?? 0) +
+            (lastBatchUsage?.inputTokenDetails.cacheReadTokens ?? 0) +
+            (lastBatchUsage?.inputTokenDetails.cacheWriteTokens ?? 0),
+          inputTokens: lastBatchUsage?.inputTokens ?? 0,
+          outputTokens: totalOutputTokens,
+          cacheRead: lastBatchUsage?.inputTokenDetails.cacheReadTokens ?? undefined,
+          cacheWrite: lastBatchUsage?.inputTokenDetails.cacheWriteTokens ?? undefined,
             generationMs: totalGenerationMs,
           });
         }
@@ -783,6 +764,10 @@ export async function agentLoop(
               const usage = await result.usage;
               if (usage) {
                 callbacks.onUsage?.({
+                  totalTokens:
+                    (usage.totalTokens ?? 0) +
+                    (usage.inputTokenDetails.cacheReadTokens ?? 0) +
+                    (usage.inputTokenDetails.cacheWriteTokens ?? 0),
                   inputTokens: usage.inputTokens ?? 0,
                   outputTokens: usage.outputTokens ?? 0,
                   cacheRead: usage.inputTokenDetails.cacheReadTokens ?? undefined,
@@ -825,9 +810,9 @@ export async function agentLoop(
       const originalMsgs = originalMessagesFromError(error);
       if (originalMsgs && originalMsgs.length > 4) {
         const contextWindow = getContextWindow(config.provider, config.modelId);
-        const target = contextWindow > 0 ? Math.floor(contextWindow * 0.45) : 40_000;
-        const compacted = compactModelMessages(originalMsgs, target);
-        if (compacted.length < originalMsgs.length) {
+        const target = contextWindow > 0 ? Math.floor(contextWindow * COMPACTION_TARGET) : 0;
+        const compacted = target > 0 ? compactModelMessages(originalMsgs, target) : originalMsgs;
+        if (target > 0 && compacted.length < originalMsgs.length) {
           log.info(`Auto-compacting on overflow: ${originalMsgs.length} → ${compacted.length} messages`, { tag: "agentLoop", data: { before: originalMsgs.length, after: compacted.length } });
           // Retry once with compacted messages
           try {

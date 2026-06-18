@@ -22,6 +22,7 @@
 
 import type { Conversation, Message } from "../stores/chat";
 import { compareMessages } from "../stores/chat";
+import type { CompactionEntry } from "./compaction/types";
 import { log, withError } from "./logger";
 
 let _invoke: (<T>(cmd: string, args?: Record<string, unknown>) => Promise<T>) | null = null;
@@ -37,6 +38,7 @@ async function getInvoke() {
 
 const JOURNAL_CONV_PREFIX = "goatllm-journal-conv:";
 const JOURNAL_MSG_PREFIX = "goatllm-journal-msg:";
+const JOURNAL_COMPACTION_PREFIX = "goatllm-journal-compaction:";
 const JOURNAL_DEL_CONV_PREFIX = "goatllm-journal-del-conv:";
 const JOURNAL_DEL_MSG_PREFIX = "goatllm-journal-del-msg:";
 
@@ -81,11 +83,13 @@ function oldestMessageKey(): string | null {
 function readJournal(): {
   conversations: Conversation[];
   messages: Message[];
+  compactionEntries: CompactionEntry[];
   deletedConvIds: Set<string>;
   deletedMsgIds: Set<string>;
 } {
   const conversations: Conversation[] = [];
   const messages: Message[] = [];
+  const compactionEntries: CompactionEntry[] = [];
   const deletedConvIds = new Set<string>();
   const deletedMsgIds = new Set<string>();
   for (let i = 0; i < localStorage.length; i++) {
@@ -98,6 +102,9 @@ function readJournal(): {
       } else if (k.startsWith(JOURNAL_MSG_PREFIX)) {
         const raw = localStorage.getItem(k);
         if (raw) messages.push(JSON.parse(raw) as Message);
+      } else if (k.startsWith(JOURNAL_COMPACTION_PREFIX)) {
+        const raw = localStorage.getItem(k);
+        if (raw) compactionEntries.push(JSON.parse(raw) as CompactionEntry);
       } else if (k.startsWith(JOURNAL_DEL_CONV_PREFIX)) {
         deletedConvIds.add(k.slice(JOURNAL_DEL_CONV_PREFIX.length));
       } else if (k.startsWith(JOURNAL_DEL_MSG_PREFIX)) {
@@ -108,7 +115,7 @@ function readJournal(): {
       safeRemove(k);
     }
   }
-  return { conversations, messages, deletedConvIds, deletedMsgIds };
+  return { conversations, messages, compactionEntries, deletedConvIds, deletedMsgIds };
 }
 
 // ── SQLite write queue ─────────────────────────────────────────────────
@@ -168,9 +175,27 @@ interface DbMessage {
   citations?: string | null;
 }
 
+interface DbCompactionEntry {
+  id: string;
+  conversation_id: string;
+  first_kept_id: string;
+  summary: string;
+  read_files: string;
+  modified_files: string;
+  tokens_before: number;
+  source: string;
+  is_split_turn: number;
+  turn_prefix: string | null;
+  prompt_version: string;
+  created_at: number;
+  mode: string;
+  model_id: string | null;
+}
+
 interface AllData {
   conversations: DbConversation[];
   messages: DbMessage[];
+  compaction_entries?: DbCompactionEntry[];
 }
 
 function parseOptionalJson<T>(raw: string | null): T | undefined {
@@ -232,11 +257,41 @@ function fromDbMessage(d: DbMessage): Message {
   };
 }
 
+function stringArrayFromJson(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function fromDbCompactionEntry(d: DbCompactionEntry): CompactionEntry {
+  return {
+    id: d.id,
+    conversationId: d.conversation_id,
+    firstKeptId: d.first_kept_id,
+    summary: d.summary,
+    readFiles: stringArrayFromJson(d.read_files),
+    modifiedFiles: stringArrayFromJson(d.modified_files),
+    tokensBefore: d.tokens_before,
+    source: d.source as CompactionEntry["source"],
+    isSplitTurn: d.is_split_turn !== 0,
+    turnPrefix: d.turn_prefix || undefined,
+    promptVersion: d.prompt_version as CompactionEntry["promptVersion"],
+    createdAt: d.created_at,
+    mode: d.mode as CompactionEntry["mode"],
+    modelId: d.model_id || undefined,
+  };
+}
+
 // ── Public API ──
 
 export interface HydratedData {
   conversations: Conversation[];
   messages: Record<string, Message[]>;
+  compactionEntries: Record<string, CompactionEntry[]>;
 }
 
 /**
@@ -252,11 +307,13 @@ export async function loadAllFromDb(): Promise<HydratedData> {
   // SQLite — best effort.
   let sqliteConvs: Conversation[] = [];
   let sqliteMsgs: Message[] = [];
+  let sqliteCompactions: CompactionEntry[] = [];
   try {
     const invoke = await getInvoke();
     const data = await invoke<AllData>("load_all_data");
     sqliteConvs = data.conversations.map(fromDbConversation);
     sqliteMsgs = data.messages.map(fromDbMessage);
+    sqliteCompactions = (data.compaction_entries ?? []).map(fromDbCompactionEntry);
   } catch (e) {
     log.warn("SQLite load failed, using journal only", withError("db", undefined, e));
   }
@@ -304,10 +361,32 @@ export async function loadAllFromDb(): Promise<HydratedData> {
     arr.sort(compareMessages);
   }
 
+  const compactionMap = new Map<string, CompactionEntry>();
+  for (const entry of sqliteCompactions) {
+    if (journal.deletedConvIds.has(entry.conversationId)) continue;
+    compactionMap.set(entry.id, entry);
+  }
+  for (const entry of journal.compactionEntries) {
+    if (journal.deletedConvIds.has(entry.conversationId)) continue;
+    const existing = compactionMap.get(entry.id);
+    if (!existing || entry.createdAt >= existing.createdAt) {
+      compactionMap.set(entry.id, entry);
+    }
+  }
+  const compactionEntries: Record<string, CompactionEntry[]> = {};
+  for (const entry of compactionMap.values()) {
+    if (!compactionEntries[entry.conversationId]) compactionEntries[entry.conversationId] = [];
+    compactionEntries[entry.conversationId].push(entry);
+  }
+  for (const arr of Object.values(compactionEntries)) {
+    arr.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+  }
+
   // Replay journal entries that SQLite is missing so the next session has
   // them durably on disk too. Plus any pending deletes.
   const sqliteConvIds = new Set(sqliteConvs.map((c) => c.id));
   const sqliteMsgIds = new Set(sqliteMsgs.map((m) => m.id));
+  const sqliteCompactionIds = new Set(sqliteCompactions.map((entry) => entry.id));
   for (const c of journal.conversations) {
     if (!sqliteConvIds.has(c.id) && !journal.deletedConvIds.has(c.id)) {
       enqueueWrite(() => invokeSaveConversation(c));
@@ -318,6 +397,11 @@ export async function loadAllFromDb(): Promise<HydratedData> {
       enqueueWrite(() => invokeSaveMessage(m));
     }
   }
+  for (const entry of journal.compactionEntries) {
+    if (!sqliteCompactionIds.has(entry.id) && !journal.deletedConvIds.has(entry.conversationId)) {
+      enqueueWrite(() => invokeSaveCompactionEntry(entry));
+    }
+  }
   for (const id of journal.deletedConvIds) {
     enqueueWrite(() => invokeDeleteConversation(id));
   }
@@ -325,7 +409,7 @@ export async function loadAllFromDb(): Promise<HydratedData> {
     enqueueWrite(() => invokeDeleteMessage(id));
   }
 
-  return { conversations, messages };
+  return { conversations, messages, compactionEntries };
 }
 
 /**
@@ -408,6 +492,28 @@ async function invokeSaveMessage(m: Message): Promise<void> {
   });
 }
 
+async function invokeSaveCompactionEntry(entry: CompactionEntry): Promise<void> {
+  const invoke = await getInvoke();
+  await invoke("save_compaction_entry", {
+    payload: {
+      id: entry.id,
+      conversationId: entry.conversationId,
+      firstKeptId: entry.firstKeptId,
+      summary: entry.summary,
+      readFiles: JSON.stringify(entry.readFiles),
+      modifiedFiles: JSON.stringify(entry.modifiedFiles),
+      tokensBefore: entry.tokensBefore,
+      source: entry.source,
+      isSplitTurn: entry.isSplitTurn,
+      turnPrefix: entry.turnPrefix ?? null,
+      promptVersion: entry.promptVersion,
+      createdAt: entry.createdAt,
+      mode: entry.mode,
+      modelId: entry.modelId ?? null,
+    },
+  });
+}
+
 async function invokeDeleteConversation(id: string): Promise<void> {
   const invoke = await getInvoke();
   await invoke("delete_conversation_db", { id });
@@ -442,6 +548,47 @@ export function persistMessage(m: Message): void {
   enqueueWrite(() => invokeSaveMessage(m));
 }
 
+export function persistCompactionEntry(entry: CompactionEntry): void {
+  safeSet(
+    `${JOURNAL_COMPACTION_PREFIX}${entry.conversationId}:${entry.id}`,
+    JSON.stringify(entry),
+  );
+  enqueueWrite(() => invokeSaveCompactionEntry(entry));
+}
+
+export async function loadCompactionEntries(conversationId: string): Promise<CompactionEntry[]> {
+  const journal = readJournal();
+  const journalEntries = journal.compactionEntries.filter(
+    (entry) => entry.conversationId === conversationId && !journal.deletedConvIds.has(conversationId),
+  );
+
+  let sqliteEntries: CompactionEntry[] = [];
+  try {
+    const invoke = await getInvoke();
+    const rows = await invoke<DbCompactionEntry[]>("load_compaction_entries", { conversationId });
+    sqliteEntries = rows.map(fromDbCompactionEntry);
+  } catch {
+    // Journal-only recovery is still valid.
+  }
+
+  const merged = new Map<string, CompactionEntry>();
+  for (const entry of sqliteEntries) merged.set(entry.id, entry);
+  for (const entry of journalEntries) {
+    const existing = merged.get(entry.id);
+    if (!existing || entry.createdAt >= existing.createdAt) merged.set(entry.id, entry);
+  }
+  return Array.from(merged.values()).sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+}
+
+export function getLatestCompactionEntry(
+  entriesByConversation: Record<string, CompactionEntry[]> | undefined,
+  conversationId: string,
+): CompactionEntry | null {
+  const entries = entriesByConversation?.[conversationId];
+  if (!entries || entries.length === 0) return null;
+  return [...entries].sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id))[0] ?? null;
+}
+
 /** Delete a conversation. Marks the journal and queues SQLite. */
 export function deleteConversationFromDb(id: string): void {
   safeRemove(JOURNAL_CONV_PREFIX + id);
@@ -456,6 +603,11 @@ export function deleteConversationFromDb(id: string): void {
       const m = JSON.parse(raw) as Message;
       if (m.conversationId === id) safeRemove(k);
     } catch { safeRemove(k); }
+  }
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(`${JOURNAL_COMPACTION_PREFIX}${id}:`)) continue;
+    safeRemove(k);
   }
   enqueueWrite(async () => {
     await invokeDeleteConversation(id);

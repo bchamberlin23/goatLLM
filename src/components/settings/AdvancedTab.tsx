@@ -12,6 +12,20 @@ export function AdvancedTab() {
   const setManualTasksEnabled = useChatStore((s) => s.setManualTasksEnabled);
   const notebookEnabled = useChatStore((s) => s.featureFlags.notebookMode);
   const setFeatureFlag = useChatStore((s) => s.setFeatureFlag);
+  const usageSettings = useChatStore((s) => s.usageSettings);
+  const setUsageSettings = useChatStore((s) => s.setUsageSettings);
+  const compactionSettings = usageSettings.compactionSettings;
+  const updateCompactionSetting = (
+    updates: Partial<typeof compactionSettings>,
+  ) => {
+    setUsageSettings({
+      ...usageSettings,
+      compactionSettings: {
+        ...compactionSettings,
+        ...updates,
+      },
+    });
+  };
 
   return (
     <>
@@ -52,6 +66,34 @@ export function AdvancedTab() {
       </SettingsGroup>
 
       <SettingsGroup
+        title="Context & memory"
+        description="Control when older conversation history is summarized for the model."
+      >
+        <ToggleRow
+          enabled={compactionSettings.enabled}
+          onToggle={(enabled) => updateCompactionSetting({ enabled })}
+          title="Auto-compact"
+          description="Summarize older context when provider usage approaches the model window."
+        />
+        <div className="soft-card grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl">
+          <NumberField
+            label="Reserve tokens"
+            value={compactionSettings.reserveTokens}
+            min={1024}
+            step={1024}
+            onChange={(reserveTokens) => updateCompactionSetting({ reserveTokens })}
+          />
+          <NumberField
+            label="Keep recent tokens"
+            value={compactionSettings.keepRecentTokens}
+            min={1024}
+            step={1024}
+            onChange={(keepRecentTokens) => updateCompactionSetting({ keepRecentTokens })}
+          />
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup
         title="Version control"
         description="Isolate agent edits with jj for easy review and rollback."
       >
@@ -70,5 +112,36 @@ export function AdvancedTab() {
         <DenylistSection />
       </SettingsGroup>
     </>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12px] font-medium text-text-2">{label}</span>
+      <input
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next)) onChange(Math.max(min, Math.round(next)));
+        }}
+        className="w-full rounded-md border border-hairline bg-surface-1 px-2.5 py-1.5 text-[12.5px] text-text-1 outline-none transition-colors focus:border-hairline-strong focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+      />
+    </label>
   );
 }

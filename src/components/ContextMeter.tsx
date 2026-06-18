@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useChatStore } from "../stores/chat";
 import { estimateTotalTokens, summarizeWithLlm } from "../lib/context-manager";
+import { createCompactionId, type CompactionEntry } from "../lib/compaction/types";
 import {
   getContextWindow,
   formatTokens,
 } from "../lib/context-window";
 import { buildConversationUsage } from "../lib/product-workspace";
+
+const EMPTY_COMPACTION_ENTRIES: CompactionEntry[] = [];
 
 /**
  * Tiny circular meter that lives in the top bar and shows how full the
@@ -32,6 +35,9 @@ export function ContextMeter() {
   const getModels = useChatStore((s) => s.getModels);
   const modelOverrides = useChatStore((s) => s.modelOverrides);
   const usageSettings = useChatStore((s) => s.usageSettings);
+  const compactionEntries = useChatStore((s) =>
+    activeId ? s.compactionEntries[activeId] ?? EMPTY_COMPACTION_ENTRIES : EMPTY_COMPACTION_ENTRIES,
+  );
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -115,6 +121,7 @@ export function ContextMeter() {
   const ratio = Math.min(1, tokens / Math.max(1, windowTokens));
   const pct = Math.round(ratio * 100);
   const remaining = Math.max(0, windowTokens - tokens);
+  const compactionEnabled = usageSettings.compactionSettings.enabled;
 
   const messageCount = messages?.length ?? 0;
   const activeModel = useMemo(
@@ -182,7 +189,7 @@ export function ContextMeter() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="control-icon flex items-center justify-center p-1 mt-[3px] rounded-md transition-colors"
+        className="control-icon relative flex items-center justify-center p-1 mt-[3px] rounded-md transition-colors"
         aria-label={`Context window — ${pct}% full`}
         title={`Context: ${pct}% used`}
       >
@@ -217,6 +224,12 @@ export function ContextMeter() {
             }}
           />
         </svg>
+        {compactionEntries.length > 1 && (
+          <span
+            className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-accent"
+            aria-hidden="true"
+          />
+        )}
       </button>
 
       {open && (
@@ -276,6 +289,10 @@ export function ContextMeter() {
               label="Messages"
               value={messageCount.toLocaleString()}
             />
+            <Row
+              label="Auto-compact"
+              value={compactionEnabled ? "On" : "Off"}
+            />
             {costUsd > 0 && (
               <>
                 <div className="h-px bg-white/5 my-1" />
@@ -304,7 +321,9 @@ export function ContextMeter() {
           )}
 
           <div className="px-3.5 pb-2 pt-1 text-[10.5px] text-text-4 leading-relaxed">
-            {!windowKnown
+            {!compactionEnabled
+              ? "Auto-compaction is disabled in Settings. Manual compaction is still available."
+              : !windowKnown
               ? "Window size estimated — no authoritative size was found for this model. You can set an explicit value in the model's gear menu."
               : ratio >= 0.9
                 ? "Near the limit. Older messages will be summarized on next send."
@@ -314,6 +333,26 @@ export function ContextMeter() {
                     ? "Window size set by you. Pinned messages are always kept."
                     : "Tokens estimated at ~4 chars each. Pinned messages are always kept."}
           </div>
+
+          {compactionEntries.length > 1 && (
+            <div className="mx-3 mb-2 rounded-lg border border-hairline bg-white/[0.03] px-2.5 py-2">
+              <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-text-3">
+                Compaction history
+              </div>
+              <div className="space-y-1">
+                {compactionEntries.slice(0, 4).map((entry, index) => (
+                  <div key={entry.id} className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="min-w-0 truncate text-text-2">
+                      {index === 0 ? "Latest" : new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                    <span className="shrink-0 font-mono tabular-nums text-text-3">
+                      {formatTokens(entry.tokensBefore)} tok
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Manual compaction */}
           {ratio >= 0.5 && activeId && (
@@ -341,6 +380,7 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
   const [instructions, setInstructions] = useState("");
   const [compacting, setCompacting] = useState(false);
   const getActiveLlmConfig = useChatStore((s) => s.getActiveLlmConfig);
+  const addCompactionEntry = useChatStore((s) => s.addCompactionEntry);
 
   const handleCompact = useCallback(async () => {
     const config = getActiveLlmConfig();
@@ -350,9 +390,9 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
     try {
       const messages = useChatStore.getState().messages[conversationId] ?? [];
       // Keep only the last 4 messages + pinned, summarize the rest
-      const pinned = messages.filter((m) => m.pinned);
       const recent = messages.slice(-4);
       const toSummarize = messages.slice(0, -4).filter((m) => !m.pinned);
+      const latestEntry = useChatStore.getState().compactionEntries[conversationId]?.[0];
 
       if (toSummarize.length === 0) {
         setCompacting(false);
@@ -365,25 +405,29 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
         config,
         undefined,
         instructions.trim() || undefined,
+        latestEntry?.summary,
+        {
+          readFiles: latestEntry?.readFiles ?? [],
+          modifiedFiles: latestEntry?.modifiedFiles ?? [],
+        },
       );
 
-      // Replace old messages with summary + recent
-      const summaryMsg = {
-        id: `compact-${Date.now()}`,
+      const firstKept = recent[0];
+      if (!firstKept) return;
+      addCompactionEntry({
+        id: createCompactionId(),
         conversationId,
-        role: "system" as const,
-        content: summary,
+        firstKeptId: firstKept.id,
+        summary,
+        readFiles: latestEntry?.readFiles ?? [],
+        modifiedFiles: latestEntry?.modifiedFiles ?? [],
+        tokensBefore: estimateTotalTokens(messages),
+        source: "manual",
+        isSplitTurn: false,
+        promptVersion: latestEntry ? "update" : "initial",
         createdAt: Date.now(),
-        pinned: true,
-      };
-
-      useChatStore.setState((s) => {
-        return {
-          messages: {
-            ...s.messages,
-            [conversationId]: [summaryMsg, ...pinned.filter((m) => !recent.includes(m)), ...recent],
-          },
-        };
+        mode: useChatStore.getState().getActiveConversation()?.mode ?? "chat",
+        modelId: useChatStore.getState().selectedModelId ?? undefined,
       });
 
       setExpanded(false);
@@ -393,7 +437,7 @@ function ManualCompactButton({ conversationId }: { conversationId: string }) {
     } finally {
       setCompacting(false);
     }
-  }, [conversationId, instructions, getActiveLlmConfig]);
+  }, [addCompactionEntry, conversationId, instructions, getActiveLlmConfig]);
 
   return (
     <div className="px-3.5 pb-3">

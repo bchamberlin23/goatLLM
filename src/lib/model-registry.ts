@@ -33,7 +33,13 @@
  * demand, to merge in models the curated list doesn't know about.
  */
 
-import type { ModelConfig, ProviderConfig } from "./providers";
+import type { ModelConfig, ProviderCompat, ProviderConfig } from "./providers";
+import {
+  OPENAI_CODEX_SUBSCRIPTION_BASE_URL,
+  OPENAI_CODEX_SUBSCRIPTION_MODELS,
+  OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID,
+  OPENAI_CODEX_SUBSCRIPTION_PROVIDER_NAME,
+} from "./openai-codex-subscription";
 
 // ── Provider metadata ────────────────────────────────────────────
 
@@ -56,6 +62,7 @@ export interface ProviderInfo {
    * this through `discoverLocalModels` in the chat store instead.
    */
   supportsDiscovery?: boolean;
+  compat?: ProviderCompat;
 }
 
 // ── Built-in providers (no settings round-trip required) ────────
@@ -76,6 +83,7 @@ const BUILTIN_PROVIDERS: ProviderInfo[] = [
         id: "deepseek-v4-flash-free",
         name: "DeepSeek V4 Flash (Free)",
         contextWindow: 200_000,
+        reasoning: true,
       },
       {
         id: "mimo-v2.5-free",
@@ -88,6 +96,12 @@ const BUILTIN_PROVIDERS: ProviderInfo[] = [
         contextWindow: 204_800,
       },
     ],
+  },
+  {
+    id: OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID,
+    name: OPENAI_CODEX_SUBSCRIPTION_PROVIDER_NAME,
+    baseUrl: OPENAI_CODEX_SUBSCRIPTION_BASE_URL,
+    models: OPENAI_CODEX_SUBSCRIPTION_MODELS,
   },
 ];
 
@@ -121,7 +135,20 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
     name: "Anthropic",
     baseUrl: "https://api.anthropic.com",
     models: [
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
+      {
+        id: "claude-sonnet-4-20250514",
+        name: "Claude Sonnet 4",
+        contextWindow: 200_000,
+        vision: true,
+        reasoning: true,
+        thinkingBudgets: {
+          minimal: 1024,
+          low: 4096,
+          medium: 8192,
+          high: 16_384,
+          xhigh: 32_768,
+        },
+      },
       { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
       { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200_000, vision: true },
       { id: "claude-3-opus-20240229", name: "Claude 3 Opus", contextWindow: 200_000, vision: true },
@@ -133,7 +160,7 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
     baseUrl: "https://api.deepseek.com/v1",
     models: [
       { id: "deepseek-chat", name: "DeepSeek V3", contextWindow: 64_000 },
-      { id: "deepseek-reasoner", name: "DeepSeek R1", contextWindow: 64_000 },
+      { id: "deepseek-reasoner", name: "DeepSeek R1", contextWindow: 64_000, reasoning: true },
     ],
   },
   {
@@ -150,13 +177,14 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
     name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",
     supportsDiscovery: true,
+    compat: { reasoningApi: "openrouter" },
     models: [
       { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
       { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
       { id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128_000, vision: true },
-      { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", contextWindow: 1_000_000, vision: true },
-      { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", contextWindow: 1_000_000, vision: true },
-      { id: "deepseek/deepseek-r1", name: "DeepSeek R1", contextWindow: 64_000 },
+      { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", contextWindow: 1_000_000, vision: true, reasoning: true },
+      { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", contextWindow: 1_000_000, vision: true, reasoning: true },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1", contextWindow: 64_000, reasoning: true },
       { id: "deepseek/deepseek-chat-v3", name: "DeepSeek V3", contextWindow: 64_000 },
       { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", contextWindow: 1_000_000, vision: true },
     ],
@@ -167,8 +195,8 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
     baseUrl: "https://opencode.ai/zen/go/v1",
     supportsDiscovery: true,
     models: [
-      { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000 },
-      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000 },
+      { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000, reasoning: true },
+      { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000, reasoning: true },
       { id: "glm-5", name: "GLM 5", contextWindow: 200_000 },
       { id: "glm-5.1", name: "GLM 5.1", contextWindow: 200_000 },
       { id: "kimi-k2.5", name: "Kimi K2.5", contextWindow: 262_144 },
@@ -177,9 +205,9 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
       { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
       { id: "minimax-m2.5", name: "MiniMax M2.5", contextWindow: 204_800 },
       { id: "minimax-m2.7", name: "MiniMax M2.7", contextWindow: 204_800 },
-      { id: "qwen3.5-plus", name: "Qwen 3.5 Plus", contextWindow: 262_144 },
-      { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", contextWindow: 262_144 },
-      { id: "qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144 },
+      { id: "qwen3.5-plus", name: "Qwen 3.5 Plus", contextWindow: 262_144, reasoning: true },
+      { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", contextWindow: 262_144, reasoning: true },
+      { id: "qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144, reasoning: true },
     ],
   },
   {
@@ -280,6 +308,7 @@ function toProviderConfig(info: ProviderInfo): ProviderConfig {
     baseUrl: info.baseUrl,
     apiKey: null,
     models: info.models.map((m) => ({ ...m })),
+    compat: info.compat ? { ...info.compat } : undefined,
   };
 }
 
@@ -310,7 +339,15 @@ function toProviderConfig(info: ProviderInfo): ProviderConfig {
  */
 export function mergeDiscoveredModels(
   curated: ModelConfig[],
-  discovered: Array<{ id: string; name: string; contextWindow?: number; vision?: boolean }>,
+  discovered: Array<{
+    id: string;
+    name: string;
+    contextWindow?: number;
+    vision?: boolean;
+    reasoning?: boolean;
+    thinkingLevelMap?: ModelConfig["thinkingLevelMap"];
+    thinkingBudgets?: ModelConfig["thinkingBudgets"];
+  }>,
 ): ModelConfig[] {
   if (discovered.length === 0) return curated;
   const curatedIds = new Set(curated.map((m) => m.id));
@@ -321,6 +358,9 @@ export function mergeDiscoveredModels(
       name: m.name,
       contextWindow: m.contextWindow ?? 0,
       ...(m.vision !== undefined ? { vision: m.vision } : {}),
+      ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
+      ...(m.thinkingLevelMap !== undefined ? { thinkingLevelMap: m.thinkingLevelMap } : {}),
+      ...(m.thinkingBudgets !== undefined ? { thinkingBudgets: m.thinkingBudgets } : {}),
     }));
   return [...curated, ...extras];
 }

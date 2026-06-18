@@ -14,8 +14,15 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
 import { getFetch, initFetch } from "./fetch-adapter";
 import type { LlmConfig } from "./llm-types";
+import { isOpenAICodexSubscriptionProvider } from "./openai-codex-subscription";
 
 export async function createModel(config: LlmConfig): Promise<LanguageModel> {
+  if (isOpenAICodexSubscriptionProvider(config.provider)) {
+    throw new Error(
+      "OpenAI Codex subscription uses goatLLM's native Codex Responses stream adapter, not AI SDK model creation.",
+    );
+  }
+
   await initFetch();
   const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
 

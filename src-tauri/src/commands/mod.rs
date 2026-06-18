@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 
 pub(crate) mod db;
+pub(crate) mod codex;
 pub(crate) mod documents;
 pub(crate) mod embeddings;
 pub(crate) mod extract;
@@ -16,9 +17,14 @@ pub(crate) mod tools;
 pub(crate) mod workspace;
 
 pub(crate) use crate::{escape_sql_like_query, init_db};
+pub(crate) use codex::{
+    openai_codex_auth_status, openai_codex_cancel, openai_codex_logout,
+    openai_codex_oauth_complete, openai_codex_oauth_start, openai_codex_stream,
+};
 pub(crate) use db::{
     delete_conversation_db, delete_message_db, get_events, load_all_data,
-    load_messages_for_conversation, log_event, save_conversation, save_message, search_messages,
+    load_compaction_entries, load_messages_for_conversation, log_event, save_compaction_entry,
+    save_conversation, save_message, search_messages,
 };
 pub(crate) use documents::{
     document_chunks_delete, document_chunks_replace, document_chunks_search, document_workspace_delete,
@@ -58,9 +64,17 @@ macro_rules! generate_handler {
     () => {
         tauri::generate_handler![
             crate::commands::db::load_all_data,
+            crate::commands::codex::openai_codex_auth_status,
+            crate::commands::codex::openai_codex_oauth_start,
+            crate::commands::codex::openai_codex_oauth_complete,
+            crate::commands::codex::openai_codex_logout,
+            crate::commands::codex::openai_codex_stream,
+            crate::commands::codex::openai_codex_cancel,
             crate::commands::db::load_messages_for_conversation,
+            crate::commands::db::load_compaction_entries,
             crate::commands::db::save_conversation,
             crate::commands::db::save_message,
+            crate::commands::db::save_compaction_entry,
             crate::commands::db::delete_conversation_db,
             crate::commands::db::delete_message_db,
             crate::commands::db::search_messages,

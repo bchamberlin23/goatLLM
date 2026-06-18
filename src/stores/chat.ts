@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { LlmConfig } from "../lib/llm";
 import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
+import type { ModelConfig, ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "../lib/providers";
 import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
@@ -26,6 +27,7 @@ import {
   loadMessagesForConversation,
   persistConversation,
   persistMessage,
+  persistCompactionEntry,
   deleteConversationFromDb,
   deleteMessageFromDb,
   searchMessages,
@@ -71,6 +73,12 @@ import {
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
+import {
+  DEFAULT_COMPACTION_SETTINGS,
+  type CompactionEntry,
+  type CompactionSettings,
+  type CompactionSummaryMetadata,
+} from "../lib/compaction/types";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
@@ -128,6 +136,7 @@ const DEFAULT_USAGE_SETTINGS: UsageSettings = {
   expensiveSessionUsd: 1,
   showInlineAlerts: true,
   priceOverrides: {},
+  compactionSettings: DEFAULT_COMPACTION_SETTINGS,
 };
 
 const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
@@ -308,6 +317,19 @@ function saveJsonSetting(key: string, value: unknown) {
   }
 }
 
+function loadUsageSettings(): UsageSettings {
+  const loaded = loadJsonSetting<UsageSettings>(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS);
+  return {
+    ...DEFAULT_USAGE_SETTINGS,
+    ...loaded,
+    priceOverrides: loaded.priceOverrides ?? {},
+    compactionSettings: {
+      ...DEFAULT_COMPACTION_SETTINGS,
+      ...(loaded.compactionSettings ?? {}),
+    },
+  };
+}
+
 // Reset runtime-only "running" status on load (no stuck spinners). The actual
 // rule lives in sanitizeNotebookCells. See CLAUDE.md "Persistence for New Features".
 function loadNotebookCells(): NotebookCell[] {
@@ -347,7 +369,7 @@ function resolveActiveNotebookId(notebooks: Notebook[]): string | null {
   return [...notebooks].sort((a, b) => b.updatedAt - a.updatedAt)[0].id;
 }
 
-export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type MessageRole = "user" | "assistant" | "system" | "tool" | "compactionSummary";
 
 export interface Attachment {
   filename: string;
@@ -473,6 +495,13 @@ export interface Message {
   /** Token usage stats from the LLM provider. */
   outputTokens?: number;
   inputTokens?: number;
+  usage?: {
+    totalTokens?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  };
   /** Model used for this turn. Stored on assistant messages for usage/cost breakdowns. */
   modelId?: string;
   /** Streaming duration in milliseconds (from first token to onDone). */
@@ -498,6 +527,8 @@ export interface Message {
    *  in onDone from the turn's citation registry, filtered to the `[n]`
    *  markers that actually appear in the final content. */
   citations?: Citation[];
+  /** Metadata for hydrate-time synthetic compaction summary messages. */
+  compaction?: CompactionSummaryMetadata;
 }
 
 export interface Conversation {
@@ -554,6 +585,9 @@ export interface Model {
    *  model. Undefined means "unknown" — we treat that as text-only to
    *  avoid silently dropping images on a model that can't see. */
   vision?: boolean;
+  reasoning?: boolean;
+  thinkingLevelMap?: ThinkingLevelMap;
+  thinkingBudgets?: ThinkingBudgets;
 }
 
 /** Per-model overrides a user can set via the gear icon in the model
@@ -571,6 +605,8 @@ export interface ModelOverride {
 export interface ProviderConfig {
   apiKey: string;
   baseUrl?: string;
+  compat?: ProviderCompat;
+  models?: ModelConfig[];
   /** Allowlist of model IDs (provider-local, e.g. "kimi-k2.6") shown in the picker.
    * `undefined` means all available models for this provider are enabled (default).
    * An explicit array — including an empty one — overrides defaults. */
@@ -595,6 +631,7 @@ export interface UsageSettings {
   expensiveSessionUsd: number;
   showInlineAlerts: boolean;
   priceOverrides: Record<string, { inputPerMillion: number; outputPerMillion: number }>;
+  compactionSettings: CompactionSettings;
 }
 
 export interface VoiceSettings {
@@ -959,6 +996,7 @@ export interface ChatStore {
   /** Bump focusNonce to re-focus the chat textarea. */
   focusInput: () => void;
   messages: Record<string, Message[]>;
+  compactionEntries: Record<string, CompactionEntry[]>;
   selectedModelId: string | null;
   isStreaming: boolean;
   streamingConversationId: string | null;
@@ -1012,6 +1050,7 @@ export interface ChatStore {
 
   // Message actions
   addMessage: (message: Omit<Message, "id" | "createdAt">) => Message;
+  addCompactionEntry: (entry: CompactionEntry) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<Message>) => void;
   appendToMessage: (conversationId: string, messageId: string, chunk: string) => void;
   appendToThinking: (conversationId: string, messageId: string, chunk: string) => void;
@@ -1505,6 +1544,7 @@ function nextCreatedAt(): number {
 // turn a user message is always conceptually before its assistant reply.
 const ROLE_ORDER: Record<string, number> = {
   system: 0,
+  compactionSummary: 0.5,
   user: 1,
   assistant: 2,
   tool: 3,
@@ -1541,7 +1581,7 @@ export const bodyMatchCounts: Map<string, number> = new Map();
  * component that indexes the cloud catalog by provider id. New code
  * should prefer the typed helpers in `../lib/providers`.
  */
-export const CLOUD_PROVIDER_MODELS: Record<string, Array<{ id: string; name: string; contextWindow: number; vision?: boolean }>> = (() => {
+export const CLOUD_PROVIDER_MODELS: Record<string, ModelConfig[]> = (() => {
   const ids = [
     "openai",
     "anthropic",
@@ -1551,7 +1591,7 @@ export const CLOUD_PROVIDER_MODELS: Record<string, Array<{ id: string; name: str
     "opencode-go",
     "groq",
   ];
-  const out: Record<string, Array<{ id: string; name: string; contextWindow: number; vision?: boolean }>> = {};
+  const out: Record<string, ModelConfig[]> = {};
   for (const id of ids) {
     out[id] = getCuratedModels(id);
   }
@@ -1619,6 +1659,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       pendingDroppedFiles: [],
       drafts: {},
       messages: {},
+      compactionEntries: {},
       selectedModelId: null,
       isStreaming: false,
       streamingConversationId: null,
@@ -1727,7 +1768,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       planMode: false,
       workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
       workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
-      usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+      usageSettings: loadUsageSettings(),
       voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
       meetingSessions: loadMeetingStateFromJournal().sessions,
       meetingSettings: loadMeetingStateFromJournal().settings,
@@ -1786,7 +1827,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       deleteConversation: (id: string) => {
-        const { conversations, activeId, messages, drafts, messageQueue } = get();
+        const { conversations, activeId, messages, drafts, messageQueue, compactionEntries } = get();
         const remaining = conversations.filter((c) => c.id !== id);
         const newMessages = { ...messages };
         delete newMessages[id];
@@ -1794,13 +1835,22 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         delete newDrafts[id];
         const newQueue = { ...messageQueue };
         delete newQueue[id];
+        const newCompactionEntries = { ...compactionEntries };
+        delete newCompactionEntries[id];
         let newActiveId = activeId;
         if (activeId === id) {
           // Show the new-chat hero in the current mode instead of jumping
           // to a random conversation that might be in a different mode.
           newActiveId = null;
         }
-        set({ conversations: remaining, activeId: newActiveId, messages: newMessages, drafts: newDrafts, messageQueue: newQueue });
+        set({
+          conversations: remaining,
+          activeId: newActiveId,
+          messages: newMessages,
+          drafts: newDrafts,
+          messageQueue: newQueue,
+          compactionEntries: newCompactionEntries,
+        });
         saveJsonSetting(MESSAGE_QUEUE_KEY, newQueue);
         deleteConversationFromDb(id);
         // Drop the in-memory attachment text cache for this conversation.
@@ -2104,6 +2154,24 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           };
         });
         return message;
+      },
+
+      addCompactionEntry: (entry) => {
+        set((state) => {
+          const current = state.compactionEntries[entry.conversationId] ?? [];
+          const byId = new Map(current.map((existing) => [existing.id, existing]));
+          byId.set(entry.id, entry);
+          const nextEntries = Array.from(byId.values()).sort(
+            (a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id),
+          );
+          persistCompactionEntry(entry);
+          return {
+            compactionEntries: {
+              ...state.compactionEntries,
+              [entry.conversationId]: nextEntries,
+            },
+          };
+        });
       },
 
       updateMessage: (conversationId, messageId, updates) => {
@@ -3415,8 +3483,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       setUsageSettings: (settings) => {
-        set({ usageSettings: settings });
-        saveJsonSetting(USAGE_SETTINGS_KEY, settings);
+        const safe: UsageSettings = {
+          ...DEFAULT_USAGE_SETTINGS,
+          ...settings,
+          priceOverrides: settings.priceOverrides ?? {},
+          compactionSettings: {
+            ...DEFAULT_COMPACTION_SETTINGS,
+            ...(settings.compactionSettings ?? {}),
+          },
+        };
+        set({ usageSettings: safe });
+        saveJsonSetting(USAGE_SETTINGS_KEY, safe);
       },
 
       setVoiceSettings: (settings) => {
@@ -4487,6 +4564,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               isAvailable: providerOnline,
               contextWindow: applyOverride(combinedId, m.contextWindow),
               vision: m.vision,
+              reasoning: m.reasoning,
+              thinkingLevelMap: m.thinkingLevelMap,
+              thinkingBudgets: m.thinkingBudgets,
             });
           }
         }
@@ -4505,7 +4585,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // the curated catalog only — discoveredModels is ignored for
           // them so a stale or bogus entry can't leak into the picker.
           const sourceModels = isLocal
-            ? (discoveredModels[providerId] ?? [])
+            ? mergeDiscoveredModels(config.models ?? [], discoveredModels[providerId] ?? [])
             : providerSupportsDiscovery(providerId)
               ? mergeDiscoveredModels(
                   CLOUD_PROVIDER_MODELS[providerId] ?? [],
@@ -4526,6 +4606,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               "vision" in m && typeof (m as { vision?: boolean }).vision === "boolean"
                 ? (m as { vision?: boolean }).vision
                 : undefined;
+            const reasoning =
+              "reasoning" in m && typeof (m as { reasoning?: boolean }).reasoning === "boolean"
+                ? (m as { reasoning?: boolean }).reasoning
+                : undefined;
             const combinedId = `${providerId}:${m.id}`;
             models.push({
               id: combinedId,
@@ -4534,6 +4618,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               isAvailable: !!config.apiKey || NO_KEY_PROVIDERS.has(providerId),
               contextWindow: applyOverride(combinedId, ctx),
               vision,
+              reasoning,
+              thinkingLevelMap: (m as ModelConfig).thinkingLevelMap,
+              thinkingBudgets: (m as ModelConfig).thinkingBudgets,
             });
           }
         }
@@ -4811,6 +4898,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           set({
             conversations: data.conversations,
             messages: data.messages,
+            compactionEntries: data.compactionEntries,
             providerConfigs,
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
@@ -4860,7 +4948,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             messageQueue,
             workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
-            usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+            usageSettings: loadUsageSettings(),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             meetingSessions: meetingState.sessions,
             meetingSettings: meetingState.settings,
@@ -4958,6 +5046,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               : documentWorkspaces[0]?.id ?? null;
           set({
             providerConfigs,
+            compactionEntries: {},
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
             firecrawlApiKey: firecrawlKey,
@@ -4999,7 +5088,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoApprove: savedMode === "yolo",
             workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
-            usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
+            usageSettings: loadUsageSettings(),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
             meetingSessions: meetingState.sessions,
             meetingSettings: meetingState.settings,
@@ -5035,6 +5124,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
         // Grab per-model overrides the user may have set via the gear icon.
         const overrides = modelOverrides[targetModelId];
+        const selectedModel = get().getModels().find((m) => m.id === targetModelId);
+        const providerCompat = providerConfigs[providerId]?.compat ?? getProviderInfo(providerId)?.compat;
+        const reasoningMetadata = selectedModel
+          ? {
+              reasoning: selectedModel.reasoning,
+              thinkingLevelMap: selectedModel.thinkingLevelMap,
+              thinkingBudgets: selectedModel.thinkingBudgets,
+              providerCompat,
+            }
+          : { providerCompat };
 
         // Built-in provider (e.g. OpenCode Go Free).
         // We resolve the bundled credential lazily so the decoded value
@@ -5052,6 +5151,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             baseUrl: builtin.baseUrl,
             maxResponseTokens: overrides?.maxResponseTokens,
             reasoningEffort: overrides?.reasoningEffort,
+            ...reasoningMetadata,
           };
         }
 
@@ -5069,6 +5169,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             baseUrl,
             maxResponseTokens: overrides?.maxResponseTokens,
             reasoningEffort: overrides?.reasoningEffort,
+            ...reasoningMetadata,
           };
         }
 

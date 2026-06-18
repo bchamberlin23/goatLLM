@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChatStore, type Model, type Provider, type ModelOverride } from "../stores/chat";
 import { getContextWindow } from "../lib/context-window";
+import { getReasoningLevelOptions, normalizeReasoningEffort } from "../lib/reasoning";
 import { generateText } from "ai";
 import { createModel } from "../lib/model-factory";
 import {
@@ -609,6 +610,8 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
   const [ctx, setCtx] = useState(overrides.contextWindow?.toString() ?? "");
   const [maxResp, setMaxResp] = useState(overrides.maxResponseTokens?.toString() ?? "");
   const [reasoning, setReasoning] = useState(overrides.reasoningEffort ?? "");
+  const reasoningOptions = useMemo(() => getReasoningLevelOptions({ model }), [model]);
+  const selectedReasoningLevel = reasoningOptions.some((o) => o.level === reasoning) ? reasoning : "";
 
   // Resolve the true auto-detected context window (without user overrides).
   const autoDetectedCtx = useMemo(() => {
@@ -635,7 +638,12 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
     const parsedMax = parseInt(maxResp, 10);
     if (maxResp.trim() !== "") patch.maxResponseTokens = isNaN(parsedMax) ? undefined : parsedMax;
     else patch.maxResponseTokens = undefined;
-    if (reasoning) patch.reasoningEffort = reasoning;
+    const normalizedReasoning = normalizeReasoningEffort(reasoning, { model });
+    if (normalizedReasoning && normalizedReasoning !== "off" && reasoningOptions.some((o) => o.level === normalizedReasoning)) {
+      patch.reasoningEffort = normalizedReasoning;
+    } else if (reasoning === "off" && reasoningOptions.some((o) => o.level === "off")) {
+      patch.reasoningEffort = "off";
+    }
     else patch.reasoningEffort = undefined;
     onSave(patch);
   };
@@ -707,19 +715,22 @@ function ModelSettingsPanel({ modelId, models, overrides, onSave, onClose }: Mod
       {/* Reasoning Level */}
       <label className="flex flex-col gap-1">
         <span className="text-[11.5px] font-medium text-text-2">Reasoning Level</span>
-        <select
-          className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors appearance-none"
-          value={reasoning}
-          onChange={(e) => setReasoning(e.target.value)}
-        >
-          <option value="">Provider default</option>
-          <option value="off">Off</option>
-          <option value="minimal">Minimal</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="xhigh">X-High</option>
-        </select>
+        {reasoningOptions.length > 0 ? (
+          <select
+            className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-1 outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/25 transition-colors appearance-none"
+            value={selectedReasoningLevel}
+            onChange={(e) => setReasoning(e.target.value)}
+          >
+            <option value="">Provider default</option>
+            {reasoningOptions.map((option) => (
+              <option key={option.level} value={option.level}>{option.label}</option>
+            ))}
+          </select>
+        ) : (
+          <div className="w-full px-2.5 py-1.5 rounded-md bg-white/5 border border-white/10 text-[13px] text-text-3">
+            Not supported by this model
+          </div>
+        )}
       </label>
 
       {/* Actions */}

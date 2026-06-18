@@ -10,7 +10,7 @@ import {
   type ToolCallEntry,
   type Message,
 } from "../../../stores/chat";
-import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../../../lib/llm";
+import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type LlmMessage, type ToolCallInfo, type ToolResultInfo } from "../../../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../../../lib/tools";
 import { shouldAutoApprove } from "../../../lib/tools/approval";
 import { classifyCommand } from "../../../lib/command-safety";
@@ -21,7 +21,13 @@ import { splitContentByArtifacts } from "../../../lib/artifact-segments";
 import { formatSkillsForPrompt } from "../../../lib/skills";
 import { loadProjectContext } from "../../../lib/project-context";
 import { logMessage, logToolCall, logToolResult, logError } from "../../../lib/event-log";
-import { compactMessages, summarizeWithLlm } from "../../../lib/context-manager";
+import {
+  compactMessages,
+  estimateContextTokens,
+  shouldCompact,
+  summarizeWithLlm,
+} from "../../../lib/context-manager";
+import { applyCompactionReplay } from "../../../lib/compaction/replay";
 import { extractAndAppend } from "../../../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../../../lib/url-fetch";
 import { log } from "../../../lib/logger";
@@ -55,8 +61,6 @@ function playCompletionSound() {
   }
 }
 
-const llmSummaryCache = new Map<string, string>();
-const llmSummaryInflight = new Set<string>();
 const promptTemplateCache = new Map<string, PromptTemplate[]>();
 
 async function getPromptTemplates(workspace: string | null | undefined): Promise<PromptTemplate[]> {
@@ -277,6 +281,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
   const send = useCallback(async (overrides?: { content?: string; attachments?: Attachment[]; fromQueue?: boolean; steered?: boolean }) => {
     const {
       addMessage,
+      addCompactionEntry,
       startStreaming,
       stopStreaming,
       appendToMessage,
@@ -671,40 +676,70 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       }
     }
 
-    // Apply context compaction for long conversations
-    // Budget: agent mode runs lots of tool turns so we keep it tighter.
-    // Chat mode often gets full PDFs / lecture decks pasted in via attachment
-    // extraction — give it room so a single paper doesn't trigger compaction
-    // and lose the body. Sized for the lowest model the user targets (200K
-    // context): 180K tokens leaves headroom for system prompt + reply.
-    const maxTokens = (isAgentMode || (isDesignMode && designWorkspace)) ? 40_000 : 180_000;
-    const compaction = compactMessages(history, maxTokens, { stripTools: !activeTools });
-    const { compacted, summarizedCount, truncatedCount, toolsInlinedCount, droppedMessages } = compaction;
+    const latestCompactionEntry = getStore().compactionEntries[convId!]?.[0] ?? null;
+    const replayed = applyCompactionReplay(history, latestCompactionEntry);
+    let compactedMessages: LlmMessage[] = replayed.llmMessages
+      .filter((message) => message.role === "user" || message.role === "assistant" || message.role === "system")
+      .map((message) => ({
+        role: message.role as "user" | "assistant" | "system",
+        content: message.content,
+      }));
 
-    // Swap the extractive summary placeholder for a cached LLM summary if
-    // we have one for this conversation.
-    let compactedMessages = compaction.messages;
-    const cached = llmSummaryCache.get(convId!);
-    if (cached && compaction.summaryMessageIndex !== undefined && compaction.summaryMessageIndex >= 0) {
-      compactedMessages = compactedMessages.map((m, i) =>
-        i === compaction.summaryMessageIndex ? { ...m, content: cached } : m,
-      );
-    }
-
-    // Kick off an LLM summary in the background so the next turn picks it up.
-    if (
-      droppedMessages &&
-      droppedMessages.length >= 4 &&
-      !llmSummaryInflight.has(convId!) &&
-      llmConfig
-    ) {
-      llmSummaryInflight.add(convId!);
-      summarizeWithLlm(droppedMessages, llmConfig)
-        .then((summary) => {
-          if (summary && summary.length > 40) llmSummaryCache.set(convId!, summary);
+    const compactionSettings = getStore().usageSettings.compactionSettings;
+    const contextEstimate = estimateContextTokens(history);
+    const contextWindow = selectedModel.contextWindow;
+    const shouldRunCompaction = shouldCompact(
+      contextEstimate.tokens,
+      contextWindow,
+      compactionSettings,
+    );
+    const maxTokensAfterReserve = Math.max(1, contextWindow - compactionSettings.reserveTokens);
+    const compaction = shouldRunCompaction
+      ? compactMessages(history, maxTokensAfterReserve, {
+          stripTools: !activeTools,
+          previousEntry: latestCompactionEntry,
+          previousSummary: latestCompactionEntry?.summary,
+          conversationId: convId!,
+          source: "auto",
+          mode: isDesignMode ? "design" : isAgentMode ? "agent" : "chat",
+          modelId: selectedModelId ?? undefined,
+          tokensBefore: contextEstimate.tokens,
+          keepRecentTokens: compactionSettings.keepRecentTokens,
         })
-        .catch(() => { /* graceful fallback already applied inside summarizeWithLlm */ })
-        .finally(() => llmSummaryInflight.delete(convId!));
+      : null;
+    const compacted = compaction?.compacted ?? replayed.hiddenCount > 0;
+    const summarizedCount = compaction?.summarizedCount ?? 0;
+    const truncatedCount = compaction?.truncatedCount ?? 0;
+    const toolsInlinedCount = compaction?.toolsInlinedCount ?? 0;
+
+    if (compaction?.compactionEntry) {
+      const entry = compaction.compactionEntry;
+      addCompactionEntry(entry);
+      compactedMessages = compaction.messages;
+
+      const firstKeptIndex = history.findIndex((message) => message.id === entry.firstKeptId);
+      const sourceMessages = firstKeptIndex > 0
+        ? history.slice(0, firstKeptIndex).filter((message) => message.role !== "system")
+        : [];
+      if (sourceMessages.length >= 4 && llmConfig && entry.source !== "mid-loop") {
+        void summarizeWithLlm(
+          sourceMessages,
+          llmConfig,
+          undefined,
+          undefined,
+          latestCompactionEntry?.summary,
+          { readFiles: entry.readFiles, modifiedFiles: entry.modifiedFiles },
+        )
+          .then((summary) => {
+            if (!summary || summary.length <= 40) return;
+            addCompactionEntry({
+              ...entry,
+              summary,
+              promptVersion: latestCompactionEntry ? "update" : "initial",
+            });
+          })
+          .catch(() => { /* graceful fallback already applied inside summarizeWithLlm */ });
+      }
     }
 
     if (compacted && (summarizedCount > 0 || truncatedCount > 0)) {
@@ -921,6 +956,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
     let capturedInputTokens: number | undefined;
     let capturedOutputTokens: number | undefined;
     let capturedGenerationMs: number | undefined;
+    let capturedUsage: Message["usage"] | undefined;
 
     const conv = getStore().conversations.find((c) => c.id === convId);
     const userPrompt = conv?.systemPrompt || "";
@@ -1237,6 +1273,13 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       onToolCall: handleToolCall,
       onToolResult: handleToolResult,
       onUsage: (usage) => {
+        capturedUsage = {
+          totalTokens: usage.totalTokens,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          cacheRead: usage.cacheRead,
+          cacheWrite: usage.cacheWrite,
+        };
         capturedInputTokens = usage.inputTokens;
         capturedOutputTokens = usage.outputTokens;
         if (usage.generationMs) capturedGenerationMs = usage.generationMs;
@@ -1308,6 +1351,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
           turnDurationMs: streamDurationMs,
           inputTokens: capturedInputTokens,
           outputTokens,
+          usage: capturedUsage,
           modelId: selectedModelId ?? undefined,
           editedFiles:
             editedFiles && editedFiles.length > 0 ? editedFiles : undefined,

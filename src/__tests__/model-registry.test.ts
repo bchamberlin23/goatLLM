@@ -9,6 +9,7 @@ import {
   mergeDiscoveredModels,
 } from "../lib/model-registry";
 import { ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
+import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 
 describe("model registry", () => {
   describe("getBuiltInProviders", () => {
@@ -18,6 +19,15 @@ describe("model registry", () => {
       // first-class built-in (no settings round-trip required).
       expect(builtins.find((p) => p.id === ZEN_FREE_PROVIDER_ID)).toBeDefined();
       expect(builtins.find((p) => p.id === ZEN_FREE_PROVIDER_ID)?.apiKey).toBeNull();
+    });
+
+    it("returns OpenAI Codex subscription as a separate no-key built-in", () => {
+      const builtins = getBuiltInProviders();
+      const codex = builtins.find((p) => p.id === OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID);
+      expect(codex?.name).toBe("OpenAI Codex");
+      expect(codex?.apiKey).toBeNull();
+      expect(codex?.baseUrl).toBe("https://chatgpt.com/backend-api");
+      expect(codex?.models.map((m) => m.id)).toContain("gpt-5.5");
     });
 
     it("returns a fresh array on each call so mutations don't leak", () => {

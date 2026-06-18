@@ -5,8 +5,11 @@ import { useChatStore, type Message } from "../stores/chat";
 import { MessageBubble } from "./MessageBubble";
 import { ChevronDown, Navigation } from "lucide-react";
 import { formatDateSeparator, formatLongDateTime, sameDay } from "../lib/datetime";
+import { applyCompactionReplay } from "../lib/compaction/replay";
+import type { CompactionEntry } from "../lib/compaction/types";
 
 const EMPTY_MESSAGES: Message[] = [];
+const EMPTY_COMPACTION_ENTRIES: CompactionEntry[] = [];
 
 function isToday(ts: number): boolean {
   return sameDay(ts, Date.now());
@@ -37,9 +40,16 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
   const messages = useChatStore(
     useShallow((s) => (s.activeId ? s.messages[s.activeId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES)),
   );
+  const compactionEntries = useChatStore(
+    useShallow((s) => (s.activeId ? s.compactionEntries[s.activeId] ?? EMPTY_COMPACTION_ENTRIES : EMPTY_COMPACTION_ENTRIES)),
+  );
   const messageQueue = useChatStore((s) => s.messageQueue);
   const steerMessage = useChatStore((s) => s.steerMessage);
   const queuedMessages = activeId ? (messageQueue[activeId] ?? []) : [];
+  const visibleMessages = useMemo(
+    () => applyCompactionReplay(messages, compactionEntries[0] ?? null).timelineMessages,
+    [messages, compactionEntries],
+  );
 
   const listRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -55,8 +65,8 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
   const lastScrollTopRef = useRef(0);
 
   const listItems = useMemo<VirtualListItem[]>(() => {
-    const items: VirtualListItem[] = messages.map((message, i) => {
-      const prev = i > 0 ? messages[i - 1] : null;
+    const items: VirtualListItem[] = visibleMessages.map((message, i) => {
+      const prev = i > 0 ? visibleMessages[i - 1] : null;
       const isDayChange = !prev || !sameDay(prev.createdAt, message.createdAt);
       const showSeparator = isDayChange && !(prev === null && isToday(message.createdAt));
       return {
@@ -78,7 +88,7 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
 
     items.push({ kind: "footer", id: "footer" });
     return items;
-  }, [messages, queuedMessages]);
+  }, [visibleMessages, queuedMessages]);
 
   const virtualizer = useVirtualizer({
     count: listItems.length,
@@ -110,14 +120,14 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
   }, [flushScrollPosition]);
 
   const userMsgCount = useMemo(
-    () => messages.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0),
-    [messages],
+    () => visibleMessages.reduce((n, m) => n + (m.role === "user" ? 1 : 0), 0),
+    [visibleMessages],
   );
 
-  const lastMessage = messages[messages.length - 1];
+  const lastMessage = visibleMessages[visibleMessages.length - 1];
   const contentSignal = isStreaming && lastMessage
     ? `${lastMessage.id}:${lastMessage.content.length}:${lastMessage.thinkingContent?.length ?? 0}:${lastMessage.toolCalls?.length ?? 0}`
-    : `${messages.length}:${listItems.length}`;
+    : `${visibleMessages.length}:${listItems.length}`;
 
   const doScrollToBottom = useCallback(() => {
     const el = listRef.current;
@@ -243,7 +253,7 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
     setShowScrollBtn(distFromBottom > 80 && el.scrollHeight > el.clientHeight + 200);
   }, []);
 
-  if (messages.length === 0) return null;
+  if (visibleMessages.length === 0) return null;
 
   const virtualItems = virtualizer.getVirtualItems();
 

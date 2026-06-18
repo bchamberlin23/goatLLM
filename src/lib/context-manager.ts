@@ -6,27 +6,94 @@
 
 import type { Message } from "../stores/chat";
 import type { LlmConfig, LlmMessage } from "./llm";
+import { findCutPoint } from "./compaction/cut-point";
+import { buildTurnPrefixSummary, mergeSplitTurnSummary } from "./compaction/split-turn";
+import {
+  createCompactionId,
+  DEFAULT_COMPACTION_SETTINGS,
+  type CompactionEntry,
+  type CompactionMode,
+  type CompactionPromptVersion,
+  type CompactionSettings,
+  type CompactionSource,
+} from "./compaction/types";
+import {
+  estimateMessageTokens,
+} from "./compaction/token-estimate";
+
+export type { CompactionSettings } from "./compaction/types";
 
 // ── Token Estimation ──
 
-/** Rough estimate: ~4 characters per token for English text. */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+export interface ContextUsage {
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
 }
 
-function estimateMessageTokens(msg: Message): number {
-  let tokens = estimateTokens(msg.content);
-  if (msg.thinkingContent) tokens += estimateTokens(msg.thinkingContent);
-  // Tool call overhead
-  if (msg.toolCalls) {
-    for (const tc of msg.toolCalls) {
-      tokens += estimateTokens(JSON.stringify(tc.input ?? ""));
-      if (tc.output && typeof tc.output === "string") {
-        tokens += estimateTokens(tc.output);
-      }
-    }
+export interface EstimatedContextTokens {
+  tokens: number;
+  usageTokens: number;
+  trailingTokens: number;
+  lastUsageIndex: number;
+}
+
+export function calculateContextTokens(usage: ContextUsage | undefined | null): number {
+  if (!usage) return 0;
+  if (typeof usage.totalTokens === "number" && usage.totalTokens > 0) {
+    return usage.totalTokens;
   }
-  return tokens;
+  return (
+    (usage.inputTokens ?? 0) +
+    (usage.outputTokens ?? 0) +
+    (usage.cacheRead ?? 0) +
+    (usage.cacheWrite ?? 0)
+  );
+}
+
+export function getLastAssistantUsage(messages: Message[]): { usage: ContextUsage; index: number } | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "assistant") continue;
+    if (message.interrupted) continue;
+    if (/^\s*Error:/i.test(message.content)) continue;
+    const usage = message.usage ?? {
+      inputTokens: message.inputTokens,
+      outputTokens: message.outputTokens,
+    };
+    if (calculateContextTokens(usage) > 0) return { usage, index: i };
+  }
+  return null;
+}
+
+export function estimateContextTokens(messages: Message[]): EstimatedContextTokens {
+  const lastUsage = getLastAssistantUsage(messages);
+  if (!lastUsage) {
+    const tokens = messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0);
+    return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: -1 };
+  }
+  const usageTokens = calculateContextTokens(lastUsage.usage);
+  const trailingTokens = messages
+    .slice(lastUsage.index + 1)
+    .reduce((sum, message) => sum + estimateMessageTokens(message), 0);
+  return {
+    tokens: usageTokens + trailingTokens,
+    usageTokens,
+    trailingTokens,
+    lastUsageIndex: lastUsage.index,
+  };
+}
+
+export function shouldCompact(
+  contextTokens: number,
+  contextWindow: number,
+  settings: CompactionSettings = DEFAULT_COMPACTION_SETTINGS,
+): boolean {
+  if (!settings.enabled) return false;
+  if (contextWindow <= 0) return false;
+  return contextTokens > contextWindow - settings.reserveTokens;
 }
 
 // ── Tool Output Truncation ──
@@ -52,6 +119,14 @@ const TOOL_OUTPUT_TRUNCATION_THRESHOLD = 2000; // Truncate tool outputs over 200
 export interface CompactionOptions {
   /** When true, inline tool-call results into message content so non-tool models see them. */
   stripTools?: boolean;
+  previousEntry?: CompactionEntry | null;
+  previousSummary?: string;
+  conversationId?: string;
+  source?: CompactionSource;
+  mode?: CompactionMode;
+  modelId?: string;
+  tokensBefore?: number;
+  keepRecentTokens?: number;
 }
 
 export interface CompactionResult {
@@ -67,13 +142,8 @@ export interface CompactionResult {
   toolsInlinedCount: number;
   /** Number of pinned messages forcibly de-pinned because pins exceeded the soft cap. */
   pinnedDroppedCount: number;
-  /** The actual messages dropped from the conversation, for callers that
-   * want to run a higher-quality LLM summary asynchronously. */
-  droppedMessages?: Message[];
-  /** Index of the auto-generated summary in `messages`, or -1 when no
-   * summary was inserted. Lets callers patch the summary text in place
-   * once an async LLM-summary returns. */
-  summaryMessageIndex?: number;
+  /** Durable compaction entry for callers to persist. */
+  compactionEntry?: CompactionEntry;
 }
 
 /**
@@ -183,10 +253,10 @@ export function compactMessages(
   }
 
   // Step 3: Total tokens.
-  let totalTokens = 0;
-  for (const msg of partitioned) {
-    totalTokens += estimateMessageTokens(msg);
-  }
+  const totalTokens = partitioned.reduce(
+    (sum, msg) => sum + estimateMessageTokens(msg),
+    0,
+  );
 
   if (totalTokens <= maxTokens) {
     return {
@@ -201,59 +271,101 @@ export function compactMessages(
 
   compacted = true;
 
-  // Always include system messages and pinned messages. Run the recency
-  // budget loop on the remaining unpinned non-system messages only.
+  // Always include system messages. The cut-point search works on the
+  // remaining linear timeline so tool calls, pinned messages, and split turns
+  // are treated as constraints on a single boundary.
   const systemMsgs = partitioned.filter((m) => m.role === "system");
-  const nonSystem = partitioned.filter((m) => m.role !== "system");
-  const pinnedMsgs = nonSystem.filter((m) => m.pinned);
-  const unpinned = nonSystem.filter((m) => !m.pinned);
-
-  const fixedTokens =
-    systemMsgs.reduce((s, m) => s + estimateMessageTokens(m), 0) +
-    pinnedMsgs.reduce((s, m) => s + estimateMessageTokens(m), 0);
-  const recentBudget = Math.max(0, maxTokens * 0.7 - fixedTokens);
-
-  const kept: Message[] = [];
-  let keptTokens = 0;
-  // Always keep the most recent user/assistant turn intact — dropping the
-  // very message we're about to respond to (or the assistant reply that
-  // produced the latest output) leaves the model blind. Big single messages
-  // (a 50KB PDF extraction, say) get to override the recency budget; the
-  // earlier-message summary path absorbs the slack.
-  if (unpinned.length > 0) {
-    const last = unpinned[unpinned.length - 1];
-    kept.push(last);
-    keptTokens += estimateMessageTokens(last);
+  const timeline = partitioned.filter((m) => m.role !== "system");
+  if (timeline.length === 0) {
+    return {
+      messages: messagesToLlm(systemMsgs),
+      compacted,
+      summarizedCount,
+      truncatedCount,
+      toolsInlinedCount,
+      pinnedDroppedCount,
+    };
   }
-  for (let i = unpinned.length - 2; i >= 0; i--) {
-    const msgTokens = estimateMessageTokens(unpinned[i]);
-    if (keptTokens + msgTokens <= recentBudget) {
-      kept.unshift(unpinned[i]);
-      keptTokens += msgTokens;
-    } else {
-      break;
-    }
+  const pinnedTimeline = timeline.filter((message) => message.pinned);
+  const unpinnedTimeline = timeline.filter((message) => !message.pinned);
+  if (unpinnedTimeline.length === 0) {
+    return {
+      messages: messagesToLlm([...systemMsgs, ...pinnedTimeline]),
+      compacted,
+      summarizedCount,
+      truncatedCount,
+      toolsInlinedCount,
+      pinnedDroppedCount,
+    };
   }
 
-  const dropped = unpinned.slice(0, unpinned.length - kept.length);
-
-  // Reassemble in original order: system → summary (if any) → pinned + kept by createdAt
-  const tail = [...pinnedMsgs, ...kept].sort(compareByCreated);
+  const fixedTokens = systemMsgs.reduce((s, m) => s + estimateMessageTokens(m), 0);
+  const keepRecentTokens = Math.max(
+    1,
+    options.keepRecentTokens ?? Math.floor(maxTokens * 0.7) - fixedTokens,
+  );
+  const cut = findCutPoint(unpinnedTimeline, 0, unpinnedTimeline.length - 1, keepRecentTokens);
+  const dropped = unpinnedTimeline.slice(0, cut.firstKeptIndex);
+  const keptUnpinned = unpinnedTimeline.slice(cut.firstKeptIndex);
+  const kept = [
+    ...pinnedTimeline,
+    ...keptUnpinned,
+  ].sort(compareByCreated);
 
   if (dropped.length > 0) {
-    const summary = buildSummary(dropped);
+    const previousEntry = options.previousEntry ?? null;
+    const deltaOps = extractFileOperations(dropped);
+    const cumulative = mergeFileOperations(previousEntry, deltaOps);
+    let summary = buildSummary(dropped, {
+      previousSummary: options.previousSummary ?? previousEntry?.summary,
+      deltaReadFiles: deltaOps.readFiles,
+      deltaModifiedFiles: deltaOps.modifiedFiles,
+      cumulativeReadFiles: cumulative.readFiles,
+      cumulativeModifiedFiles: cumulative.modifiedFiles,
+      updateMode: !!(options.previousSummary ?? previousEntry?.summary),
+    });
+    let turnPrefix: string | undefined;
+    if (cut.isSplitTurn) {
+      turnPrefix = buildTurnPrefixSummary(unpinnedTimeline.slice(cut.turnStartIndex, cut.firstKeptIndex));
+      summary = mergeSplitTurnSummary(summary, turnPrefix);
+    }
     summarizedCount = dropped.length;
+    const firstKept = keptUnpinned[0] ?? kept[0];
+    const promptVersion: CompactionPromptVersion =
+      options.previousSummary || previousEntry?.summary ? "update" : "initial";
+    const compactionEntry: CompactionEntry | undefined = firstKept
+      ? {
+          id: createCompactionId(),
+          conversationId:
+            options.conversationId ??
+            firstKept.conversationId ??
+            messages.find((message) => message.conversationId)?.conversationId ??
+            "",
+          firstKeptId: firstKept.id,
+          summary,
+          readFiles: cumulative.readFiles,
+          modifiedFiles: cumulative.modifiedFiles,
+          tokensBefore: options.tokensBefore ?? totalTokens,
+          source: options.source ?? "auto",
+          isSplitTurn: cut.isSplitTurn,
+          turnPrefix,
+          promptVersion,
+          createdAt: Date.now(),
+          mode: options.mode ?? "chat",
+          modelId: options.modelId,
+        }
+      : undefined;
     const summaryEntry: Message = {
-      id: "__summary__",
-      conversationId: "",
+      id: compactionEntry ? `compaction-${compactionEntry.id}` : "__summary__",
+      conversationId: compactionEntry?.conversationId ?? "",
       role: "system",
       content: summary,
-      createdAt: 0,
+      createdAt: kept[0]?.createdAt ? kept[0].createdAt - 0.5 : 0,
     } as Message;
     const result: Message[] = [
       ...systemMsgs,
       summaryEntry,
-      ...tail,
+      ...kept,
     ];
     const llmMessages = messagesToLlm(result);
     return {
@@ -263,13 +375,12 @@ export function compactMessages(
       truncatedCount,
       toolsInlinedCount,
       pinnedDroppedCount,
-      droppedMessages: dropped,
-      summaryMessageIndex: systemMsgs.length, // index of the summary in result
+      compactionEntry,
     };
   }
 
   return {
-    messages: messagesToLlm([...systemMsgs, ...tail]),
+    messages: messagesToLlm([...systemMsgs, ...kept]),
     compacted,
     summarizedCount,
     truncatedCount,
@@ -283,17 +394,90 @@ function compareByCreated(a: Message, b: Message): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+export interface FileOperations {
+  readFiles: string[];
+  modifiedFiles: string[];
+}
+
+interface BuildSummaryOptions {
+  previousSummary?: string;
+  deltaReadFiles?: string[];
+  deltaModifiedFiles?: string[];
+  cumulativeReadFiles?: string[];
+  cumulativeModifiedFiles?: string[];
+  updateMode?: boolean;
+}
+
+function sortedUnique(values: Iterable<string>): string[] {
+  return Array.from(new Set(Array.from(values).filter(Boolean))).sort();
+}
+
+function extractToolPath(input: unknown): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = (input as { path?: unknown; filePath?: unknown }).path ??
+    (input as { filePath?: unknown }).filePath;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function extractFileOperations(messages: Message[]): FileOperations {
+  const readFiles = new Set<string>();
+  const modifiedFiles = new Set<string>();
+
+  for (const message of messages) {
+    for (const toolCall of message.toolCalls ?? []) {
+      const path = extractToolPath(toolCall.input);
+      if (!path) continue;
+      if (
+        toolCall.toolName === "read_file" ||
+        toolCall.toolName === "read_pdf" ||
+        toolCall.toolName === "read_text_file_abs" ||
+        toolCall.toolName === "list_dir" ||
+        toolCall.toolName === "search_content"
+      ) {
+        readFiles.add(path);
+      } else if (
+        toolCall.toolName === "write_file" ||
+        toolCall.toolName === "edit_file" ||
+        toolCall.toolName === "delete_file"
+      ) {
+        modifiedFiles.add(path);
+      }
+    }
+    for (const path of message.editedFiles ?? []) {
+      modifiedFiles.add(path);
+    }
+  }
+
+  return {
+    readFiles: sortedUnique(readFiles),
+    modifiedFiles: sortedUnique(modifiedFiles),
+  };
+}
+
+function mergeFileOperations(
+  previousEntry: CompactionEntry | null,
+  delta: FileOperations,
+): FileOperations {
+  return {
+    readFiles: sortedUnique([...(previousEntry?.readFiles ?? []), ...delta.readFiles]),
+    modifiedFiles: sortedUnique([...(previousEntry?.modifiedFiles ?? []), ...delta.modifiedFiles]),
+  };
+}
+
 /**
  * Build a concise summary of dropped messages using extractive sampling.
  * Each user message gets its first ~200 chars preserved; assistant messages
  * are summarized more aggressively.
  */
-function buildSummary(messages: Message[]): string {
+function buildSummary(messages: Message[], options: BuildSummaryOptions = {}): string {
   const parts: string[] = [];
 
-  // Track files from tool calls (pi-style cumulative file tracking)
-  const readFiles = new Set<string>();
-  const modifiedFiles = new Set<string>();
+  if (options.updateMode && options.previousSummary?.trim()) {
+    parts.push("## Previous Context");
+    parts.push(options.previousSummary.trim());
+    parts.push("");
+    parts.push("## New Context");
+  }
 
   parts.push("## Goal");
   // Extract goal from first user message
@@ -316,32 +500,42 @@ function buildSummary(messages: Message[]): string {
       // Track files from tool calls
       if (msg.toolCalls) {
         for (const tc of msg.toolCalls) {
-          const input = tc.input as Record<string, unknown> | undefined;
-          const path = input?.path as string | undefined;
-          if (tc.toolName === "read_file" || tc.toolName === "read_pdf" || tc.toolName === "list_dir") {
-            if (path) readFiles.add(path);
-          } else if (tc.toolName === "write_file" || tc.toolName === "edit_file") {
-            if (path) modifiedFiles.add(path);
-          }
+          const path = extractToolPath(tc.input);
           parts.push(`  - [Used ${tc.toolName}${path ? `: ${path}` : ""}]`);
         }
       }
     }
   }
 
-  // File tracking section (pi-style)
-  if (readFiles.size > 0 || modifiedFiles.size > 0) {
+  // File tracking section. The rendered summary shows this compaction's
+  // delta, while the persisted CompactionEntry stores cumulative history.
+  const deltaReadFiles = options.deltaReadFiles ?? extractFileOperations(messages).readFiles;
+  const deltaModifiedFiles = options.deltaModifiedFiles ?? extractFileOperations(messages).modifiedFiles;
+  if (deltaReadFiles.length > 0 || deltaModifiedFiles.length > 0) {
     parts.push("");
     parts.push("## Files touched");
-    if (readFiles.size > 0) {
+    if (deltaReadFiles.length > 0) {
       parts.push("<read-files>");
-      for (const f of readFiles) parts.push(f);
+      for (const f of deltaReadFiles) parts.push(f);
       parts.push("</read-files>");
     }
-    if (modifiedFiles.size > 0) {
+    if (deltaModifiedFiles.length > 0) {
       parts.push("<modified-files>");
-      for (const f of modifiedFiles) parts.push(f);
+      for (const f of deltaModifiedFiles) parts.push(f);
       parts.push("</modified-files>");
+    }
+  }
+
+  const cumulativeReadFiles = options.cumulativeReadFiles ?? [];
+  const cumulativeModifiedFiles = options.cumulativeModifiedFiles ?? [];
+  if (cumulativeReadFiles.length > 0 || cumulativeModifiedFiles.length > 0) {
+    parts.push("");
+    parts.push("## Cumulative files");
+    if (cumulativeReadFiles.length > 0) {
+      parts.push(`Read: ${cumulativeReadFiles.join(", ")}`);
+    }
+    if (cumulativeModifiedFiles.length > 0) {
+      parts.push(`Modified: ${cumulativeModifiedFiles.join(", ")}`);
     }
   }
 
@@ -404,7 +598,7 @@ export function estimateTotalTokens(messages: Message[]): number {
 
 // ── LLM-based summarization ──
 
-const LLM_SUMMARY_PROMPT = `You are a context-compaction assistant. The user is mid-conversation with another agent and needs an older slice of the conversation summarized so it fits in the LLM context window.
+const INITIAL_SUMMARY_PROMPT = `You are a context-compaction assistant. The user is mid-conversation with another agent and needs an older slice of the conversation summarized so it fits in the LLM context window.
 
 Produce a structured summary that preserves enough state for the agent to resume seamlessly. Use this exact format:
 
@@ -449,6 +643,30 @@ Rules:
 - Do NOT speculate beyond what's in the transcript.
 - Do NOT include any preamble like "Here's the summary" — start with the ## Goal heading.`;
 
+const UPDATE_SUMMARY_PROMPT = `You are a context-compaction assistant updating an existing conversation summary with a newer slice of transcript.
+
+preserve all existing durable context, add new facts and decisions, and move items from in-progress to done when the transcript proves they were completed.
+
+Use the same structured format as the previous summary:
+
+## Goal
+## Constraints & Preferences
+## Progress
+### Done
+### In Progress
+### Blocked
+## Key Decisions
+## Files touched
+## Next Steps
+## Critical Context
+
+Rules:
+- Stay under 650 words.
+- Preserve all existing context unless the new transcript explicitly supersedes it.
+- Quote exact identifiers (function names, file paths, error messages).
+- Do NOT speculate beyond the transcript.
+- Do NOT include a preamble. Start with the ## Goal heading.`;
+
 /**
  * Render a list of messages into a compact transcript suitable for feeding
  * to a summarization LLM. Tool calls are inlined.
@@ -481,6 +699,62 @@ function renderTranscript(messages: Message[]): string {
   return parts.join("\n\n---\n\n");
 }
 
+export interface SummarizationRequestInput {
+  dropped: Message[];
+  previousSummary?: string;
+  cumulativeFiles?: FileOperations;
+  customInstructions?: string;
+}
+
+export interface SummarizationRequest {
+  system: string;
+  prompt: string;
+  promptVersion: CompactionPromptVersion;
+}
+
+export function buildSummarizationRequest(input: SummarizationRequestInput): SummarizationRequest {
+  const transcript = renderTranscript(input.dropped);
+  const trimmed =
+    transcript.length > 24_000
+      ? transcript.slice(0, 12_000) +
+        `\n\n…[middle ${transcript.length - 24_000} chars elided]…\n\n` +
+        transcript.slice(transcript.length - 12_000)
+      : transcript;
+  const hasPrevious = !!input.previousSummary?.trim();
+  const promptVersion: CompactionPromptVersion = hasPrevious ? "update" : "initial";
+  const blocks: string[] = [];
+  if (input.customInstructions?.trim()) {
+    blocks.push(`Focus especially on: ${input.customInstructions.trim()}`);
+  }
+  if (hasPrevious) {
+    blocks.push(`<previous-summary>\n${input.previousSummary!.trim()}\n</previous-summary>`);
+  }
+  if (
+    input.cumulativeFiles &&
+    (input.cumulativeFiles.readFiles.length > 0 || input.cumulativeFiles.modifiedFiles.length > 0)
+  ) {
+    blocks.push(
+      [
+        "<cumulative-files>",
+        "<read-files>",
+        ...input.cumulativeFiles.readFiles,
+        "</read-files>",
+        "<modified-files>",
+        ...input.cumulativeFiles.modifiedFiles,
+        "</modified-files>",
+        "</cumulative-files>",
+      ].join("\n"),
+    );
+  }
+  blocks.push(`Summarize the following conversation slice:\n\n${trimmed}`);
+
+  return {
+    system: hasPrevious ? UPDATE_SUMMARY_PROMPT : INITIAL_SUMMARY_PROMPT,
+    prompt: blocks.join("\n\n"),
+    promptVersion,
+  };
+}
+
 /**
  * Generate a structured LLM summary of the given messages. Falls back to
  * the extractive `buildSummary` if the LLM call fails or returns nothing
@@ -495,18 +769,16 @@ export async function summarizeWithLlm(
   config: LlmConfig,
   signal?: AbortSignal,
   customInstructions?: string,
+  previousSummary?: string,
+  cumulativeFiles?: FileOperations,
 ): Promise<string> {
   if (dropped.length === 0) return "";
-  const transcript = renderTranscript(dropped);
-  // Cap transcript size sent to the summarizer so we don't blow its own
-  // context window. 24k chars ≈ 6k tokens — small enough to fit the smallest
-  // sane summarizer model with room for instructions and reply.
-  const trimmed =
-    transcript.length > 24_000
-      ? transcript.slice(0, 12_000) +
-        `\n\n…[middle ${transcript.length - 24_000} chars elided]…\n\n` +
-        transcript.slice(transcript.length - 12_000)
-      : transcript;
+  const request = buildSummarizationRequest({
+    dropped,
+    previousSummary,
+    cumulativeFiles,
+    customInstructions,
+  });
   try {
     const { generateText } = await import("ai");
     const { createOpenAI } = await import("@ai-sdk/openai");
@@ -535,13 +807,10 @@ export async function summarizeWithLlm(
       modelFactory = createOpenAI({ apiKey: config.apiKey ?? "", fetch: customFetch });
     }
     const model = modelFactory.languageModel(config.modelId);
-    const userPrompt = customInstructions
-      ? `Summarize the following conversation slice, focusing especially on: ${customInstructions}\n\n${trimmed}`
-      : `Summarize the following conversation slice:\n\n${trimmed}`;
     const result = await generateText({
       model,
-      system: LLM_SUMMARY_PROMPT,
-      prompt: userPrompt,
+      system: request.system,
+      prompt: request.prompt,
       maxOutputTokens: 800,
       temperature: 0.2,
       abortSignal: signal,
@@ -549,11 +818,21 @@ export async function summarizeWithLlm(
     const text = result.text.trim();
     if (text.length < 40) {
       // Implausibly short — the model probably refused or stalled. Fall back.
-      return buildSummary(dropped);
+      return buildSummary(dropped, {
+        previousSummary,
+        cumulativeReadFiles: cumulativeFiles?.readFiles,
+        cumulativeModifiedFiles: cumulativeFiles?.modifiedFiles,
+        updateMode: request.promptVersion === "update",
+      });
     }
     return `[Earlier conversation summary — LLM generated]\n\n${text}`;
   } catch {
     // Network / auth / quota — graceful fallback to extractive summary.
-    return buildSummary(dropped);
+    return buildSummary(dropped, {
+      previousSummary,
+      cumulativeReadFiles: cumulativeFiles?.readFiles,
+      cumulativeModifiedFiles: cumulativeFiles?.modifiedFiles,
+      updateMode: request.promptVersion === "update",
+    });
   }
 }

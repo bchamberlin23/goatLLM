@@ -5,6 +5,7 @@ import { LocalProviderCard } from "./LocalProviderCard";
 import { CustomProviderSection } from "./CustomProviderSection";
 import { SettingsGroup } from "./SettingsGroup";
 import { getCloudProviders } from "../../lib/providers";
+import { CodexSubscriptionCard } from "./CodexSubscriptionCard";
 
 /**
  * Cloud providers shown in the Settings tab. Derived from the unified
@@ -23,6 +24,13 @@ export function ProvidersTab() {
 
   return (
     <>
+      <SettingsGroup
+        title="Subscription providers"
+        description="ChatGPT Plus/Pro entitlement, separate from API-key billing."
+      >
+        <CodexSubscriptionCard />
+      </SettingsGroup>
+
       <SettingsGroup
         title="Cloud providers"
         description="API keys stored locally. Choose which models appear in the picker."

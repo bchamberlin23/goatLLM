@@ -218,15 +218,28 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
 
       // ── Run subagent ───────────────────────────────────────
       try {
-        await withSubagentBypass(() =>
-          agentLoop(messages, buildSubagentSystemPrompt(task), ctx.config, callbacks, {
+        const maxToolRounds = Math.min(max_tool_rounds ?? 15, 30);
+        await withSubagentBypass(async () => {
+          if (ctx.config.provider === "openai-codex-subscription") {
+            const { streamCodexSubscription } = await import("../../openai-codex-subscription");
+            await streamCodexSubscription(messages, buildSubagentSystemPrompt(task), ctx.config, callbacks, {
+              depth: ctx.depth + 1,
+              parentSignal: ctx.parentSignal,
+              abortSignal: ctx.abortSignal,
+              tools: subagentTools,
+              maxToolRounds,
+            });
+            return;
+          }
+
+          await agentLoop(messages, buildSubagentSystemPrompt(task), ctx.config, callbacks, {
             depth: ctx.depth + 1,
             parentSignal: ctx.parentSignal,
             abortSignal: ctx.abortSignal,
             tools: subagentTools,
-            maxToolRounds: Math.min(max_tool_rounds ?? 15, 30),
-          }),
-        );
+            maxToolRounds,
+          });
+        });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (

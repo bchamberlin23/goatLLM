@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useChatStore } from "../stores/chat";
+import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 
 function freshStore() {
   // Reset store state between tests
@@ -165,13 +166,22 @@ describe("ChatStore", () => {
     it("includes the bundled free OpenCode Go provider by default", () => {
       const providers = useChatStore.getState().getProviders();
       const builtIn = providers.filter((p) => p.isBuiltIn);
-      expect(builtIn.map((p) => p.id)).toEqual(["opencode-go-free"]);
+      expect(builtIn.map((p) => p.id)).toEqual([
+        "opencode-go-free",
+        OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID,
+      ]);
     });
 
     it("exposes the free DeepSeek model out of the box", () => {
       const models = useChatStore.getState().getModels();
       const ids = models.map((m) => m.id);
       expect(ids).toContain("opencode-go-free:deepseek-v4-flash-free");
+    });
+
+    it("exposes Codex subscription models out of the box", () => {
+      const models = useChatStore.getState().getModels();
+      const ids = models.map((m) => m.id);
+      expect(ids).toContain(`${OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID}:gpt-5.5`);
     });
 
     it("includes cloud provider models after config", () => {
@@ -250,6 +260,19 @@ describe("ChatStore", () => {
       expect(config).toBeTruthy();
       expect(config?.provider).toBe("opencode-go");
       expect(config?.apiKey).toBe("sk-test");
+    });
+
+    it("builds LlmConfig for Codex subscription without API key or user provider config", () => {
+      useChatStore
+        .getState()
+        .setSelectedModel(`${OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID}:gpt-5.5`);
+      const config = useChatStore.getState().getActiveLlmConfig();
+      expect(config).toMatchObject({
+        provider: OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID,
+        modelId: "gpt-5.5",
+        apiKey: null,
+        baseUrl: "https://chatgpt.com/backend-api",
+      });
     });
   });
 

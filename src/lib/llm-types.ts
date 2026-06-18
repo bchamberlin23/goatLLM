@@ -4,6 +4,8 @@
  * without a circular dependency on llm.ts itself.
  */
 
+import type { ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "./providers";
+
 export type LlmContentPart =
   | { type: "text"; text: string }
   | { type: "image"; image: string; mimeType?: string }
@@ -31,6 +33,11 @@ export interface LlmConfig {
    *  "off" means no extended thinking; otherwise one of the pi-ai
    *  ThinkingLevel values: "minimal" | "low" | "medium" | "high" | "xhigh". */
   reasoningEffort?: string;
+  /** Model metadata used to decide whether/how reasoning controls are sent. */
+  reasoning?: boolean;
+  thinkingLevelMap?: ThinkingLevelMap;
+  thinkingBudgets?: ThinkingBudgets;
+  providerCompat?: ProviderCompat;
 }
 
 export interface ToolCallInfo {
@@ -65,7 +72,7 @@ export interface StreamCallbacks {
   /** Called once at the end of a stream with token usage stats.
    *  generationMs is the cumulative time the model spent generating tokens
    *  (excludes tool execution time). Used for accurate tokens/second. */
-  onUsage?: (usage: { inputTokens: number; outputTokens: number; cacheRead?: number; cacheWrite?: number; generationMs?: number }) => void;
+  onUsage?: (usage: { totalTokens?: number; inputTokens: number; outputTokens: number; cacheRead?: number; cacheWrite?: number; generationMs?: number }) => void;
   onDone: (fullText: string, summary?: string) => void;
   onError: (error: Error) => void;
 }

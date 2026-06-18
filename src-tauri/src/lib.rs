@@ -143,6 +143,13 @@ pub(crate) fn init_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, St
             .map_err(|e| format!("Failed to update schema version: {}", e))?;
     }
 
+    if version < 16 {
+        conn.execute_batch(include_str!("../migrations/016_compaction_entries.sql"))
+            .map_err(|e| format!("Database migration 016 failed: {}. You may need to remove the database file and restart.", e))?;
+        conn.pragma_update(None, "user_version", 16)
+            .map_err(|e| format!("Failed to update schema version: {}", e))?;
+    }
+
     Ok(conn)
 }
 
@@ -168,6 +175,7 @@ pub fn run() {
                 }
             };
             app.manage(commands::db::DbState { db: Mutex::new(db) });
+            app.manage(commands::codex::CodexProviderState::new());
 
             let workspaces = commands::workspace::load_workspaces(&app.handle().clone());
             app.manage(Mutex::new(commands::workspace::WorkspaceState {

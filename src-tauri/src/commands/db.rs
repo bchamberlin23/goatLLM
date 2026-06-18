@@ -37,10 +37,29 @@ pub(crate) struct DbMessage {
     citations: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct DbCompactionEntry {
+    id: String,
+    conversation_id: String,
+    first_kept_id: String,
+    summary: String,
+    read_files: String,
+    modified_files: String,
+    tokens_before: i64,
+    source: String,
+    is_split_turn: i64,
+    turn_prefix: Option<String>,
+    prompt_version: String,
+    created_at: i64,
+    mode: String,
+    model_id: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct AllData {
     conversations: Vec<DbConversation>,
     messages: Vec<DbMessage>,
+    compaction_entries: Vec<DbCompactionEntry>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,6 +94,25 @@ pub(crate) struct SaveMessageRequest {
     edited_files: Option<String>,
     model_id: Option<String>,
     citations: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveCompactionEntryRequest {
+    id: String,
+    conversation_id: String,
+    first_kept_id: String,
+    summary: String,
+    read_files: String,
+    modified_files: String,
+    tokens_before: i64,
+    source: String,
+    is_split_turn: bool,
+    turn_prefix: Option<String>,
+    prompt_version: String,
+    created_at: i64,
+    mode: String,
+    model_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -145,9 +183,37 @@ pub(crate) fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData,
         .filter_map(|r| r.ok())
         .collect();
 
+    let mut compaction_stmt = db
+        .prepare("SELECT id, conversation_id, first_kept_id, summary, read_files, modified_files, tokens_before, source, is_split_turn, turn_prefix, prompt_version, created_at, mode, model_id FROM compaction_entries ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
+
+    let compaction_entries: Vec<DbCompactionEntry> = compaction_stmt
+        .query_map([], |row| {
+            Ok(DbCompactionEntry {
+                id: row.get(0)?,
+                conversation_id: row.get(1)?,
+                first_kept_id: row.get(2)?,
+                summary: row.get(3)?,
+                read_files: row.get(4)?,
+                modified_files: row.get(5)?,
+                tokens_before: row.get(6)?,
+                source: row.get(7)?,
+                is_split_turn: row.get(8)?,
+                turn_prefix: row.get(9)?,
+                prompt_version: row.get(10)?,
+                created_at: row.get(11)?,
+                mode: row.get(12)?,
+                model_id: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+
     Ok(AllData {
         conversations,
         messages,
+        compaction_entries,
     })
 }
 
@@ -214,6 +280,36 @@ pub(crate) fn save_message(
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) fn save_compaction_entry(
+    payload: SaveCompactionEntryRequest,
+    state: tauri::State<'_, DbState>,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let split_int: i64 = if payload.is_split_turn { 1 } else { 0 };
+    db.execute(
+        "INSERT OR REPLACE INTO compaction_entries (id, conversation_id, first_kept_id, summary, read_files, modified_files, tokens_before, source, is_split_turn, turn_prefix, prompt_version, created_at, mode, model_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        rusqlite::params![
+            payload.id,
+            payload.conversation_id,
+            payload.first_kept_id,
+            payload.summary,
+            payload.read_files,
+            payload.modified_files,
+            payload.tokens_before,
+            payload.source,
+            split_int,
+            payload.turn_prefix,
+            payload.prompt_version,
+            payload.created_at,
+            payload.mode,
+            payload.model_id
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Load all messages for a single conversation. Used as a safety net when the
 /// in-memory store has an empty list for a conversation that does have rows on
 /// disk (e.g. after a restart or when the renderer was reloaded mid-stream).
@@ -251,6 +347,43 @@ pub(crate) fn load_messages_for_conversation(
         .filter_map(|r| r.ok())
         .collect();
     Ok(messages)
+}
+
+#[tauri::command]
+pub(crate) fn load_compaction_entries(
+    conversation_id: String,
+    state: tauri::State<'_, DbState>,
+) -> Result<Vec<DbCompactionEntry>, String> {
+    let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let mut stmt = db
+        .prepare(
+            "SELECT id, conversation_id, first_kept_id, summary, read_files, modified_files, tokens_before, source, is_split_turn, turn_prefix, prompt_version, created_at, mode, model_id \
+             FROM compaction_entries WHERE conversation_id = ?1 ORDER BY created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let entries: Vec<DbCompactionEntry> = stmt
+        .query_map(rusqlite::params![conversation_id], |row| {
+            Ok(DbCompactionEntry {
+                id: row.get(0)?,
+                conversation_id: row.get(1)?,
+                first_kept_id: row.get(2)?,
+                summary: row.get(3)?,
+                read_files: row.get(4)?,
+                modified_files: row.get(5)?,
+                tokens_before: row.get(6)?,
+                source: row.get(7)?,
+                is_split_turn: row.get(8)?,
+                turn_prefix: row.get(9)?,
+                prompt_version: row.get(10)?,
+                created_at: row.get(11)?,
+                mode: row.get(12)?,
+                model_id: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(entries)
 }
 
 #[tauri::command]

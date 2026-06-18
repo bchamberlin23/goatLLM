@@ -18,6 +18,8 @@ regex = "1"
 glob = "0.3"
 tempfile = "3"
 base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
 pdf-extract = "0.7"
 zip = "0.6"
 calamine = "0.24"
@@ -26,6 +28,7 @@ dirs = "5"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros"] }
 notify = "6"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+url = "2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
