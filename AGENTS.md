@@ -29,7 +29,11 @@ Source: `src/lib/db.ts`. This is intentional overkill — crash-proof message sa
 
 ## Git Conventions
 
-Never include AI/bot co-author trailers (Claude, ClaudeCode, CommandCodeBot, etc.) in git commits messages. Only credit human contributors. AI agents are tools, not collaborators.
+- **Always work on `main`.** Commit and push straight to `main` — do not create feature branches, do not open PRs, do not push branches to `origin`. `main` is the only long-lived branch; every commit on it is deployable.
+- **No worktrees, no stashes-as-branches.** If a change is risky or exploratory, do it in a throwaway directory or hold it locally until it's ready to land. Long-lived branches rot, drift from `main`, and force a merge commit that obscures what actually shipped.
+- **If you ever find yourself on a non-`main` branch, something has gone wrong.** Stop, switch back to `main`, and re-anchor there before continuing.
+- **Never include AI/bot co-author trailers** (Claude, ClaudeCode, CommandCodeBot, etc.) in git commit messages. Only credit human contributors. AI agents are tools, not collaborators.
+- **Conventional Commit prefixes** for the subject line: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore(ci):`, etc. Match the style of recent commits in `git log --oneline`.
 
 ## Persistence for New Features
 
