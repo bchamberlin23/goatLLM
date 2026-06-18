@@ -9,6 +9,7 @@ pub(crate) mod git;
 pub(crate) mod latex;
 pub(crate) mod memory;
 pub(crate) mod misc;
+pub(crate) mod scheduled_agents;
 pub(crate) mod search;
 pub(crate) mod tools;
 pub(crate) mod workspace;
@@ -43,6 +44,7 @@ pub(crate) use memory::{
 pub(crate) use misc::{
     run_python, sync_export_state, sync_import_state, unwatch_workspace, watch_workspace,
 };
+pub(crate) use scheduled_agents::{scheduled_agents_load, scheduled_agents_save};
 pub(crate) use search::{normalize_for_fuzzy_match, search_content};
 pub(crate) use tools::{edit_file, exec_command, read_lints};
 pub(crate) use workspace::{
@@ -122,6 +124,8 @@ macro_rules! generate_handler {
             crate::commands::documents::document_chunks_replace,
             crate::commands::documents::document_chunks_delete,
             crate::commands::documents::document_chunks_search,
+            crate::commands::scheduled_agents::scheduled_agents_load,
+            crate::commands::scheduled_agents::scheduled_agents_save,
             crate::commands::misc::watch_workspace,
             crate::commands::misc::unwatch_workspace,
             crate::commands::misc::sync_export_state,

@@ -7,6 +7,7 @@ import { useChatStore } from "./stores/chat";
 import { useKeyboardShortcuts } from "./lib/keyboard";
 import { seedBuiltinSkills } from "./lib/skill-seed";
 import { loadAllSkills } from "./lib/skills";
+import { dueScheduledAgents } from "./lib/scheduled-agents";
 
 async function refreshSkills() {
   const state = useChatStore.getState();
@@ -78,6 +79,21 @@ export default function App() {
   useEffect(() => {
     if (!_hydrated) return;
     const id = setInterval(() => checkAllProvidersHealth(), 30_000);
+    return () => clearInterval(id);
+  }, [_hydrated]);
+
+  useEffect(() => {
+    if (!_hydrated) return;
+    const tick = () => {
+      const state = useChatStore.getState();
+      if (!state.featureFlags.scheduledAgents) return;
+      const due = dueScheduledAgents(state.scheduledAgents, state.scheduledAgentRuns, Date.now());
+      for (const agent of due) {
+        void state.runScheduledAgent(agent.id);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
   }, [_hydrated]);
 

@@ -39,6 +39,17 @@ import {
   type DocumentWorkspace,
   type KnowledgeDocument,
 } from "../lib/document-workspace";
+import {
+  appendScheduledRun,
+  buildContinueScheduledRunPrompt,
+  computeNextScheduledRun,
+  createScheduledAgentRun,
+  loadScheduledAgentState,
+  persistScheduledAgentState,
+  sanitizeScheduledAgentRuns,
+  updateScheduledAgentAfterRun,
+  type ScheduledAgentRun,
+} from "../lib/scheduled-agents";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
@@ -1236,6 +1247,10 @@ export interface ChatStore {
   setImageGenSettings: (settings: ImageGenSettings) => void;
   scheduledAgents: ScheduledAgent[];
   setScheduledAgents: (agents: ScheduledAgent[]) => void;
+  scheduledAgentRuns: ScheduledAgentRun[];
+  setScheduledAgentRuns: (runs: ScheduledAgentRun[]) => void;
+  runScheduledAgent: (agentId: string) => Promise<void>;
+  continueScheduledRun: (runId: string) => string | null;
   watcherEvents: WatcherEventSummaryInput[];
   addWatcherEvent: (event: WatcherEventSummaryInput) => void;
   clearWatcherEvents: () => void;
@@ -1704,6 +1719,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
       imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
       scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
+      scheduledAgentRuns: sanitizeScheduledAgentRuns([]),
       watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
       ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
       documentWorkspaces: [] as DocumentWorkspace[],
@@ -3529,7 +3545,118 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       setScheduledAgents: (agents) => {
         set({ scheduledAgents: agents });
-        saveJsonSetting(SCHEDULED_AGENTS_KEY, agents);
+        persistScheduledAgentState(agents, get().scheduledAgentRuns);
+      },
+
+      setScheduledAgentRuns: (runs) => {
+        const next = sanitizeScheduledAgentRuns(runs);
+        set({ scheduledAgentRuns: next });
+        persistScheduledAgentState(get().scheduledAgents, next);
+      },
+
+      runScheduledAgent: async (agentId) => {
+        const agent = get().scheduledAgents.find((item) => item.id === agentId);
+        if (!agent) return;
+        const startedAt = Date.now();
+        const run: ScheduledAgentRun = {
+          ...createScheduledAgentRun(agent, startedAt),
+          status: "running",
+          startedAt,
+          trace: ["Run started."],
+        };
+        let runs = appendScheduledRun(get().scheduledAgentRuns, run, 200);
+        let agents = get().scheduledAgents.map((item) =>
+          item.id === agent.id ? { ...item, lastStatus: "running" as const, lastRunAt: startedAt, lastResult: "Running..." } : item,
+        );
+        set({ scheduledAgents: agents, scheduledAgentRuns: runs });
+        persistScheduledAgentState(agents, runs);
+
+        try {
+          const config = get().getActiveLlmConfig();
+          if (!config) throw new Error("No model is selected.");
+          const { generateText } = await import("ai");
+          const { createModel } = await import("../lib/model-factory");
+          const model = await createModel(config);
+          const response = await generateText({
+            model,
+            system: "You are running a scheduled goatLLM agent. Complete the scheduled task directly, keep the result concise, and include any useful next actions.",
+            prompt: agent.prompt,
+            maxOutputTokens: config.maxResponseTokens ?? 2048,
+            temperature: 0.4,
+          });
+          const completedAt = Date.now();
+          const nextRunAt = computeNextScheduledRun(agent.schedule, new Date(completedAt)).getTime();
+          const completedRun: ScheduledAgentRun = {
+            ...run,
+            status: "done",
+            completedAt,
+            result: response.text,
+            trace: [...run.trace, "Model completed the run."],
+          };
+          runs = appendScheduledRun(runs, completedRun, 200);
+          agents = agents.map((item) =>
+            item.id === agent.id
+              ? updateScheduledAgentAfterRun(item, {
+                  status: "done",
+                  result: response.text,
+                  completedAt,
+                  nextRunAt,
+                })
+              : item,
+          );
+          set({ scheduledAgents: agents, scheduledAgentRuns: runs });
+          persistScheduledAgentState(agents, runs);
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(`${agent.name} completed`, { body: response.text.slice(0, 120) || "Scheduled run complete." });
+          }
+        } catch (e) {
+          const completedAt = Date.now();
+          const nextRunAt = (() => {
+            try {
+              return computeNextScheduledRun(agent.schedule, new Date(completedAt)).getTime();
+            } catch {
+              return completedAt + 60 * 60 * 1000;
+            }
+          })();
+          const error = e instanceof Error ? e.message : String(e);
+          const failedRun: ScheduledAgentRun = {
+            ...run,
+            status: "error",
+            completedAt,
+            error,
+            trace: [...run.trace, `Run failed: ${error}`],
+          };
+          runs = appendScheduledRun(runs, failedRun, 200);
+          agents = agents.map((item) =>
+            item.id === agent.id
+              ? updateScheduledAgentAfterRun(item, {
+                  status: "error",
+                  error,
+                  completedAt,
+                  nextRunAt,
+                })
+              : item,
+          );
+          set({ scheduledAgents: agents, scheduledAgentRuns: runs });
+          persistScheduledAgentState(agents, runs);
+        }
+      },
+
+      continueScheduledRun: (runId) => {
+        const run = get().scheduledAgentRuns.find((item) => item.id === runId);
+        if (!run) return null;
+        const conversationId = get().createConversation();
+        get().addMessage({
+          conversationId,
+          role: "user",
+          content: buildContinueScheduledRunPrompt(run),
+        });
+        const runs = get().scheduledAgentRuns.map((item) =>
+          item.id === runId ? { ...item, conversationId, readAt: Date.now() } : item,
+        );
+        set({ scheduledAgentRuns: runs });
+        persistScheduledAgentState(get().scheduledAgents, runs);
+        return conversationId;
       },
 
       addWatcherEvent: (event) => {
@@ -4509,6 +4636,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           ) as Record<string, QueuedMessage[]>;
           saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
           const documentWorkspaces = await loadDocumentWorkspaces();
+          const scheduledAgentState = await loadScheduledAgentState(sanitizeScheduledAgents);
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4590,7 +4718,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             notebooks: loadNotebooks(),
             activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
             imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
-            scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
+            scheduledAgents: scheduledAgentState.agents,
+            scheduledAgentRuns: scheduledAgentState.runs,
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
             documentWorkspaces,
@@ -4659,6 +4788,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
           const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
           const documentWorkspaces = sanitizeDocumentWorkspaces(await loadDocumentWorkspaces().catch(() => []));
+          const scheduledAgentState = await loadScheduledAgentState(sanitizeScheduledAgents).catch(() => ({
+            agents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
+            runs: sanitizeScheduledAgentRuns([]),
+          }));
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4717,7 +4850,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             notebooks: loadNotebooks(),
             activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
             imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
-            scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
+            scheduledAgents: scheduledAgentState.agents,
+            scheduledAgentRuns: scheduledAgentState.runs,
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
             documentWorkspaces,

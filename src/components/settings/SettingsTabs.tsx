@@ -45,6 +45,7 @@ import {
   type KnowledgeDocument,
   type RetrievalPreviewHit,
 } from "../../lib/document-workspace";
+import { computeNextScheduledRun, type ScheduledAgentRun } from "../../lib/scheduled-agents";
 import { invoke } from "@tauri-apps/api/core";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
@@ -1076,26 +1077,49 @@ function MemorySettings() {
 function ScheduleSettings() {
   const agents = useChatStore((s) => s.scheduledAgents);
   const setAgents = useChatStore((s) => s.setScheduledAgents);
+  const runs = useChatStore((s) => s.scheduledAgentRuns);
+  const runScheduledAgent = useChatStore((s) => s.runScheduledAgent);
+  const continueScheduledRun = useChatStore((s) => s.continueScheduledRun);
   const [name, setName] = useState("");
   const [schedule, setSchedule] = useState("@daily");
   const [prompt, setPrompt] = useState("");
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "unsupported",
+  );
 
   const addAgent = () => {
     if (!prompt.trim()) return;
+    let nextRunAt: number;
+    try {
+      nextRunAt = computeNextScheduledRun(schedule.trim() || "@daily").getTime();
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+      return;
+    }
     const agent: ScheduledAgent = {
       id: crypto.randomUUID(),
       name: name.trim() || "Scheduled agent",
       prompt: prompt.trim(),
       schedule: schedule.trim() || "@daily",
       enabled: true,
-      nextRunAt: Date.now() + 3600000,
+      nextRunAt,
       lastStatus: "idle",
     };
     setAgents([agent, ...agents]);
     setName("");
     setPrompt("");
     setSchedule("@daily");
+    setStatus("Schedule added.");
   };
+
+  const updateAgent = (agent: ScheduledAgent, updates: Partial<ScheduledAgent>) => {
+    setAgents(agents.map((item) => (item.id === agent.id ? { ...item, ...updates } : item)));
+  };
+
+  const runsForAgent = (agentId: string): ScheduledAgentRun[] =>
+    runs.filter((run) => run.agentId === agentId).slice(0, 5);
 
   return (
     <SettingsGroup title="Scheduled agents" description="Cron-style recurring runs for digests, repo checks, and periodic work.">
@@ -1109,24 +1133,79 @@ function ScheduleSettings() {
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="What should the agent do on schedule?"
           rows={2}
-          className="w-full px-3 py-2 rounded-lg border border-hairline-strong bg-black/20 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
+          className="w-full px-3 py-2 rounded-lg border border-hairline-strong bg-surface-1 text-[12.5px] text-text-1 placeholder:text-text-3 outline-none focus:border-accent/45 resize-none"
         />
         <button onClick={addAgent} disabled={!prompt.trim()} className="primary-action self-start px-4 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-50">
           Add Schedule
         </button>
       </div>
+      {notificationPermission === "default" && (
+        <button
+          onClick={async () => setNotificationPermission(await Notification.requestPermission())}
+          className="control-pill mt-2 rounded-md px-2.5 py-1 text-[11px]"
+        >
+          Enable Notifications
+        </button>
+      )}
+      {status && <p className="mt-2 text-[11px] text-text-3">{status}</p>}
       {agents.length > 0 && (
         <div className="mt-4 flex flex-col gap-2">
           <div className="text-[11.5px] font-medium text-text-2">{agents.length} configured agent{agents.length === 1 ? "" : "s"}</div>
           {agents.map((agent) => (
-            <div key={agent.id} className="rounded-lg border border-hairline bg-black/20 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[12.5px] font-medium text-text-1 truncate">{agent.name}</span>
-                <button onClick={() => setAgents(agents.filter((a) => a.id !== agent.id))} className="control-icon p-0.5 rounded text-text-3 hover:text-red-400">
-                  ✕
-                </button>
+            <div key={agent.id} className="rounded-lg border border-hairline bg-surface-3 px-3 py-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[12.5px] font-medium text-text-1">{agent.name}</span>
+                    <span className={`text-[10.5px] ${agent.enabled ? "text-accent" : "text-text-3"}`}>{agent.enabled ? "enabled" : "paused"}</span>
+                    {agent.lastStatus && <span className="text-[10.5px] text-text-3">{agent.lastStatus}</span>}
+                  </div>
+                  <div className="mt-1 text-[11px] text-text-3">
+                    {agent.schedule} · next {new Date(agent.nextRunAt).toLocaleString()}
+                  </div>
+                  {agent.lastResult && <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-3">{agent.lastResult}</div>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button onClick={() => updateAgent(agent, { enabled: !agent.enabled })} className="control-pill rounded-md px-2 py-1 text-[10.5px]">
+                    {agent.enabled ? "Pause" : "Enable"}
+                  </button>
+                  <button onClick={() => void runScheduledAgent(agent.id)} className="control-pill rounded-md px-2 py-1 text-[10.5px]">
+                    Run now
+                  </button>
+                  <button onClick={() => setAgents(agents.filter((a) => a.id !== agent.id))} className="control-icon rounded p-1 text-text-3 hover:text-error" aria-label="Delete scheduled agent">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
-              <div className="mt-1 text-[11px] text-text-3">{agent.schedule}</div>
+              {runsForAgent(agent.id).length > 0 && (
+                <div className="mt-2 flex flex-col gap-1 border-t border-hairline pt-2">
+                  {runsForAgent(agent.id).map((run) => {
+                    const expanded = expandedRunId === run.id;
+                    return (
+                      <div key={run.id} className="rounded border border-hairline bg-sunken px-2.5 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <button onClick={() => setExpandedRunId(expanded ? null : run.id)} className="min-w-0 truncate text-left text-[11.5px] font-medium text-text-2">
+                            {new Date(run.createdAt).toLocaleString()} · {run.status}
+                          </button>
+                          <button onClick={() => continueScheduledRun(run.id)} className="control-pill shrink-0 rounded-md px-2 py-1 text-[10px]">
+                            Continue
+                          </button>
+                        </div>
+                        {expanded && (
+                          <div className="mt-2 flex flex-col gap-1 text-[10.5px] leading-relaxed text-text-3">
+                            {(run.trace.length > 0 ? run.trace : ["No trace captured."]).map((entry, index) => (
+                              <div key={`${run.id}-trace-${index}`}>- {entry}</div>
+                            ))}
+                            {(run.result || run.error) && (
+                              <div className={run.error ? "text-error" : "text-text-2"}>{run.result || run.error}</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))}
         </div>
