@@ -58,6 +58,16 @@ import {
   sanitizeMemoryExtractionSettings,
   type MemoryExtractionSettings,
 } from "../lib/memory-extraction";
+import {
+  buildContinueMeetingPrompt,
+  loadMeetingState,
+  loadMeetingStateFromJournal,
+  persistMeetingState,
+  sanitizeMeetingSessions,
+  sanitizeMeetingSettings,
+  type MeetingSession,
+  type MeetingSettings,
+} from "../lib/meeting-assistant";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
@@ -1224,6 +1234,13 @@ export interface ChatStore {
   setUsageSettings: (settings: UsageSettings) => void;
   voiceSettings: VoiceSettings;
   setVoiceSettings: (settings: VoiceSettings) => void;
+  meetingSessions: MeetingSession[];
+  meetingSettings: MeetingSettings;
+  setMeetingSettings: (settings: MeetingSettings) => void;
+  setMeetingSessions: (sessions: MeetingSession[]) => void;
+  updateMeetingSession: (sessionId: string, updates: Partial<MeetingSession>) => void;
+  deleteMeetingSession: (sessionId: string) => void;
+  continueMeetingSession: (sessionId: string) => string | null;
   syncSettings: SyncConfig;
   setSyncSettings: (settings: SyncConfig) => void;
   featureFlags: ProductFeatureFlags;
@@ -1719,6 +1736,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
       usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
       voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+      meetingSessions: loadMeetingStateFromJournal().sessions,
+      meetingSettings: loadMeetingStateFromJournal().settings,
       syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
       imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
       featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
@@ -3412,6 +3431,49 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(VOICE_SETTINGS_KEY, settings);
       },
 
+      setMeetingSettings: (settings) => {
+        const safe = sanitizeMeetingSettings(settings);
+        set({ meetingSettings: safe });
+        persistMeetingState(get().meetingSessions, safe);
+      },
+
+      setMeetingSessions: (sessions) => {
+        const safe = sanitizeMeetingSessions(sessions);
+        set({ meetingSessions: safe });
+        persistMeetingState(safe, get().meetingSettings);
+      },
+
+      updateMeetingSession: (sessionId, updates) => {
+        const next = sanitizeMeetingSessions(get().meetingSessions.map((session) =>
+          session.id === sessionId ? { ...session, ...updates, updatedAt: Date.now() } : session,
+        ));
+        set({ meetingSessions: next });
+        persistMeetingState(next, get().meetingSettings);
+      },
+
+      deleteMeetingSession: (sessionId) => {
+        const next = get().meetingSessions.filter((session) => session.id !== sessionId);
+        set({ meetingSessions: next });
+        persistMeetingState(next, get().meetingSettings);
+      },
+
+      continueMeetingSession: (sessionId) => {
+        const session = get().meetingSessions.find((item) => item.id === sessionId);
+        if (!session) return null;
+        const conversationId = get().createConversation();
+        get().addMessage({
+          conversationId,
+          role: "user",
+          content: buildContinueMeetingPrompt(session),
+        });
+        const next = sanitizeMeetingSessions(get().meetingSessions.map((item) =>
+          item.id === sessionId ? { ...item, conversationId, updatedAt: Date.now() } : item,
+        ));
+        set({ meetingSessions: next });
+        persistMeetingState(next, get().meetingSettings);
+        return conversationId;
+      },
+
       setSyncSettings: (settings) => {
         set({ syncSettings: settings });
         saveJsonSetting(SYNC_SETTINGS_KEY, settings);
@@ -4654,6 +4716,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const documentWorkspaces = await loadDocumentWorkspaces();
           const scheduledAgentState = await loadScheduledAgentState(sanitizeScheduledAgents);
           const memoryExtractionSettings = await loadMemoryExtractionSettings();
+          const meetingState = await loadMeetingState();
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4727,6 +4790,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
             usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+            meetingSessions: meetingState.sessions,
+            meetingSettings: meetingState.settings,
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
             imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
@@ -4813,6 +4878,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const memoryExtractionSettings = await loadMemoryExtractionSettings().catch(() => ({
             ...DEFAULT_MEMORY_EXTRACTION_SETTINGS,
           }));
+          const meetingState = await loadMeetingState().catch(() => loadMeetingStateFromJournal());
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4863,6 +4929,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
             usageSettings: loadJsonSetting(USAGE_SETTINGS_KEY, DEFAULT_USAGE_SETTINGS),
             voiceSettings: loadJsonSetting(VOICE_SETTINGS_KEY, DEFAULT_VOICE_SETTINGS),
+            meetingSessions: meetingState.sessions,
+            meetingSettings: meetingState.settings,
             syncSettings: loadJsonSetting(SYNC_SETTINGS_KEY, DEFAULT_SYNC_SETTINGS),
             imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),

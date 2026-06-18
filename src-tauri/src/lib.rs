@@ -136,6 +136,13 @@ pub(crate) fn init_db(app: &tauri::AppHandle) -> Result<rusqlite::Connection, St
             .map_err(|e| format!("Failed to update schema version: {}", e))?;
     }
 
+    if version < 15 {
+        conn.execute_batch(include_str!("../migrations/015_meeting_assistant.sql"))
+            .map_err(|e| format!("Database migration 015 failed: {}. You may need to remove the database file and restart.", e))?;
+        conn.pragma_update(None, "user_version", 15)
+            .map_err(|e| format!("Failed to update schema version: {}", e))?;
+    }
+
     Ok(conn)
 }
 

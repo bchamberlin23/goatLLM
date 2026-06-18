@@ -8,6 +8,7 @@ pub(crate) mod files;
 pub(crate) mod git;
 pub(crate) mod latex;
 pub(crate) mod memory;
+pub(crate) mod meetings;
 pub(crate) mod misc;
 pub(crate) mod scheduled_agents;
 pub(crate) mod search;
@@ -41,6 +42,7 @@ pub(crate) use memory::{
     memory_delete, memory_increment_uses, memory_insert, memory_list, memory_search,
     memory_search_text, memory_settings_load, memory_settings_save, memory_update,
 };
+pub(crate) use meetings::{meetings_load, meetings_save};
 pub(crate) use misc::{
     run_python, sync_export_state, sync_import_state, unwatch_workspace, watch_workspace,
 };
@@ -121,6 +123,8 @@ macro_rules! generate_handler {
             crate::commands::memory::memory_update,
             crate::commands::memory::memory_settings_load,
             crate::commands::memory::memory_settings_save,
+            crate::commands::meetings::meetings_load,
+            crate::commands::meetings::meetings_save,
             crate::commands::documents::document_workspaces_load,
             crate::commands::documents::document_workspace_save,
             crate::commands::documents::document_workspace_delete,

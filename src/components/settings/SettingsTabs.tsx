@@ -7,6 +7,7 @@ import {
   Cpu,
   Eye,
   FileText,
+  FileAudio,
   Flag,
   Image as ImageIcon,
   Layout,
@@ -25,6 +26,7 @@ import {
   RefreshCw,
   Play,
   Pin,
+  Square,
 } from "lucide-react";
 import { ProvidersTab } from "./ProvidersTab";
 import { ToolsTab } from "./ToolsTab";
@@ -48,6 +50,13 @@ import {
 } from "../../lib/document-workspace";
 import { computeNextScheduledRun, type ScheduledAgentRun } from "../../lib/scheduled-agents";
 import { buildMemoryProvenance } from "../../lib/memory-extraction";
+import {
+  buildMeetingSummaryPrompt,
+  createMeetingSession,
+  extractMeetingSections,
+  formatMeetingDuration,
+  type MeetingSession,
+} from "../../lib/meeting-assistant";
 import { invoke } from "@tauri-apps/api/core";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
@@ -277,7 +286,20 @@ function FeatureFlagSettings() {
 function VoiceSettings() {
   const voiceSettings = useChatStore((s) => s.voiceSettings);
   const setVoiceSettings = useChatStore((s) => s.setVoiceSettings);
+  const meetingSessions = useChatStore((s) => s.meetingSessions);
+  const meetingSettings = useChatStore((s) => s.meetingSettings);
+  const setMeetingSettings = useChatStore((s) => s.setMeetingSettings);
+  const setMeetingSessions = useChatStore((s) => s.setMeetingSessions);
+  const updateMeetingSession = useChatStore((s) => s.updateMeetingSession);
+  const deleteMeetingSession = useChatStore((s) => s.deleteMeetingSession);
+  const continueMeetingSession = useChatStore((s) => s.continueMeetingSession);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [meetingStatus, setMeetingStatus] = useState("");
+  const [recordingId, setRecordingId] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const recordingStartedAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (!("speechSynthesis" in window)) return;
@@ -288,6 +310,138 @@ function VoiceSettings() {
       window.speechSynthesis.onvoiceschanged = null;
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      recorderRef.current?.state === "recording" && recorderRef.current.stop();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  const blobToDataUrl = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error("Could not read audio."));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+
+  const summarizeMeeting = async (session: MeetingSession, transcript = session.transcript || "") => {
+    if (!transcript.trim()) return;
+    updateMeetingSession(session.id, { status: "summarizing", error: undefined, transcript: meetingSettings.storeTranscripts ? transcript : undefined });
+    try {
+      const config = useChatStore.getState().getActiveLlmConfig();
+      if (!config) throw new Error("No model is selected.");
+      const { generateText } = await import("ai");
+      const { createModel } = await import("../../lib/model-factory");
+      const model = await createModel(config);
+      const prompt = buildMeetingSummaryPrompt({ ...session, transcript }, meetingSettings);
+      const result = await generateText({
+        model,
+        prompt,
+        temperature: 0.2,
+        maxOutputTokens: config.maxResponseTokens ?? 2048,
+      });
+      const sections = extractMeetingSections(result.text);
+      updateMeetingSession(session.id, {
+        status: "done",
+        summary: result.text,
+        transcript: meetingSettings.storeTranscripts ? transcript : undefined,
+        actionItems: sections.actionItems,
+        decisions: sections.decisions,
+        participants: sections.participants,
+        modelId: config.modelId,
+        error: undefined,
+      });
+      setMeetingStatus(`Summarized ${session.title}.`);
+    } catch (e) {
+      updateMeetingSession(session.id, { status: "error", error: e instanceof Error ? e.message : String(e) });
+      setMeetingStatus(`Summary failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const transcribeSessionAudio = async (session: MeetingSession, dataUrl: string, filename: string) => {
+    updateMeetingSession(session.id, { status: "transcribing", error: undefined, audioFilename: filename });
+    setMeetingStatus(`Transcribing ${session.title}...`);
+    try {
+      const available = await invoke<boolean>("audio_transcription_available").catch(() => false);
+      if (!available) {
+        throw new Error("Install whisper-cpp or openai-whisper to enable local transcription.");
+      }
+      const transcript = await invoke<string>("transcribe_audio", { dataUrl, filename });
+      const ready: Partial<MeetingSession> = {
+        status: meetingSettings.autoSummarize ? "summarizing" : "ready",
+        transcript: meetingSettings.storeTranscripts ? transcript : undefined,
+        error: undefined,
+      };
+      updateMeetingSession(session.id, ready);
+      setMeetingStatus(`Transcribed ${session.title}.`);
+      if (meetingSettings.autoSummarize) {
+        await summarizeMeeting({ ...session, ...ready, transcript }, transcript);
+      }
+    } catch (e) {
+      updateMeetingSession(session.id, { status: "error", error: e instanceof Error ? e.message : String(e) });
+      setMeetingStatus(`Transcription failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const startMeetingRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const session = createMeetingSession({ source: "recording", title: `Meeting ${new Date().toLocaleDateString()}` });
+      chunksRef.current = [];
+      recordingStartedAtRef.current = Date.now();
+      streamRef.current = stream;
+      recorderRef.current = recorder;
+      setRecordingId(session.id);
+      setMeetingSessions([session, ...meetingSessions]);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const endedAt = Date.now();
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setRecordingId(null);
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const filename = `meeting-${new Date(recordingStartedAtRef.current).toISOString().replace(/[:.]/g, "-")}.webm`;
+        updateMeetingSession(session.id, {
+          endedAt,
+          durationMs: endedAt - recordingStartedAtRef.current,
+          audioFilename: filename,
+        });
+        void blobToDataUrl(blob)
+          .then((dataUrl) => transcribeSessionAudio({ ...session, endedAt, durationMs: endedAt - recordingStartedAtRef.current, audioFilename: filename }, dataUrl, filename))
+          .catch((e) => {
+            updateMeetingSession(session.id, { status: "error", error: e instanceof Error ? e.message : String(e) });
+          });
+      };
+      recorder.start(1000);
+      setMeetingStatus("Recording meeting...");
+    } catch (e) {
+      setMeetingStatus(`Recording failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const stopMeetingRecording = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  };
+
+  const importMeetingAudio = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      const session = createMeetingSession({
+        source: "upload",
+        title: file.name.replace(/\.[^.]+$/, "") || "Imported meeting",
+        audioFilename: file.name,
+      });
+      setMeetingSessions([session, ...useChatStore.getState().meetingSessions]);
+      const dataUrl = await blobToDataUrl(file);
+      await transcribeSessionAudio(session, dataUrl, file.name);
+    }
+  };
 
   return (
     <>
@@ -311,6 +465,106 @@ function VoiceSettings() {
             <TextInput type="number" min={0.5} max={2} step={0.05} value={voiceSettings.pitch} onChange={(e) => setVoiceSettings({ ...voiceSettings, pitch: Number(e.target.value) || 1 })} />
           </Field>
         </div>
+      </SettingsGroup>
+      <SettingsGroup title="Meeting assistant" description="Record or import audio, transcribe locally, summarize with the selected model, and continue in chat.">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <ToggleRow enabled={meetingSettings.autoSummarize} onToggle={(autoSummarize) => setMeetingSettings({ ...meetingSettings, autoSummarize })} title="Auto-summarize" description="Summarize transcripts as soon as transcription finishes." />
+          <ToggleRow enabled={meetingSettings.storeTranscripts} onToggle={(storeTranscripts) => setMeetingSettings({ ...meetingSettings, storeTranscripts })} title="Store transcripts" description="Keep transcript text in meeting history." />
+          <ToggleRow enabled={meetingSettings.speakerLabels} onToggle={(speakerLabels) => setMeetingSettings({ ...meetingSettings, speakerLabels })} title="Speaker labels" description="Preserve speaker names when the transcript includes them." />
+          <Field label="Summary style">
+            <Select value={meetingSettings.summaryStyle} onChange={(e) => setMeetingSettings({ ...meetingSettings, summaryStyle: e.target.value as typeof meetingSettings.summaryStyle })}>
+              <option value="concise">Concise</option>
+              <option value="detailed">Detailed</option>
+              <option value="standup">Standup</option>
+            </Select>
+          </Field>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {recordingId ? (
+            <button onClick={stopMeetingRecording} className="control-pill rounded-lg px-3 py-2 text-[11px] text-error">
+              <Square size={13} className="mr-1.5 inline" />
+              Stop Recording
+            </button>
+          ) : (
+            <button onClick={() => void startMeetingRecording()} className="primary-action rounded-lg px-3 py-2 text-[11px] font-medium">
+              <Mic2 size={13} className="mr-1.5 inline" />
+              Record Meeting
+            </button>
+          )}
+          <label className="control-pill inline-flex cursor-pointer items-center rounded-lg px-3 py-2 text-[11px] font-medium">
+            <UploadCloud size={13} className="mr-1.5" />
+            Import Audio
+            <input
+              type="file"
+              accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.webm,.aac"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void importMeetingAudio(e.currentTarget.files);
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+          {meetingStatus && <span className="text-[11px] text-text-3">{meetingStatus}</span>}
+        </div>
+        {meetingSessions.length > 0 && (
+          <div className="mt-4 flex max-h-[360px] flex-col gap-2 overflow-y-auto">
+            {meetingSessions.map((session) => (
+              <div key={session.id} className="rounded-lg border border-hairline bg-surface-3 px-3 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <FileAudio size={13} className="text-text-3" aria-hidden="true" />
+                      <span className="truncate text-[12.5px] font-medium text-text-1">{session.title}</span>
+                      <span className={session.status === "error" ? "text-[10px] uppercase text-error" : "text-[10px] uppercase text-accent"}>{session.status}</span>
+                      {session.durationMs && <span className="font-mono text-[10px] text-text-3">{formatMeetingDuration(session.durationMs)}</span>}
+                    </div>
+                    {session.audioFilename && <div className="mt-0.5 truncate text-[10.5px] text-text-3">{session.audioFilename}</div>}
+                    {session.error && <div className="mt-1 text-[11px] text-error">{session.error}</div>}
+                    {session.summary && <p className="mt-2 line-clamp-3 text-[11.5px] leading-relaxed text-text-2">{session.summary}</p>}
+                    {session.transcript && (
+                      <details className="mt-2 rounded border border-hairline bg-sunken px-2.5 py-2">
+                        <summary className="cursor-pointer text-[10.5px] uppercase text-text-3">Transcript</summary>
+                        <pre className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-text-2">{session.transcript}</pre>
+                      </details>
+                    )}
+                    {(session.decisions.length > 0 || session.actionItems.length > 0) && (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {session.decisions.length > 0 && (
+                          <div className="rounded border border-hairline bg-sunken px-2.5 py-2">
+                            <div className="text-[10px] uppercase text-text-3">Decisions</div>
+                            {session.decisions.slice(0, 3).map((item, index) => <div key={`${session.id}-decision-${index}`} className="mt-1 text-[11px] text-text-2">- {item}</div>)}
+                          </div>
+                        )}
+                        {session.actionItems.length > 0 && (
+                          <div className="rounded border border-hairline bg-sunken px-2.5 py-2">
+                            <div className="text-[10px] uppercase text-text-3">Action items</div>
+                            {session.actionItems.slice(0, 3).map((item, index) => <div key={`${session.id}-action-${index}`} className="mt-1 text-[11px] text-text-2">- {item}</div>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1">
+                    {session.transcript && session.status !== "summarizing" && (
+                      <button onClick={() => void summarizeMeeting(session)} className="control-pill rounded-md px-2 py-1 text-[10.5px]">
+                        <Sparkles size={12} className="mr-1 inline" />
+                        Summarize
+                      </button>
+                    )}
+                    <button onClick={() => continueMeetingSession(session.id)} className="control-pill rounded-md px-2 py-1 text-[10.5px]">
+                      <Play size={12} className="mr-1 inline" />
+                      Continue
+                    </button>
+                    <button onClick={() => deleteMeetingSession(session.id)} className="control-icon self-end rounded p-1 text-text-3 hover:text-error" aria-label="Delete meeting">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </SettingsGroup>
     </>
   );
