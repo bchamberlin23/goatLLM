@@ -11,6 +11,7 @@ import {
   type Message,
 } from "../../../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type LlmMessage, type ToolCallInfo, type ToolResultInfo } from "../../../lib/llm";
+import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../../../lib/openai-codex-subscription";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../../../lib/tools";
 import { shouldAutoApprove } from "../../../lib/tools/approval";
 import { classifyCommand } from "../../../lib/command-safety";
@@ -338,7 +339,12 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
     const models = getModels();
     const selectedModel = models.find((m) => m.id === selectedModelId);
     if (!selectedModel) { setError("Selected model not found."); return; }
-    if (!llmConfig.apiKey && selectedModel.providerId !== "ollama" && selectedModel.providerId !== "lmstudio") {
+    if (
+      !llmConfig.apiKey &&
+      selectedModel.providerId !== "ollama" &&
+      selectedModel.providerId !== "lmstudio" &&
+      selectedModel.providerId !== OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID
+    ) {
       setError(`No API key configured for ${selectedModel.providerId}. Add one in Settings.`);
       return;
     }

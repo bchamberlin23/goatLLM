@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, KeyRound, Loader2, LogIn, LogOut, RefreshCw, XCircle } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { useChatStore } from "../../stores/chat";
 
 interface CodexAuthStatus {
   signed_in: boolean;
-  account_id?: string | null;
-  expires?: number | null;
+  account_id: string | null;
+  expires: number | null;
 }
 
 interface CodexOAuthStart {
@@ -26,18 +27,23 @@ export function CodexSubscriptionCard() {
   const [manualOpen, setManualOpen] = useState(false);
   const unlistenRef = useRef<(() => void) | null>(null);
 
+  // Mirror status into the chat store so the model picker gates the
+  // Codex provider group on the same sign-in state this card shows.
+  const syncCodexAuthStatus = useChatStore((s) => s.setCodexAuthStatus);
+
   const refreshStatus = useCallback(async () => {
     setUiState("loading");
     setMessage("");
     try {
       const next = await invoke<CodexAuthStatus>("openai_codex_auth_status");
       setStatus(next);
+      syncCodexAuthStatus(next);
       setUiState(next.signed_in ? "signed-in" : "signed-out");
     } catch (err) {
       setUiState("error");
       setMessage(errorMessage(err));
     }
-  }, []);
+  }, [syncCodexAuthStatus]);
 
   useEffect(() => {
     void refreshStatus();
@@ -69,6 +75,7 @@ export function CodexSubscriptionCard() {
           if (record.kind === "signed_in") {
             const next = record.status as CodexAuthStatus;
             setStatus(next);
+            syncCodexAuthStatus(next);
             setUiState("signed-in");
             setMessage("Signed in");
             setManualOpen(false);
@@ -91,7 +98,7 @@ export function CodexSubscriptionCard() {
       setMessage(errorMessage(err));
       setManualOpen(true);
     }
-  }, []);
+  }, [syncCodexAuthStatus]);
 
   const completeManual = useCallback(async () => {
     if (!loginId || !manualInput.trim()) return;
@@ -103,6 +110,7 @@ export function CodexSubscriptionCard() {
         input: manualInput.trim(),
       });
       setStatus(next);
+      syncCodexAuthStatus(next);
       setUiState("signed-in");
       setMessage("Signed in");
       setManualOpen(false);
@@ -112,7 +120,7 @@ export function CodexSubscriptionCard() {
       setUiState("error");
       setMessage(errorMessage(err));
     }
-  }, [loginId, manualInput]);
+  }, [loginId, manualInput, syncCodexAuthStatus]);
 
   const signOut = useCallback(async () => {
     setUiState("loading");
@@ -120,6 +128,7 @@ export function CodexSubscriptionCard() {
     try {
       const next = await invoke<CodexAuthStatus>("openai_codex_logout");
       setStatus(next);
+      syncCodexAuthStatus(next);
       setUiState("signed-out");
       setMessage("Signed out");
       setManualOpen(false);
@@ -128,7 +137,7 @@ export function CodexSubscriptionCard() {
       setUiState("error");
       setMessage(errorMessage(err));
     }
-  }, []);
+  }, [syncCodexAuthStatus]);
 
   const signedIn = !!status?.signed_in;
   const isLoading = uiState === "loading";

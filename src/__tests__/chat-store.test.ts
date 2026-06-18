@@ -166,10 +166,7 @@ describe("ChatStore", () => {
     it("includes the bundled free OpenCode Go provider by default", () => {
       const providers = useChatStore.getState().getProviders();
       const builtIn = providers.filter((p) => p.isBuiltIn);
-      expect(builtIn.map((p) => p.id)).toEqual([
-        "opencode-go-free",
-        OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID,
-      ]);
+      expect(builtIn.map((p) => p.id)).toEqual(["opencode-go-free"]);
     });
 
     it("exposes the free DeepSeek model out of the box", () => {
@@ -178,10 +175,76 @@ describe("ChatStore", () => {
       expect(ids).toContain("opencode-go-free:deepseek-v4-flash-free");
     });
 
-    it("exposes Codex subscription models out of the box", () => {
+    it("hides Codex subscription provider when not signed in", () => {
+      // The Codex group is gated on ChatGPT OAuth sign-in. Until the
+      // user signs in via the Settings card, the provider and its
+      // models must be invisible to the picker so a stale selection
+      // can't be invoked.
+      useChatStore.setState(() => ({
+        codexAuthStatus: { signed_in: false, account_id: null, expires: null },
+      }));
+      const providers = useChatStore.getState().getProviders();
+      const builtIn = providers.filter((p) => p.isBuiltIn).map((p) => p.id);
+      expect(builtIn).not.toContain(OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID);
+
+      const models = useChatStore.getState().getModels();
+      const ids = models.map((m) => m.id);
+      expect(ids).not.toContain(`${OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID}:gpt-5.5`);
+    });
+
+    it("exposes Codex subscription models when signed in", () => {
+      useChatStore.setState(() => ({
+        codexAuthStatus: { signed_in: true, account_id: "acc_test", expires: 0 },
+      }));
+      const providers = useChatStore.getState().getProviders();
+      const builtIn = providers.filter((p) => p.isBuiltIn).map((p) => p.id);
+      expect(builtIn).toContain(OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID);
+
       const models = useChatStore.getState().getModels();
       const ids = models.map((m) => m.id);
       expect(ids).toContain(`${OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID}:gpt-5.5`);
+    });
+
+    it("setCodexAuthStatus toggles the Codex provider in the picker", () => {
+      // Mirrors what CodexSubscriptionCard does on sign-in / sign-out:
+      // it dispatches the new status into the chat store and the picker
+      // re-renders on the next render cycle.
+      useChatStore.getState().setCodexAuthStatus({
+        signed_in: true,
+        account_id: "acc_test",
+        expires: 0,
+      });
+      expect(
+        useChatStore
+          .getState()
+          .getProviders()
+          .some((p) => p.id === OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID),
+      ).toBe(true);
+
+      useChatStore.getState().setCodexAuthStatus({
+        signed_in: false,
+        account_id: null,
+        expires: null,
+      });
+      expect(
+        useChatStore
+          .getState()
+          .getProviders()
+          .some((p) => p.id === OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID),
+      ).toBe(false);
+    });
+
+    it("checkCodexAuthStatus is a no-op outside Tauri", () => {
+      // The action guards on window.__TAURI_INTERNALS__ so it can be
+      // called from browser-only contexts (jsdom tests, Vite dev
+      // server) without throwing. The auth state should be untouched.
+      const before = useChatStore.getState().codexAuthStatus;
+      return useChatStore
+        .getState()
+        .checkCodexAuthStatus()
+        .then(() => {
+          expect(useChatStore.getState().codexAuthStatus).toEqual(before);
+        });
     });
 
     it("includes cloud provider models after config", () => {
@@ -263,6 +326,9 @@ describe("ChatStore", () => {
     });
 
     it("builds LlmConfig for Codex subscription without API key or user provider config", () => {
+      useChatStore.setState(() => ({
+        codexAuthStatus: { signed_in: true, account_id: "acc_test", expires: 0 },
+      }));
       useChatStore
         .getState()
         .setSelectedModel(`${OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID}:gpt-5.5`);

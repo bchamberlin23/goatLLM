@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { LlmConfig } from "../lib/llm";
 import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
+import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import type { ModelConfig, ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "../lib/providers";
 import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
@@ -107,6 +108,7 @@ const RAG_SETTINGS_KEY = "goatllm-rag-settings";
 const ACTIVE_DOCUMENT_WORKSPACE_KEY = "goatllm-active-document-workspace";
 const BRANCH_TIPS_KEY = "goatllm-active-branch-tips";
 const MESSAGE_QUEUE_KEY = "goatllm-message-queue";
+const CODEX_AUTH_STATUS_KEY = "goatllm-codex-auth-status";
 
 const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
   requireBuildForWeb: true,
@@ -328,6 +330,22 @@ function loadUsageSettings(): UsageSettings {
       ...(loaded.compactionSettings ?? {}),
     },
   };
+}
+
+/**
+ * Hydrate the Codex sign-in status from the journal. The OS keychain
+ * is the source of truth, but persisting the last known status means
+ * the picker can render with the correct gating on the very first
+ * paint — no flash of an empty Codex group while the Tauri command
+ * round-trips to the keychain. `checkCodexAuthStatus` runs after
+ * hydrate to refresh the status in the background.
+ */
+function loadCodexAuthStatus(): CodexAuthStatus {
+  return loadJsonValue<CodexAuthStatus>(CODEX_AUTH_STATUS_KEY, {
+    signed_in: false,
+    account_id: null,
+    expires: null,
+  });
 }
 
 // Reset runtime-only "running" status on load (no stuck spinners). The actual
@@ -569,6 +587,18 @@ export interface Provider {
   baseUrl: string;
   /** Whether the provider has been health-checked yet. */
   healthChecked: boolean;
+}
+
+/**
+ * Mirror of the Rust-side `CodexAuthStatus` returned by
+ * `openai_codex_auth_status`. Field names match the Tauri command
+ * payload (snake_case → camelCase in this file) so the chat store
+ * can hold it directly without an adapter.
+ */
+export interface CodexAuthStatus {
+  signed_in: boolean;
+  account_id: string | null;
+  expires: number | null;
 }
 
 export interface Model {
@@ -1376,6 +1406,14 @@ export interface ChatStore {
   checkProviderHealth: (providerId: string, baseUrl: string) => Promise<void>;
   checkAllProvidersHealth: () => Promise<void>;
 
+  // OpenAI Codex (ChatGPT subscription) auth state. Tauri-side creds live
+  // in the desktop keychain; this mirror just tracks whether the user is
+  // currently signed in so the picker can gate the Codex provider group
+  // and the send path can skip the API-key check.
+  codexAuthStatus: CodexAuthStatus;
+  checkCodexAuthStatus: () => Promise<void>;
+  setCodexAuthStatus: (status: CodexAuthStatus) => void;
+
   // Message search
   messageSearchResults: MessageSearchResult[];
   messageSearchLoading: boolean;
@@ -1732,6 +1770,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       })(),
       agentBudgetControls: loadJsonSetting(AGENT_BUDGET_CONTROLS_KEY, DEFAULT_AGENT_BUDGET_CONTROLS),
       providerHealth: {},
+      codexAuthStatus: loadCodexAuthStatus(),
       messageSearchResults: [],
       messageSearchLoading: false,
       tavilyApiKey: "",
@@ -3998,6 +4037,64 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         await Promise.allSettled(checks);
       },
 
+      // ── OpenAI Codex subscription auth ──
+
+      /**
+       * Pulls the current ChatGPT subscription sign-in state from the
+       * Tauri backend. Called on startup (after hydrate) and on demand
+       * from the Settings card. The status is the gate the picker uses
+       * to decide whether to show the Codex provider group.
+       *
+       * If Tauri isn't available (browser dev server, tests) we leave
+       * the existing status in place — defaulting to "signed out" hides
+       * the group, which is the safe state in unknown environments.
+       */
+      checkCodexAuthStatus: async () => {
+        const hasTauri = Boolean(
+          (typeof window !== "undefined" &&
+            (window as unknown as { __TAURI_INTERNALS__?: unknown })
+              .__TAURI_INTERNALS__) ||
+            (typeof window !== "undefined" &&
+              (window as unknown as { __TAURI__?: unknown }).__TAURI__),
+        );
+        if (!hasTauri) return;
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const status = await invoke<{
+            signed_in: boolean;
+            account_id?: string | null;
+            expires?: number | null;
+          }>("openai_codex_auth_status");
+          const next: CodexAuthStatus = {
+            signed_in: !!status.signed_in,
+            account_id: status.account_id ?? null,
+            expires: status.expires ?? null,
+          };
+          set({ codexAuthStatus: next });
+          saveJsonSetting(CODEX_AUTH_STATUS_KEY, next);
+        } catch {
+          // Leave previous status untouched — a transient failure
+          // shouldn't flip the user out of a working Codex session.
+        }
+      },
+
+      /**
+       * Mirror the status into the chat store from the Settings card
+       * (which talks to Tauri directly). The picker re-renders
+       * automatically because `getProviders`/`getModels` read from
+       * this field. Persisted to the journal so a reload restores the
+       * last known state without waiting for the keychain check.
+       */
+      setCodexAuthStatus: (status) => {
+        const next: CodexAuthStatus = {
+          signed_in: !!status.signed_in,
+          account_id: status.account_id ?? null,
+          expires: status.expires ?? null,
+        };
+        set({ codexAuthStatus: next });
+        saveJsonSetting(CODEX_AUTH_STATUS_KEY, next);
+      },
+
       performMessageSearch: async (query) => {
         if (!query.trim()) {
           set({ messageSearchResults: [], messageSearchLoading: false });
@@ -4494,14 +4591,20 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       getProviders: () => {
-        const { providerConfigs, providerHealth } = get();
+        const { providerConfigs, providerHealth, codexAuthStatus } = get();
         // If the user has configured their own OpenCode Go key, that
         // supersedes the bundled free tier — we hide our built-in entry so
         // the picker shows their full paid catalog instead of two competing
-        // OpenCode entries.
+        // OpenCode entries. Same idea for the Codex subscription: until
+        // the user has signed in via the Settings card, the Codex group
+        // is hidden from the picker so the "send" path can't pick a model
+        // the user isn't entitled to use.
         const userHasOwnZenKey = !!providerConfigs["opencode-go"]?.apiKey;
+        const codexSignedIn = !!codexAuthStatus.signed_in;
         const visibleBuiltins = BUILTIN_PROVIDERS.filter(
-          (bp) => !(bp.id === ZEN_FREE_PROVIDER_ID && userHasOwnZenKey),
+          (bp) =>
+            !(bp.id === ZEN_FREE_PROVIDER_ID && userHasOwnZenKey) &&
+            !(bp.id === OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID && !codexSignedIn),
         );
         const providers: Provider[] = visibleBuiltins.map((bp) => {
           const health = providerHealth[bp.id];
@@ -4538,9 +4641,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       getModels: () => {
-        const { providerConfigs, providerHealth, discoveredModels, modelOverrides } = get();
+        const { providerConfigs, providerHealth, discoveredModels, modelOverrides, codexAuthStatus } = get();
         const models: Model[] = [];
         const userHasOwnZenKey = !!providerConfigs["opencode-go"]?.apiKey;
+        const codexSignedIn = !!codexAuthStatus.signed_in;
         // Helper: apply user overrides to a model's contextWindow.
         const applyOverride = (modelId: string, ctx: number): number => {
           const ov = modelOverrides[modelId];
@@ -4552,6 +4656,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // Hide the bundled free tier when the user has configured their
           // own OpenCode Go key — their key supersedes the free credential.
           if (bp.id === ZEN_FREE_PROVIDER_ID && userHasOwnZenKey) continue;
+          // Hide the Codex subscription group until the user has signed
+          // in via the Settings card. Otherwise the picker advertises
+          // models the user can't actually invoke.
+          if (bp.id === OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID && !codexSignedIn) continue;
           const health = providerHealth[bp.id];
           // Optimistic: assume online until first check fails
           const providerOnline = health ? health.online : true;

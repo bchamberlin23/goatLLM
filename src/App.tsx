@@ -26,6 +26,7 @@ export default function App() {
   const _hydrated = useChatStore((s) => s._hydrated);
   const checkAllProvidersHealth = useChatStore((s) => s.checkAllProvidersHealth);
   const discoverAllLocalModels = useChatStore((s) => s.discoverAllLocalModels);
+  const checkCodexAuthStatus = useChatStore((s) => s.checkCodexAuthStatus);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
@@ -46,6 +47,7 @@ export default function App() {
     return () => query.removeEventListener("change", onChange);
   }, [setSidebarOpen]);
   useEffect(() => { if (_hydrated) checkAllProvidersHealth(); }, [_hydrated]);
+  useEffect(() => { if (_hydrated) void checkCodexAuthStatus(); }, [_hydrated, checkCodexAuthStatus]);
   useEffect(() => { if (_hydrated) void discoverAllLocalModels(); }, [_hydrated]);
   useEffect(() => {
     if (!_hydrated) return;
