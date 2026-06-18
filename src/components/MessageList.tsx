@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useShallow } from "zustand/react/shallow";
 import { useChatStore, type Message } from "../stores/chat";
 import { MessageBubble } from "./MessageBubble";
-import { ChevronDown, Send } from "lucide-react";
+import { ChevronDown, Navigation } from "lucide-react";
 import { formatDateSeparator, formatLongDateTime, sameDay } from "../lib/datetime";
 
 const EMPTY_MESSAGES: Message[] = [];
@@ -300,7 +300,8 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
                 {item.kind === "queued" && (
                   <QueuedMessageBubble
                     content={item.content}
-                    onSteer={() => activeId && steerMessage(activeId, item.content)}
+                    index={item.index}
+                    onSteer={() => activeId && steerMessage(activeId, item.content, item.index)}
                   />
                 )}
                 {item.kind === "footer" && <div className="h-3" aria-hidden="true" />}
@@ -348,23 +349,35 @@ function DateSeparator({ ts }: { ts: number }) {
   );
 }
 
-function QueuedMessageBubble({ content, onSteer }: { content: string; onSteer: () => void }) {
+function QueuedMessageBubble({ content, index, onSteer }: { content: string; index: number; onSteer: () => void }) {
+  const position = index + 1;
+
   return (
     <div className="motion-reveal flex flex-col items-end px-6 py-1.5">
-      <div className="max-w-[70%] bg-accent/[0.055] border border-accent/20 rounded-2xl rounded-br-md px-4 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-accent/60">
-            Queued
+      <div className="soft-card max-w-[85%] sm:max-w-[70%] rounded-2xl rounded-br-md px-4 py-2.5">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-text-3">
+            Queued follow-up
           </span>
+          {index > 0 && (
+            <span className="shrink-0 rounded bg-sunken px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-text-3 border border-hairline">
+              #{position}
+            </span>
+          )}
         </div>
-        <p className="text-[14px] text-text-2 whitespace-pre-wrap">{content}</p>
-        <button
-          onClick={onSteer}
-          className="primary-action flex items-center gap-1 mt-2 px-2 py-1 rounded-md text-[11px] font-medium"
-        >
-          <Send size={11} />
-          Steer
-        </button>
+        <p className="text-[14px] leading-relaxed text-text-1 whitespace-pre-wrap break-words select-text">{content}</p>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onSteer}
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-accent/25 bg-accent/10 px-2.5 text-[11.5px] font-semibold text-accent transition-[background,border-color,color] hover:border-accent/35 hover:bg-accent/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/25"
+            aria-label={`Steer now with queued follow-up ${position}`}
+            title="Steer current response with this queued message"
+          >
+            <Navigation size={11} strokeWidth={2} aria-hidden="true" />
+            Steer now
+          </button>
+        </div>
       </div>
     </div>
   );

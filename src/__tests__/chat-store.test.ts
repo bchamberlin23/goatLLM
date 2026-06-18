@@ -348,5 +348,35 @@ describe("ChatStore", () => {
       });
       expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({});
     });
+
+    it("steers only the selected queued message when queued content is duplicated", () => {
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      useChatStore.getState().enqueueMessage(convId, "repeat this");
+      useChatStore.getState().enqueueMessage(convId, "different turn");
+      useChatStore.getState().enqueueMessage(convId, "repeat this");
+
+      (
+        useChatStore.getState().steerMessage as (
+          conversationId: string,
+          content: string,
+          queueIndex?: number,
+        ) => void
+      )(convId, "repeat this", 2);
+
+      expect(useChatStore.getState().messageQueue[convId]).toEqual([
+        { content: "repeat this" },
+        { content: "different turn" },
+      ]);
+      expect(useChatStore.getState().steerPayload).toEqual({
+        conversationId: convId,
+        content: "repeat this",
+        steered: true,
+      });
+      expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({
+        [convId]: [{ content: "repeat this" }, { content: "different turn" }],
+      });
+    });
   });
 });

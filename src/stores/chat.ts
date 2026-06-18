@@ -1029,7 +1029,7 @@ export interface ChatStore {
   clearResend: () => void;
   enqueueMessage: (conversationId: string, content: string) => void;
   dequeueMessage: (conversationId: string) => { content: string } | undefined;
-  steerMessage: (conversationId: string, content: string) => void;
+  steerMessage: (conversationId: string, content: string, queueIndex?: number) => void;
   setSteerPayload: (payload: { conversationId: string; content: string; steered?: boolean } | null) => void;
   /** Resume a partial assistant turn (uses existing thread + reasoning in context). */
   triggerContinue: (conversationId: string) => void;
@@ -2309,19 +2309,25 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         return first;
       },
 
-      steerMessage: (conversationId, content) => {
+      steerMessage: (conversationId, content, queueIndex) => {
         const { cancelStreaming } = get();
         cancelStreaming();
         const queue = get().messageQueue[conversationId];
         if (queue) {
-          const filtered = queue.filter((q) => q.content !== content);
-          set((state) => {
-            const messageQueue = { ...state.messageQueue };
-            if (filtered.length > 0) messageQueue[conversationId] = filtered;
-            else delete messageQueue[conversationId];
-            saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
-            return { messageQueue };
-          });
+          const removeIndex =
+            typeof queueIndex === "number" && queue[queueIndex]?.content === content
+              ? queueIndex
+              : queue.findIndex((q) => q.content === content);
+          if (removeIndex >= 0) {
+            const filtered = queue.filter((_, index) => index !== removeIndex);
+            set((state) => {
+              const messageQueue = { ...state.messageQueue };
+              if (filtered.length > 0) messageQueue[conversationId] = filtered;
+              else delete messageQueue[conversationId];
+              saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+              return { messageQueue };
+            });
+          }
         }
         set({ steerPayload: { conversationId, content, steered: true } });
       },
