@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import {
   AlertTriangle,
   BookOpen,
-  Brain,
   CheckCircle,
   FileText,
   Search,
-  Telescope,
   RotateCw,
   Globe,
   Plus,
@@ -27,28 +25,6 @@ function TextShimmer({ text, className = "" }: { text: string; className?: strin
   );
 }
 
-const PHASE_LABEL: Record<DeepResearchPhase, string> = {
-  planning: "Planning strategy",
-  searching: "Searching web",
-  reading: "Reading sources",
-  analyzing: "Analyzing findings",
-  writing: "Writing report",
-  warning: "Needs attention",
-  error: "Deep Research stopped",
-  done: "Deep Research complete",
-};
-
-const PHASE_ICON: Record<DeepResearchPhase, typeof Telescope> = {
-  planning: Telescope,
-  searching: Search,
-  reading: BookOpen,
-  analyzing: Brain,
-  writing: FileText,
-  warning: AlertTriangle,
-  error: AlertTriangle,
-  done: CheckCircle,
-};
-
 const PHASE_PERCENT: Record<DeepResearchPhase, number> = {
   planning: 15,
   searching: 35,
@@ -63,8 +39,6 @@ const PHASE_PERCENT: Record<DeepResearchPhase, number> = {
 export function DeepResearchProgress({ message, state }: { message: Message; state: DeepResearchState }) {
   const isWorking = state.phase !== "done" && state.phase !== "error";
   const elapsed = useElapsedLabel(state.startedAt, isWorking);
-  const Icon = PHASE_ICON[state.phase] ?? Telescope;
-  const recentEvents = state.events.slice(-5);
   const [detailTab, setDetailTab] = useState<"sources" | "findings" | null>(null);
 
   const sources = state.sources ?? [];

@@ -74,6 +74,42 @@ describe("buildAgentSystemPrompt", () => {
     expect(out).toMatch(/goatLLM/);
   });
 
+  it("uses a Codex-style operating guide while preserving goatLLM capabilities", () => {
+    const out = buildAgentSystemPrompt({ tools: [] });
+
+    expect(out).toMatch(/Your capabilities:/);
+    expect(out).toMatch(/# How you work/);
+    expect(out).toMatch(/## Responsiveness/);
+    expect(out).toMatch(/## Task execution/);
+    expect(out).toMatch(/## Validating your work/);
+    expect(out).toMatch(/side-panel canvas/);
+    expect(out).toMatch(/load_skill/);
+    expect(out).toMatch(/spawn_subagent/);
+    expect(out).toMatch(/todo_create/);
+    expect(out).toMatch(/done/);
+  });
+
+  it("relies on tool approval cards instead of telling the agent to wait separately", () => {
+    const out = buildAgentSystemPrompt({ tools: [] });
+
+    expect(out).toMatch(/approval card/i);
+    expect(out).not.toMatch(/wait for user approval before making changes/i);
+  });
+
+  it("explains project instruction precedence when project context is injected", () => {
+    const out = buildAgentSystemPrompt({
+      tools: [],
+      projectContextFiles: [
+        { path: "AGENTS.md", content: "Run focused tests before finalizing." },
+      ],
+    });
+
+    expect(out).toMatch(/Project instructions/i);
+    expect(out).toMatch(/more deeply nested/i);
+    expect(out).toMatch(/direct user instructions/i);
+    expect(out).toMatch(/Run focused tests before finalizing/);
+  });
+
   it("routes grep-shaped work to search_content (PR0 grep nudge)", () => {
     const out = buildAgentSystemPrompt({ tools: [] });
     // Tool routing: search_content beats bash grep, including the new flags.

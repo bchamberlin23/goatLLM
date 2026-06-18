@@ -38,10 +38,10 @@ describe("Todo Tools - Batch Creation", () => {
   });
 
   it("creates a single task successfully (backward compatibility)", async () => {
-    const output = await todo_create.execute({
+    const output = await todo_create.execute!({
       title: "Single Task",
       description: "A single task description",
-    });
+    }, {} as any);
 
     expect(output).toContain("Created task:");
     expect(output).toContain("Single Task");
@@ -55,13 +55,13 @@ describe("Todo Tools - Batch Creation", () => {
   });
 
   it("creates multiple tasks in a batch upfront", async () => {
-    const output = await todo_create.execute({
+    const output = await todo_create.execute!({
       tasks: [
         { id: "task-a", title: "Task A", description: "Desc A" },
         { id: "task-b", title: "Task B", description: "Desc B", blockedBy: ["task-a"] },
         { id: "task-c", title: "Task C" },
       ],
-    });
+    }, {} as any);
 
     expect(output).toContain("Created 3 tasks:");
     expect(output).toContain("task-a, task-b, task-c");
@@ -76,11 +76,11 @@ describe("Todo Tools - Batch Creation", () => {
   });
 
   it("rejects batch task creation with self-blocking tasks", async () => {
-    const output = await todo_create.execute({
+    const output = await todo_create.execute!({
       tasks: [
         { id: "task-a", title: "Task A", blockedBy: ["task-a"] },
       ],
-    });
+    }, {} as any);
 
     expect(output).toContain("Error: task \"task-a\" cannot block itself");
     const board = getBoardForConversation(convId);
@@ -88,11 +88,11 @@ describe("Todo Tools - Batch Creation", () => {
   });
 
   it("rejects batch task creation with missing dependencies", async () => {
-    const output = await todo_create.execute({
+    const output = await todo_create.execute!({
       tasks: [
         { id: "task-a", title: "Task A", blockedBy: ["task-nonexistent"] },
       ],
-    });
+    }, {} as any);
 
     expect(output).toContain("Error: blockedBy task \"task-nonexistent\" not found");
     const board = getBoardForConversation(convId);
@@ -100,12 +100,12 @@ describe("Todo Tools - Batch Creation", () => {
   });
 
   it("rejects batch task creation with dependency cycles", async () => {
-    const output = await todo_create.execute({
+    const output = await todo_create.execute!({
       tasks: [
         { id: "task-a", title: "Task A", blockedBy: ["task-b"] },
         { id: "task-b", title: "Task B", blockedBy: ["task-a"] },
       ],
-    });
+    }, {} as any);
 
     expect(output).toContain("Error: blockedBy creates a dependency cycle");
     const board = getBoardForConversation(convId);

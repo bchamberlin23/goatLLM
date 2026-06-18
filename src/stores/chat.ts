@@ -6,7 +6,12 @@ import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
 import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
-import { sanitizeNotebookCells } from "../lib/product-workspace";
+import {
+  sanitizeImageJobs,
+  sanitizeModelComparisonRuns,
+  sanitizeNotebookCells,
+  sanitizeScheduledAgents,
+} from "../lib/product-workspace";
 import type { NotebookCell, SyncConfig, WatcherEventSummaryInput } from "../lib/product-workspace";
 import {
   createBoard,
@@ -1675,12 +1680,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
       plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
       browserMirror: DEFAULT_BROWSER_MIRROR,
-      modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+      modelComparisonRuns: sanitizeModelComparisonRuns(loadJsonValue<unknown>(MODEL_COMPARISON_RUNS_KEY, [])),
       notebookCells: loadNotebookCells(),
       notebooks: loadNotebooks(),
       activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
-      imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
-      scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+      imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
+      scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
       watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
       ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
       activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
@@ -4493,12 +4498,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
-            modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+            modelComparisonRuns: sanitizeModelComparisonRuns(loadJsonValue<unknown>(MODEL_COMPARISON_RUNS_KEY, [])),
             notebookCells: loadNotebookCells(),
             notebooks: loadNotebooks(),
             activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
-            imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
-            scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+            imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
+            scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
             activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
@@ -4612,12 +4617,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             imageGenSettings: loadJsonSetting(IMAGE_GEN_SETTINGS_KEY, DEFAULT_IMAGE_GEN_SETTINGS),
             featureFlags: loadJsonSetting(FEATURE_FLAGS_KEY, DEFAULT_FEATURE_FLAGS),
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
-            modelComparisonRuns: loadJsonValue<ModelComparisonRun[]>(MODEL_COMPARISON_RUNS_KEY, []),
+            modelComparisonRuns: sanitizeModelComparisonRuns(loadJsonValue<unknown>(MODEL_COMPARISON_RUNS_KEY, [])),
             notebookCells: loadNotebookCells(),
             notebooks: loadNotebooks(),
             activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
-            imageJobs: loadJsonValue<ImageGenerationJob[]>(IMAGE_JOBS_KEY, []),
-            scheduledAgents: loadJsonValue<ScheduledAgent[]>(SCHEDULED_AGENTS_KEY, []),
+            imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
+            scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
             activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),

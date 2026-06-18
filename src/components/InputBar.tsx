@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ClipboardEvent } from "react";
 import type { ToolSet } from "ai";
-import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type DeepResearchEvent, type DeepResearchState, type ToolCallEntry } from "../stores/chat";
+import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type DeepResearchEvent, type DeepResearchState, type ToolCallEntry, type Message } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
 import { shouldAutoApprove } from "../lib/tools/approval";

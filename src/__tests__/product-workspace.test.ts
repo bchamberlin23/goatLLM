@@ -9,7 +9,10 @@ import {
   estimateMessageCost,
   filterPromptDocuments,
   normalizeSyncConfig,
+  sanitizeImageJobs,
+  sanitizeModelComparisonRuns,
   sanitizeNotebookCells,
+  sanitizeScheduledAgents,
   summarizeWatcherEvent,
 } from "../lib/product-workspace";
 
@@ -140,6 +143,49 @@ describe("product workspace primitives", () => {
     expect(sanitizeNotebookCells(null)).toEqual([]);
     expect(sanitizeNotebookCells("oops")).toEqual([]);
     expect(sanitizeNotebookCells([null, 5, { id: "ok", kind: "text", content: "", status: "idle", updatedAt: 1 }])).toHaveLength(1);
+  });
+
+  it("settles interrupted model comparison runs on hydrate", () => {
+    const cleaned = sanitizeModelComparisonRuns([
+      {
+        id: "run-1",
+        prompt: "Compare this",
+        modelIds: ["a", "b"],
+        createdAt: 10,
+        results: [
+          { modelId: "a", status: "running", content: "partial" },
+          { modelId: "b", status: "queued", content: "" },
+          { modelId: "c", status: "done", content: "complete" },
+        ],
+      },
+    ]);
+
+    expect(cleaned[0].results.map((r) => r.status)).toEqual(["error", "error", "done"]);
+    expect(cleaned[0].results[0].content).toBe("partial");
+    expect(cleaned[0].results[0].error).toBe("Comparison interrupted.");
+  });
+
+  it("settles interrupted image jobs and scheduled agents on hydrate", () => {
+    const jobs = sanitizeImageJobs([
+      { id: "img-1", prompt: "A diagram", provider: "openai", status: "running", createdAt: 1 },
+      { id: "img-2", prompt: "Finished", provider: "openai", status: "done", createdAt: 2, imageDataUrl: "data:image/png;base64,ok" },
+    ]);
+    const agents = sanitizeScheduledAgents([
+      {
+        id: "agent-1",
+        name: "Nightly review",
+        prompt: "Review repo",
+        schedule: "@daily",
+        enabled: true,
+        nextRunAt: 100,
+        lastStatus: "running",
+      },
+    ]);
+
+    expect(jobs.map((job) => job.status)).toEqual(["error", "done"]);
+    expect(jobs[0].error).toBe("Image generation interrupted.");
+    expect(agents[0].lastStatus).toBe("error");
+    expect(agents[0].lastResult).toBe("Scheduled run interrupted.");
   });
 
   it("summarizes watcher events into user-facing reactions", () => {

@@ -8,6 +8,7 @@ import {
   type DeepResearchEvent,
   type DeepResearchState,
   type ToolCallEntry,
+  type Message,
 } from "../../../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type ToolCallInfo, type ToolResultInfo } from "../../../lib/llm";
 import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../../../lib/tools";

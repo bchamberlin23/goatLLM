@@ -1,4 +1,4 @@
-import type { Message } from "../stores/chat";
+import type { ImageGenerationJob, Message, ModelComparisonRun, ScheduledAgent } from "../stores/chat";
 
 export interface ModelPrice {
   inputPerMillion: number;
@@ -417,6 +417,101 @@ export function sanitizeNotebookCells(cells: unknown): NotebookCell[] {
       cell.status === "running"
         ? { ...cell, status: cell.output ? ("done" as const) : ("idle" as const) }
         : cell,
+    );
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function settleRuntimeStatus<T extends { status: "queued" | "running" | "done" | "error"; error?: string }>(
+  item: T,
+  interruptedMessage: string,
+): T {
+  return item.status === "queued" || item.status === "running"
+    ? { ...item, status: "error", error: item.error || interruptedMessage }
+    : item;
+}
+
+export function sanitizeModelComparisonRuns(runs: unknown): ModelComparisonRun[] {
+  if (!Array.isArray(runs)) return [];
+  return runs
+    .filter((run): run is ModelComparisonRun =>
+      isObjectRecord(run) &&
+      typeof run.id === "string" &&
+      typeof run.prompt === "string" &&
+      Array.isArray(run.modelIds) &&
+      typeof run.createdAt === "number",
+    )
+    .map((run) => ({
+      ...run,
+      modelIds: run.modelIds.filter((id): id is string => typeof id === "string"),
+      results: Array.isArray(run.results)
+        ? run.results
+            .filter((result) => isObjectRecord(result) && typeof result.modelId === "string")
+            .map((result) =>
+              settleRuntimeStatus(
+                {
+                  ...result,
+                  content: typeof result.content === "string" ? result.content : "",
+                  status:
+                    result.status === "queued" ||
+                    result.status === "running" ||
+                    result.status === "done" ||
+                    result.status === "error"
+                      ? result.status
+                      : "error",
+                } as ModelComparisonRun["results"][number],
+                "Comparison interrupted.",
+              ),
+            )
+        : [],
+    }));
+}
+
+export function sanitizeImageJobs(jobs: unknown): ImageGenerationJob[] {
+  if (!Array.isArray(jobs)) return [];
+  return jobs
+    .filter((job): job is ImageGenerationJob =>
+      isObjectRecord(job) &&
+      typeof job.id === "string" &&
+      typeof job.prompt === "string" &&
+      typeof job.provider === "string" &&
+      typeof job.createdAt === "number",
+    )
+    .map((job) =>
+      settleRuntimeStatus(
+        {
+          ...job,
+          status:
+            job.status === "queued" || job.status === "running" || job.status === "done" || job.status === "error"
+              ? job.status
+              : "error",
+        },
+        "Image generation interrupted.",
+      ),
+    );
+}
+
+export function sanitizeScheduledAgents(agents: unknown): ScheduledAgent[] {
+  if (!Array.isArray(agents)) return [];
+  return agents
+    .filter((agent): agent is ScheduledAgent =>
+      isObjectRecord(agent) &&
+      typeof agent.id === "string" &&
+      typeof agent.name === "string" &&
+      typeof agent.prompt === "string" &&
+      typeof agent.schedule === "string" &&
+      typeof agent.nextRunAt === "number",
+    )
+    .map((agent) =>
+      agent.lastStatus === "running"
+        ? {
+            ...agent,
+            lastStatus: "error",
+            lastResult: agent.lastResult || "Scheduled run interrupted.",
+          }
+        : agent,
     );
 }
 
