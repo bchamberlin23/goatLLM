@@ -30,6 +30,15 @@ import {
   deleteMessageFromDb,
   searchMessages,
 } from "../lib/db";
+import {
+  createDocumentWorkspace as createKnowledgeWorkspace,
+  deletePersistedDocumentWorkspace,
+  loadDocumentWorkspaces,
+  persistDocumentWorkspaces,
+  sanitizeDocumentWorkspaces,
+  type DocumentWorkspace,
+  type KnowledgeDocument,
+} from "../lib/document-workspace";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
@@ -58,6 +67,7 @@ const IMAGE_JOBS_KEY = "goatllm-image-jobs";
 const SCHEDULED_AGENTS_KEY = "goatllm-scheduled-agents";
 const WATCHER_EVENTS_KEY = "goatllm-watcher-events";
 const RAG_SETTINGS_KEY = "goatllm-rag-settings";
+const ACTIVE_DOCUMENT_WORKSPACE_KEY = "goatllm-active-document-workspace";
 const BRANCH_TIPS_KEY = "goatllm-active-branch-tips";
 const MESSAGE_QUEUE_KEY = "goatllm-message-queue";
 
@@ -1231,6 +1241,14 @@ export interface ChatStore {
   clearWatcherEvents: () => void;
   ragSettings: RagSettings;
   setRagSettings: (settings: RagSettings) => void;
+  documentWorkspaces: DocumentWorkspace[];
+  activeDocumentWorkspaceId: string | null;
+  createDocumentWorkspace: (name?: string) => string;
+  deleteDocumentWorkspace: (id: string) => void;
+  setActiveDocumentWorkspace: (id: string | null) => void;
+  renameDocumentWorkspace: (id: string, name: string) => void;
+  upsertKnowledgeDocument: (workspaceId: string, document: KnowledgeDocument) => void;
+  updateKnowledgeDocument: (workspaceId: string, documentId: string, updates: Partial<KnowledgeDocument>) => void;
   activeBranchTips: Record<string, string>;
   setActiveBranchTip: (conversationId: string, tipMessageId: string) => void;
   pursueGoalMode: boolean;
@@ -1688,6 +1706,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
       watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
       ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+      documentWorkspaces: [] as DocumentWorkspace[],
+      activeDocumentWorkspaceId: null,
       activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
       pursueGoalMode: false,
 
@@ -3528,6 +3548,67 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         saveJsonSetting(RAG_SETTINGS_KEY, settings);
       },
 
+      createDocumentWorkspace: (name = "Knowledge workspace") => {
+        const workspace = createKnowledgeWorkspace(name, get().workspacePath);
+        const next = [workspace, ...get().documentWorkspaces];
+        set({ documentWorkspaces: next, activeDocumentWorkspaceId: workspace.id });
+        persistDocumentWorkspaces(next);
+        saveJsonSetting(ACTIVE_DOCUMENT_WORKSPACE_KEY, workspace.id);
+        return workspace.id;
+      },
+
+      deleteDocumentWorkspace: (id) => {
+        const next = deletePersistedDocumentWorkspace(id, get().documentWorkspaces);
+        const currentActive = get().activeDocumentWorkspaceId;
+        const activeDocumentWorkspaceId =
+          currentActive === id ? next[0]?.id ?? null : currentActive;
+        set({ documentWorkspaces: next, activeDocumentWorkspaceId });
+        saveJsonSetting(ACTIVE_DOCUMENT_WORKSPACE_KEY, activeDocumentWorkspaceId);
+      },
+
+      setActiveDocumentWorkspace: (id) => {
+        set({ activeDocumentWorkspaceId: id });
+        saveJsonSetting(ACTIVE_DOCUMENT_WORKSPACE_KEY, id);
+      },
+
+      renameDocumentWorkspace: (id, name) => {
+        const clean = name.trim();
+        if (!clean) return;
+        const next = get().documentWorkspaces.map((workspace) =>
+          workspace.id === id ? { ...workspace, name: clean, updatedAt: Date.now() } : workspace,
+        );
+        set({ documentWorkspaces: next });
+        persistDocumentWorkspaces(next);
+      },
+
+      upsertKnowledgeDocument: (workspaceId, document) => {
+        const next = get().documentWorkspaces.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          const existing = workspace.documents.some((doc) => doc.id === document.id);
+          const documents = existing
+            ? workspace.documents.map((doc) => (doc.id === document.id ? document : doc))
+            : [document, ...workspace.documents];
+          return { ...workspace, documents, updatedAt: Date.now() };
+        });
+        set({ documentWorkspaces: next });
+        persistDocumentWorkspaces(next);
+      },
+
+      updateKnowledgeDocument: (workspaceId, documentId, updates) => {
+        const next = get().documentWorkspaces.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          return {
+            ...workspace,
+            documents: workspace.documents.map((doc) =>
+              doc.id === documentId ? { ...doc, ...updates, updatedAt: Date.now() } : doc,
+            ),
+            updatedAt: Date.now(),
+          };
+        });
+        set({ documentWorkspaces: next });
+        persistDocumentWorkspaces(next);
+      },
+
       setActiveBranchTip: (conversationId, tipMessageId) => {
         const next = { ...get().activeBranchTips, [conversationId]: tipMessageId };
         set({ activeBranchTips: next });
@@ -4427,6 +4508,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               .filter(([, queued]) => queued.length > 0),
           ) as Record<string, QueuedMessage[]>;
           saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          const documentWorkspaces = await loadDocumentWorkspaces();
+          const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
+          const activeDocumentWorkspaceId =
+            savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
+              ? savedDocumentWorkspaceId
+              : documentWorkspaces[0]?.id ?? null;
 
           // Load skill state from localStorage
           let skillPaths: string[] = [];
@@ -4506,6 +4593,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+            documentWorkspaces,
+            activeDocumentWorkspaceId,
             activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
             _hydrated: true,
           });
@@ -4569,6 +4658,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const defaultSystemPrompt = localStorage.getItem("goatllm-default-system-prompt") || "";
           const ollamaUrl = localStorage.getItem("goatllm-ollama-url") || "http://localhost:11434";
           const embeddingModel = localStorage.getItem("goatllm-embedding-model") || "nomic-embed-text";
+          const documentWorkspaces = sanitizeDocumentWorkspaces(await loadDocumentWorkspaces().catch(() => []));
+          const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
+          const activeDocumentWorkspaceId =
+            savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
+              ? savedDocumentWorkspaceId
+              : documentWorkspaces[0]?.id ?? null;
           set({
             providerConfigs,
             selectedModelId: savedModel,
@@ -4625,6 +4720,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             scheduledAgents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
             watcherEvents: loadJsonValue<WatcherEventSummaryInput[]>(WATCHER_EVENTS_KEY, []),
             ragSettings: loadJsonSetting(RAG_SETTINGS_KEY, DEFAULT_RAG_SETTINGS),
+            documentWorkspaces,
+            activeDocumentWorkspaceId,
             activeBranchTips: loadJsonValue<Record<string, string>>(BRANCH_TIPS_KEY, {}),
             _hydrated: true,
           });

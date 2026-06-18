@@ -1,6 +1,7 @@
 #![allow(unused_imports)]
 
 pub(crate) mod db;
+pub(crate) mod documents;
 pub(crate) mod embeddings;
 pub(crate) mod extract;
 pub(crate) mod files;
@@ -16,6 +17,10 @@ pub(crate) use crate::{escape_sql_like_query, init_db};
 pub(crate) use db::{
     delete_conversation_db, delete_message_db, get_events, load_all_data,
     load_messages_for_conversation, log_event, save_conversation, save_message, search_messages,
+};
+pub(crate) use documents::{
+    document_chunks_delete, document_chunks_replace, document_chunks_search, document_workspace_delete,
+    document_workspace_save, document_workspaces_load,
 };
 pub(crate) use embeddings::{
     embeddings_clear, embeddings_count, embeddings_insert, embeddings_search, workspace_chunks,
@@ -111,6 +116,12 @@ macro_rules! generate_handler {
             crate::commands::memory::memory_search,
             crate::commands::memory::memory_search_text,
             crate::commands::memory::memory_increment_uses,
+            crate::commands::documents::document_workspaces_load,
+            crate::commands::documents::document_workspace_save,
+            crate::commands::documents::document_workspace_delete,
+            crate::commands::documents::document_chunks_replace,
+            crate::commands::documents::document_chunks_delete,
+            crate::commands::documents::document_chunks_search,
             crate::commands::misc::watch_workspace,
             crate::commands::misc::unwatch_workspace,
             crate::commands::misc::sync_export_state,

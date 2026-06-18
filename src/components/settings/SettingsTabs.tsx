@@ -23,6 +23,7 @@ import {
   Trash2,
   RefreshCw,
   Play,
+  Pin,
 } from "lucide-react";
 import { ProvidersTab } from "./ProvidersTab";
 import { ToolsTab } from "./ToolsTab";
@@ -34,6 +35,16 @@ import { useChatStore, type ProductFeatureFlags, type ScheduledAgent, type Image
 import { loadPromptTemplates } from "../../lib/prompt-templates";
 import type { Memory } from "../../lib/memory";
 import { createPromptVersion, filterPromptDocuments, type PromptDocument } from "../../lib/product-workspace";
+import {
+  createKnowledgeDocument,
+  deleteDocumentChunks,
+  embedKnowledgeDocument,
+  searchKnowledgeDocuments,
+  setDocumentEmbedded,
+  setDocumentPinned,
+  type KnowledgeDocument,
+  type RetrievalPreviewHit,
+} from "../../lib/document-workspace";
 import { invoke } from "@tauri-apps/api/core";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
@@ -684,11 +695,31 @@ function MemorySettings() {
   const setRagSettings = useChatStore((s) => s.setRagSettings);
   const memoryEnabled = useChatStore((s) => s.memoryEnabled);
   const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
+  const documentWorkspaces = useChatStore((s) => s.documentWorkspaces);
+  const activeDocumentWorkspaceId = useChatStore((s) => s.activeDocumentWorkspaceId);
+  const createDocumentWorkspace = useChatStore((s) => s.createDocumentWorkspace);
+  const deleteDocumentWorkspace = useChatStore((s) => s.deleteDocumentWorkspace);
+  const setActiveDocumentWorkspace = useChatStore((s) => s.setActiveDocumentWorkspace);
+  const renameDocumentWorkspace = useChatStore((s) => s.renameDocumentWorkspace);
+  const upsertKnowledgeDocument = useChatStore((s) => s.upsertKnowledgeDocument);
+  const updateKnowledgeDocument = useChatStore((s) => s.updateKnowledgeDocument);
+  const ollamaUrl = useChatStore((s) => s.ollamaUrl);
+  const embeddingModel = useChatStore((s) => s.embeddingModel);
   const [memText, setMemText] = useState("");
   const [memCategory, setMemCategory] = useState("fact");
   const [memQuery, setMemQuery] = useState("");
   const [memList, setMemList] = useState<Memory[]>([]);
   const [memStatus, setMemStatus] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [documentStatus, setDocumentStatus] = useState("");
+  const [retrievalQuery, setRetrievalQuery] = useState("");
+  const [retrievalPreview, setRetrievalPreview] = useState<RetrievalPreviewHit[]>([]);
+  const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+
+  const activeDocumentWorkspace = useMemo(
+    () => documentWorkspaces.find((workspace) => workspace.id === activeDocumentWorkspaceId) ?? documentWorkspaces[0] ?? null,
+    [activeDocumentWorkspaceId, documentWorkspaces],
+  );
 
   const refreshMemories = useCallback(async () => {
     try {
@@ -732,6 +763,136 @@ function MemorySettings() {
     } catch { /* ignore */ }
   };
 
+  const ensureDocumentWorkspace = () => {
+    if (activeDocumentWorkspace) return activeDocumentWorkspace.id;
+    return createDocumentWorkspace("Knowledge workspace");
+  };
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error || new Error("Could not read file."));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(file);
+    });
+
+  const importKnowledgeFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const workspaceId = ensureDocumentWorkspace();
+    setDocumentStatus(`Importing ${files.length} file${files.length === 1 ? "" : "s"}...`);
+    try {
+      const { extractAttachment } = await import("../../lib/attachment-extract");
+      let imported = 0;
+      for (const file of Array.from(files)) {
+        const dataUrl = await fileToDataUrl(file);
+        const extracted = await extractAttachment({
+          filename: file.name,
+          mimeType: file.type,
+          dataUrl,
+          sizeBytes: file.size,
+        });
+        const text = extracted.rawBody || extracted.inlinedText.replace(/^\[[^\]]+\]\s*/m, "").trim();
+        if (!text.trim()) continue;
+        const document = createKnowledgeDocument({
+          workspaceId,
+          title: file.name.replace(/\.[^.]+$/, "") || file.name,
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          text,
+          source: { kind: "upload", label: file.name },
+        });
+        upsertKnowledgeDocument(workspaceId, document);
+        imported++;
+      }
+      setDocumentStatus(imported > 0 ? `Imported ${imported} document${imported === 1 ? "" : "s"}.` : "No extractable text found.");
+    } catch (e) {
+      setDocumentStatus(`Import failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const addWorkspace = () => {
+    const id = createDocumentWorkspace(workspaceName.trim() || "Knowledge workspace");
+    setActiveDocumentWorkspace(id);
+    setWorkspaceName("");
+  };
+
+  const saveWorkspaceName = () => {
+    if (!activeDocumentWorkspace || !workspaceName.trim()) return;
+    renameDocumentWorkspace(activeDocumentWorkspace.id, workspaceName);
+    setWorkspaceName("");
+  };
+
+  const embedDocument = async (document: KnowledgeDocument) => {
+    if (!activeDocumentWorkspace) return;
+    setBusyDocumentId(document.id);
+    updateKnowledgeDocument(activeDocumentWorkspace.id, document.id, { status: "embedding", lastError: undefined });
+    try {
+      const embedded = await embedKnowledgeDocument({
+        workspaceId: activeDocumentWorkspace.id,
+        document,
+        ollamaUrl,
+        model: embeddingModel,
+        onProgress: (done, total) => setDocumentStatus(`Embedding ${document.title}: ${done}/${total}`),
+      });
+      upsertKnowledgeDocument(activeDocumentWorkspace.id, embedded);
+      setDocumentStatus(`Embedded ${document.title}.`);
+    } catch (e) {
+      updateKnowledgeDocument(activeDocumentWorkspace.id, document.id, {
+        status: "error",
+        embedded: false,
+        lastError: e instanceof Error ? e.message : String(e),
+      });
+      setDocumentStatus(`Embed failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
+
+  const unembedDocument = async (document: KnowledgeDocument) => {
+    if (!activeDocumentWorkspace) return;
+    setBusyDocumentId(document.id);
+    try {
+      await deleteDocumentChunks(document.id);
+      upsertKnowledgeDocument(
+        activeDocumentWorkspace.id,
+        setDocumentEmbedded(document, {
+          embedded: false,
+          status: "ready",
+          chunkCount: 0,
+        }),
+      );
+      setDocumentStatus(`Unembedded ${document.title}.`);
+    } catch (e) {
+      setDocumentStatus(`Unembed failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
+
+  const togglePinned = (document: KnowledgeDocument) => {
+    if (!activeDocumentWorkspace) return;
+    upsertKnowledgeDocument(activeDocumentWorkspace.id, setDocumentPinned(document, !document.pinned));
+  };
+
+  const runRetrievalPreview = async () => {
+    if (!activeDocumentWorkspace || !retrievalQuery.trim()) return;
+    setDocumentStatus("Searching embedded documents...");
+    try {
+      const hits = await searchKnowledgeDocuments({
+        workspaceId: activeDocumentWorkspace.id,
+        query: retrievalQuery,
+        limit: ragSettings.maxRetrievedMemories,
+        ollamaUrl,
+        model: embeddingModel,
+        includeProvenance: ragSettings.provenance,
+      });
+      setRetrievalPreview(hits);
+      setDocumentStatus(hits.length > 0 ? `${hits.length} retrieval hit${hits.length === 1 ? "" : "s"}.` : "No retrieval hits.");
+    } catch (e) {
+      setDocumentStatus(`Retrieval failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   return (
     <>
       <SettingsGroup title="Memory and retrieval" description="Control what can be remembered, retrieved, and shown.">
@@ -744,6 +905,129 @@ function MemorySettings() {
           <Field label="Max retrieved">
             <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
           </Field>
+        </div>
+      </SettingsGroup>
+
+      <SettingsGroup title="Document knowledge workspaces" description="Reusable document corpora for retrieval, provenance, pinning, and source-aware context.">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[220px_1fr]">
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <TextInput value={workspaceName} onChange={(e) => setWorkspaceName(e.target.value)} placeholder={activeDocumentWorkspace ? "Rename workspace" : "Workspace name"} className="min-w-0 flex-1" />
+              <button onClick={activeDocumentWorkspace ? saveWorkspaceName : addWorkspace} className="control-pill shrink-0 rounded-lg px-3 py-2 text-[11px]">
+                {activeDocumentWorkspace ? "Rename" : "Create"}
+              </button>
+            </div>
+            <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto">
+              {documentWorkspaces.map((workspace) => {
+                const active = activeDocumentWorkspace?.id === workspace.id;
+                return (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    onClick={() => setActiveDocumentWorkspace(workspace.id)}
+                    className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                      active ? "border-accent/30 bg-accent/10" : "border-hairline bg-black/20 hover:border-hairline-strong hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="block truncate text-[12.5px] font-medium text-text-1">{workspace.name}</span>
+                    <span className="mt-0.5 block text-[10.5px] text-text-3">{workspace.documents.length} document{workspace.documents.length === 1 ? "" : "s"}</span>
+                  </button>
+                );
+              })}
+              {documentWorkspaces.length === 0 && (
+                <div className="rounded-lg border border-hairline bg-black/20 px-3 py-2 text-[12px] text-text-3">
+                  No knowledge workspace yet.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="control-pill inline-flex cursor-pointer items-center rounded-lg px-3 py-2 text-[11px] font-medium">
+                <UploadCloud size={13} className="mr-1.5" />
+                Import files
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    void importKnowledgeFiles(e.currentTarget.files);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              {activeDocumentWorkspace && (
+                <button onClick={() => deleteDocumentWorkspace(activeDocumentWorkspace.id)} className="control-pill rounded-lg px-3 py-2 text-[11px] text-error">
+                  <Trash2 size={13} className="mr-1.5 inline" />
+                  Delete corpus
+                </button>
+              )}
+              {documentStatus && <span className="text-[11px] text-text-3">{documentStatus}</span>}
+            </div>
+
+            {activeDocumentWorkspace && activeDocumentWorkspace.documents.length > 0 && (
+              <div className="flex max-h-[280px] flex-col gap-1 overflow-y-auto">
+                {activeDocumentWorkspace.documents.map((document) => (
+                  <div key={document.id} className="rounded-lg border border-hairline bg-black/20 px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[12.5px] font-medium text-text-1">{document.title}</span>
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] ${document.status === "error" ? "text-error" : document.embedded ? "text-success" : "text-text-3"}`}>
+                            {document.status}
+                          </span>
+                          {document.pinned && <Pin size={12} className="text-accent" aria-label="Pinned" />}
+                        </div>
+                        <div className="mt-0.5 truncate text-[10.5px] text-text-3">
+                          {document.filename} · {document.characters.toLocaleString()} chars · {document.chunkCount ?? 0} chunks
+                        </div>
+                        {document.lastError && <div className="mt-1 text-[10.5px] text-error">{document.lastError}</div>}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button onClick={() => togglePinned(document)} className="control-icon rounded p-1 text-text-3 hover:text-accent" aria-label={document.pinned ? "Unpin document" : "Pin document"}>
+                          <Pin size={13} />
+                        </button>
+                        <button
+                          onClick={() => document.embedded ? void unembedDocument(document) : void embedDocument(document)}
+                          disabled={busyDocumentId === document.id}
+                          className="control-pill rounded-md px-2 py-1 text-[10.5px] disabled:opacity-50"
+                        >
+                          {document.embedded ? "Unembed" : "Embed"}
+                        </button>
+                        <button onClick={() => void embedDocument(document)} disabled={busyDocumentId === document.id} className="control-icon rounded p-1 text-text-3 hover:text-text-1 disabled:opacity-50" aria-label="Resync document">
+                          <RefreshCw size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-hairline bg-black/20 p-3">
+              <div className="flex gap-2">
+                <TextInput value={retrievalQuery} onChange={(e) => setRetrievalQuery(e.target.value)} placeholder="Preview retrieval query" className="min-w-0 flex-1" onKeyDown={(e) => e.key === "Enter" && void runRetrievalPreview()} />
+                <button onClick={() => void runRetrievalPreview()} disabled={!activeDocumentWorkspace || !retrievalQuery.trim()} className="control-pill shrink-0 rounded-lg px-3 py-2 text-[11px] disabled:opacity-50">
+                  <Search size={13} />
+                </button>
+              </div>
+              {retrievalPreview.length > 0 && (
+                <div className="mt-3 flex max-h-[180px] flex-col gap-1 overflow-y-auto">
+                  {retrievalPreview.map((hit) => (
+                    <div key={hit.id} className="rounded border border-hairline bg-sunken px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[11.5px] font-medium text-text-2">{hit.title}</span>
+                        <span className="font-mono text-[10px] text-text-3">{hit.score.toFixed(3)}</span>
+                      </div>
+                      {hit.provenance && <div className="mt-0.5 text-[10.5px] text-text-3">{hit.provenance}</div>}
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-3">{hit.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </SettingsGroup>
 
