@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { ChevronDown, Check, EyeOff, Eye, Search, X } from "lucide-react";
-import { CLOUD_PROVIDER_MODELS } from "../../stores/chat";
+import { ChevronDown, Check, EyeOff, Eye, Search, X, RefreshCw, Loader2 } from "lucide-react";
+import { CLOUD_PROVIDER_MODELS, useChatStore } from "../../stores/chat";
+import { mergeDiscoveredModels } from "../../lib/providers";
+import { useShallow } from "zustand/react/shallow";
 
 export function ProviderCard({
   provider,
@@ -9,16 +11,41 @@ export function ProviderCard({
   onRemove,
   onSetEnabled,
 }: {
-  provider: { id: string; name: string; baseUrl: string; noKey?: boolean };
+  provider: {
+    id: string;
+    name: string;
+    baseUrl: string;
+    noKey?: boolean;
+    /** If true, expose a "Discover" button that hits the provider's
+     *  /v1/models endpoint and merges the result with the curated
+     *  catalog. Set in `src/lib/model-registry.ts`. */
+    supportsDiscovery?: boolean;
+  };
   config: { apiKey: string; enabledModels?: string[] } | null;
   onSave: (apiKey: string) => void;
   onRemove: () => void;
   onSetEnabled: (modelIds: string[]) => void;
 }) {
   const hasKey = !!config?.apiKey || !!provider.noKey;
-  const allModels = CLOUD_PROVIDER_MODELS[provider.id] ?? [];
+  // Merge the curated catalog with any /v1/models result the user has
+  // already pulled. The registry wins on conflict; new entries append
+  // in provider order. Same precedence as `mergeDiscoveredModels` in
+  // the chat store's getModels() path — keeping the two aligned so the
+  // Settings card and the picker show the same list.
+  const { discoveredModels, discoveryStatus, discoverCloudModels } = useChatStore(
+    useShallow((s) => ({
+      discoveredModels: s.discoveredModels,
+      discoveryStatus: s.discoveryStatus,
+      discoverCloudModels: s.discoverCloudModels,
+    })),
+  );
+  const curated = CLOUD_PROVIDER_MODELS[provider.id] ?? [];
+  const discovered = provider.supportsDiscovery ? discoveredModels[provider.id] ?? [] : [];
+  const allModels = mergeDiscoveredModels(curated, discovered);
   const enabled = config?.enabledModels;
   const enabledCount = enabled === undefined ? allModels.length : enabled.length;
+  const isDiscovering = provider.supportsDiscovery && discoveryStatus[provider.id] === "loading";
+  const canDiscover = !!provider.supportsDiscovery && hasKey && !isDiscovering;
 
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
@@ -110,6 +137,23 @@ export function ProviderCard({
         )}
         {justSaved && (
           <span className="motion-reveal text-[10px] text-success font-medium">Saved</span>
+        )}
+        {provider.supportsDiscovery && hasKey && (
+          <button
+            className={`control-pill px-2 py-1 text-[11px] font-medium rounded-md transition-colors flex items-center gap-1 ${canDiscover ? "" : "opacity-45 cursor-not-allowed"}`}
+            onClick={(e) => { e.stopPropagation(); if (canDiscover) void discoverCloudModels(provider.id); }}
+            disabled={!canDiscover}
+            aria-label={`Discover ${provider.name} models`}
+            title={hasKey ? `Hit ${provider.baseUrl}/models to refresh the catalog` : "Add an API key first"}
+            data-testid={`discover-${provider.id}`}
+          >
+            {isDiscovering ? (
+              <Loader2 size={10} strokeWidth={2} className="animate-spin" />
+            ) : (
+              <RefreshCw size={10} strokeWidth={2} />
+            )}
+            <span>Discover</span>
+          </button>
         )}
         <div className="flex-1" />
         {!provider.noKey && (

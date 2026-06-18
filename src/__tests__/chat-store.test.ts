@@ -185,6 +185,58 @@ describe("ChatStore", () => {
       expect(ids).toContain("opencode-go:deepseek-v4-pro");
     });
 
+    it("merges /v1/models discovery results into the curated catalog", () => {
+      // Mirrors pi-ai's "registry metadata wins, new entries append"
+      // pattern. When a user hits Discover on a provider like OpenRouter,
+      // the result is merged with the curated list and surfaced in the
+      // picker. The curated entry for a shared id keeps its metadata.
+      useChatStore.getState().configureProvider("openrouter", {
+        apiKey: "sk-test",
+      });
+      // Simulate the chat store having cached a discovery result.
+      // We poke the state directly because the discovery action goes
+      // through the network and we don't want to mock fetch in this test.
+      useChatStore.setState((s) => ({
+        discoveredModels: {
+          ...s.discoveredModels,
+          openrouter: [
+            { id: "anthropic/claude-3.5-sonnet", name: "Auto-Discovered 3.5 Sonnet", contextWindow: 1 },
+            { id: "vendor/newest-experimental", name: "Newest Experimental", contextWindow: 500_000 },
+          ],
+        },
+      }));
+
+      const models = useChatStore.getState().getModels();
+      const ids = models.map((m) => m.id);
+
+      // New entry from discovery surfaces in the picker.
+      expect(ids).toContain("openrouter:vendor/newest-experimental");
+
+      // Curated entry wins on conflict: the curated display name and
+      // context window (200_000) are preserved over the discovered
+      // (1) bogus context.
+      const curated = models.find((m) => m.id === "openrouter:anthropic/claude-3.5-sonnet")!;
+      expect(curated.name).toBe("Claude 3.5 Sonnet");
+      expect(curated.contextWindow).toBe(200_000);
+    });
+
+    it("does not merge discovery for providers that don't opt in", () => {
+      // Anthropic doesn't expose /v1/models the way OpenRouter does, and
+      // we curate its full catalog. A bogus discoveredModels entry must
+      // not leak into the picker.
+      useChatStore.getState().configureProvider("anthropic", { apiKey: "sk-test" });
+      useChatStore.setState((s) => ({
+        discoveredModels: {
+          ...s.discoveredModels,
+          anthropic: [{ id: "leaked-model", name: "Leaked", contextWindow: 1 }],
+        },
+      }));
+
+      const models = useChatStore.getState().getModels();
+      const ids = models.map((m) => m.id);
+      expect(ids).not.toContain("anthropic:leaked-model");
+    });
+
     it("returns null LlmConfig when no model selected", () => {
       expect(useChatStore.getState().getActiveLlmConfig()).toBeNull();
     });

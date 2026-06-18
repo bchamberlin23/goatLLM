@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { LlmConfig } from "../lib/llm";
 import { heuristicTitle } from "../lib/llm";
-import { getBuiltInProviders } from "../lib/providers";
+import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
 import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
@@ -1046,6 +1046,13 @@ export interface ChatStore {
   discoverLocalModels: (providerId: string) => Promise<void>;
   /** Refresh every configured local provider in parallel. */
   discoverAllLocalModels: () => Promise<void>;
+  /**
+   * Hit a cloud provider's /v1/models endpoint and cache the result.
+   * No-op for providers without `supportsDiscovery: true` in the
+   * registry (e.g. Anthropic, OpenAI) and for providers without a
+   * configured API key.
+   */
+  discoverCloudModels: (providerId: string) => Promise<void>;
 
   // Model selection & per-model overrides
   setSelectedModel: (modelId: string | null) => void;
@@ -1518,74 +1525,60 @@ const BUILTIN_PROVIDERS = getBuiltInProviders();
  *  naturally pruned. */
 export const bodyMatchCounts: Map<string, number> = new Map();
 
-export const CLOUD_PROVIDER_MODELS: Record<string, { id: string; name: string; contextWindow: number; vision?: boolean }[]> = {
-  openai: [
-    { id: "gpt-4o", name: "GPT-4o", contextWindow: 128_000, vision: true },
-    { id: "gpt-4o-mini", name: "GPT-4o Mini", contextWindow: 128_000, vision: true },
-    { id: "gpt-4.1", name: "GPT-4.1", contextWindow: 1_000_000, vision: true },
-  ],
-  anthropic: [
-    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
-    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", contextWindow: 200_000, vision: true },
-    { id: "claude-3-opus-20240229", name: "Claude 3 Opus", contextWindow: 200_000, vision: true },
-  ],
-  deepseek: [
-    { id: "deepseek-chat", name: "DeepSeek V3", contextWindow: 64_000 },
-    { id: "deepseek-reasoner", name: "DeepSeek R1", contextWindow: 64_000 },
-  ],
-  mimo: [
-    { id: "mimo-v2.5", name: "MiMo V2.5", contextWindow: 1_000_000 },
-    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
-  ],
-  openrouter: [
-    { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", contextWindow: 200_000, vision: true },
-    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", contextWindow: 200_000, vision: true },
-    { id: "openai/gpt-4o", name: "GPT-4o", contextWindow: 128_000, vision: true },
-    { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", contextWindow: 1_000_000, vision: true },
-    { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", contextWindow: 1_000_000, vision: true },
-    { id: "deepseek/deepseek-r1", name: "DeepSeek R1", contextWindow: 64_000 },
-    { id: "deepseek/deepseek-chat-v3", name: "DeepSeek V3", contextWindow: 64_000 },
-    { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", contextWindow: 1_000_000, vision: true },
-  ],
-  ollama: [],
-  lmstudio: [],
-  "opencode-go": [
-    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash (Free)", contextWindow: 200_000 },
-    { id: "mimo-v2.5-free", name: "MiMo V2.5 (Free)", contextWindow: 1_048_576 },
-    { id: "nemotron-3-super-free", name: "Nemotron 3 Super (Free)", contextWindow: 204_800 },
-    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_000_000 },
-    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_000_000 },
-    { id: "glm-5", name: "GLM 5", contextWindow: 200_000 },
-    { id: "glm-5.1", name: "GLM 5.1", contextWindow: 200_000 },
-    { id: "kimi-k2.5", name: "Kimi K2.5", contextWindow: 262_144 },
-    { id: "kimi-k2.6", name: "Kimi K2.6", contextWindow: 262_144 },
-    { id: "mimo-v2.5", name: "MiMo V2.5", contextWindow: 1_000_000 },
-    { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576 },
-    { id: "minimax-m2.5", name: "MiniMax M2.5", contextWindow: 204_800 },
-    { id: "minimax-m2.7", name: "MiniMax M2.7", contextWindow: 204_800 },
-    { id: "qwen3.5-plus", name: "Qwen 3.5 Plus", contextWindow: 262_144 },
-    { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", contextWindow: 262_144 },
-    { id: "qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144 },
-  ],
-  groq: [
-    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: 128_000 },
-    { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", contextWindow: 32_768 },
-    { id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: 8_192 },
-  ],
-};
+/**
+ * Curated cloud model catalog, indexed by provider id. Built from the
+ * unified registry in `src/lib/model-registry.ts` at module load so
+ * every call site (`ProviderCard.tsx`, `getModels()` below, etc.) can
+ * use the same Record shape they always have. For mutating or merging,
+ * prefer the helpers in `../lib/providers`.
+ *
+ * Pi-ai uses the same approach: `models.generated.js` is the single
+ * source of truth and everything else reads from it. This Record is
+ * the goatllm-side equivalent of `pi-ai's getModels(provider)`.
+ */
+/**
+ * Exported for back-compat with `ProviderCard.tsx` and any other
+ * component that indexes the cloud catalog by provider id. New code
+ * should prefer the typed helpers in `../lib/providers`.
+ */
+export const CLOUD_PROVIDER_MODELS: Record<string, Array<{ id: string; name: string; contextWindow: number; vision?: boolean }>> = (() => {
+  const ids = [
+    "openai",
+    "anthropic",
+    "deepseek",
+    "mimo",
+    "openrouter",
+    "opencode-go",
+    "groq",
+  ];
+  const out: Record<string, Array<{ id: string; name: string; contextWindow: number; vision?: boolean }>> = {};
+  for (const id of ids) {
+    out[id] = getCuratedModels(id);
+  }
+  return out;
+})();
 
-const CLOUD_PROVIDER_BASE_URLS: Record<string, string> = {
-  openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com",
-  deepseek: "https://api.deepseek.com/v1",
-  mimo: "https://token-plan-sgp.xiaomimimo.com/v1",
-  openrouter: "https://openrouter.ai/api/v1",
-  ollama: "http://localhost:11434/v1",
-  lmstudio: "http://localhost:1234/v1",
-  "opencode-go": "https://opencode.ai/zen/go/v1",
-  groq: "https://api.groq.com/openai/v1",
-};
+/**
+ * Default base URLs for cloud providers. Local providers (Ollama,
+ * LM Studio) live in `LOCAL_PROVIDERS` below with their own defaults.
+ */
+const CLOUD_PROVIDER_BASE_URLS: Record<string, string> = (() => {
+  const ids = [
+    "openai",
+    "anthropic",
+    "deepseek",
+    "mimo",
+    "openrouter",
+    "opencode-go",
+    "groq",
+  ];
+  const out: Record<string, string> = {};
+  for (const id of ids) {
+    const url = getProviderBaseUrl(id);
+    if (url) out[id] = url;
+  }
+  return out;
+})();
 
 const NO_KEY_PROVIDERS = new Set(["ollama", "lmstudio"]);
 
@@ -4273,6 +4266,79 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         await Promise.allSettled(targets.map((p) => discoverLocalModels(p.id)));
       },
 
+      /**
+       * Hit a cloud provider's /v1/models endpoint and merge the result
+       * with the curated catalog. Mirrors `discoverLocalModels` for
+       * cloud providers that opted into discovery (OpenRouter, Groq,
+       * OpenCode Go). The curated list wins on conflict — registry
+       * metadata is the authoritative source for display name, vision
+       * flag, and context window.
+       *
+       * Auth: most cloud /v1/models endpoints accept the API key as
+       * either a Bearer token or an `Authorization: Bearer …` header.
+       * The user must have already configured the key in Settings —
+       * we don't try to scrape a public catalog anonymously because
+       * providers like OpenRouter gate model metadata behind auth.
+       */
+      discoverCloudModels: async (providerId: string) => {
+        if (!providerSupportsDiscovery(providerId)) return;
+        const baseUrl = CLOUD_PROVIDER_BASE_URLS[providerId];
+        if (!baseUrl) return;
+        const cfg = get().providerConfigs[providerId];
+        const apiKey = cfg?.apiKey?.trim();
+        if (!apiKey) {
+          set((state) => ({
+            discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
+            discoveryError: {
+              ...state.discoveryError,
+              [providerId]: `Add an API key for ${providerId} before discovering models.`,
+            },
+          }));
+          return;
+        }
+
+        set((state) => ({
+          discoveryStatus: { ...state.discoveryStatus, [providerId]: "loading" },
+          discoveryError: { ...state.discoveryError, [providerId]: null },
+        }));
+
+        try {
+          const { initFetch } = await import("../lib/fetch-adapter");
+          const customFetch = await initFetch();
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 6000);
+          const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+          const res = await customFetch(url, {
+            signal: controller.signal,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+          });
+          clearTimeout(timeout);
+
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const body = await res.json();
+          const discovered = normalizeProviderModels(providerId, body);
+
+          set((state) => ({
+            discoveredModels: { ...state.discoveredModels, [providerId]: discovered },
+            discoveryStatus: { ...state.discoveryStatus, [providerId]: "ok" },
+            discoveryError: { ...state.discoveryError, [providerId]: null },
+          }));
+        } catch (e) {
+          const reason =
+            e instanceof DOMException && e.name === "AbortError"
+              ? `Couldn't reach ${baseUrl} (timed out).`
+              : `Couldn't reach ${baseUrl}.`;
+          set((state) => ({
+            discoveredModels: { ...state.discoveredModels, [providerId]: [] },
+            discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
+            discoveryError: { ...state.discoveryError, [providerId]: reason },
+          }));
+        }
+      },
+
       setSelectedModel: (modelId) => {
         set({ selectedModelId: modelId });
         try { localStorage.setItem("goatllm-selected-model", modelId ?? ""); } catch {}
@@ -4373,23 +4439,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             baseUrl: bp.baseUrl,
           };
         });
-        // Add user-configured cloud providers
-        const knownNames: Record<string, string> = {
-          openai: "OpenAI",
-          anthropic: "Anthropic",
-          deepseek: "DeepSeek",
-          mimo: "MiMo",
-          openrouter: "OpenRouter",
-          ollama: "Ollama",
-          "opencode-go": "OpenCode Go",
-          groq: "Groq",
-        };
+        // Add user-configured cloud providers. Display names come from
+        // the registry so adding a provider to the catalog automatically
+        // makes it render correctly here without a parallel knownNames
+        // table to maintain.
         for (const [id, config] of Object.entries(providerConfigs)) {
           if (!BUILTIN_PROVIDERS.find((bp) => bp.id === id)) {
             const hasKey = !!config.apiKey || NO_KEY_PROVIDERS.has(id);
+            const info = getProviderInfo(id);
             providers.push({
               id,
-              name: knownNames[id] ?? id.charAt(0).toUpperCase() + id.slice(1),
+              name: info?.name ?? id.charAt(0).toUpperCase() + id.slice(1),
               isOnline: hasKey,
               healthChecked: true,
               isBuiltIn: false,
@@ -4437,9 +4497,21 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // Local providers expose a real catalog at runtime; cloud providers
           // ship a curated static list. Don't mix them — a local server with
           // zero models pulled should show zero models in the picker.
+          // Cloud providers with `supportsDiscovery: true` (OpenRouter, Groq,
+          // OpenCode Go) augment the curated list with the result of their
+          // /v1/models endpoint. The curated metadata wins on conflict;
+          // discovered models are appended in provider order. Providers
+          // that don't opt in (Anthropic, OpenAI, DeepSeek, MiMo) keep
+          // the curated catalog only — discoveredModels is ignored for
+          // them so a stale or bogus entry can't leak into the picker.
           const sourceModels = isLocal
             ? (discoveredModels[providerId] ?? [])
-            : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
+            : providerSupportsDiscovery(providerId)
+              ? mergeDiscoveredModels(
+                  CLOUD_PROVIDER_MODELS[providerId] ?? [],
+                  discoveredModels[providerId] ?? [],
+                )
+              : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
           const allowlist = config.enabledModels;
           for (const m of sourceModels) {
             if (allowlist && !allowlist.includes(m.id)) continue;

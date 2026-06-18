@@ -3,10 +3,22 @@
  * modal (API keys + per-provider enabled-models list); local providers
  * (LM Studio, Ollama) are baked into the chat store.
  *
- * Historical note: there used to be a hard-coded built-in provider list
- * here; that responsibility has moved into the store. This file keeps the
- * shared types so future modules can import them without circular deps.
+ * The data for which models each provider exposes lives in
+ * `model-registry.ts` — this file keeps the *type* surface (ProviderConfig,
+ * ModelConfig) so other modules can import it without pulling in the
+ * registry's data, and re-exports the registry helpers for back-compat.
  */
+
+import {
+  getBuiltInProviders as registryGetBuiltInProviders,
+  getCloudProviders as registryGetCloudProviders,
+  getCuratedModels as registryGetCuratedModels,
+  getProviderBaseUrl as registryGetProviderBaseUrl,
+  getProviderInfo as registryGetProviderInfo,
+  providerSupportsDiscovery as registryProviderSupportsDiscovery,
+  mergeDiscoveredModels as registryMergeDiscoveredModels,
+  type ProviderInfo,
+} from "./model-registry";
 
 export interface ProviderConfig {
   id: string;
@@ -32,35 +44,65 @@ export interface ModelConfig {
  * authenticated with a bundled credential resolved at call time (see
  * src/stores/chat.ts → getActiveLlmConfig).
  *
- * Currently this seeds the OpenCode Go Free tier so a user can chat
- * immediately after install. The credential itself lives in
- * src/lib/zen-credentials.ts (XOR-folded, not in plain text).
+ * The data lives in `model-registry.ts`; this function re-exports it
+ * in the shape the rest of the app already uses so call sites don't
+ * need to migrate.
  */
 export function getBuiltInProviders(): ProviderConfig[] {
-  return [
-    {
-      id: "opencode-go-free",
-      name: "Free Models",
-      // Free endpoint: drop the `/go` segment used by the paid catalog.
-      baseUrl: "https://opencode.ai/zen/v1",
-      apiKey: null,
-      models: [
-        {
-          id: "deepseek-v4-flash-free",
-          name: "DeepSeek V4 Flash (Free)",
-          contextWindow: 200_000,
-        },
-        {
-          id: "mimo-v2.5-free",
-          name: "MiMo V2.5 (Free)",
-          contextWindow: 1_048_576,
-        },
-        {
-          id: "nemotron-3-super-free",
-          name: "Nemotron 3 Super (Free)",
-          contextWindow: 204_800,
-        },
-      ],
-    },
-  ];
+  return registryGetBuiltInProviders();
+}
+
+/**
+ * Re-export of the cloud provider catalog. Used by ProvidersTab.tsx
+ * to render the Settings cards and by the chat store when populating
+ * the picker for a configured cloud provider.
+ */
+export function getCloudProviders() {
+  return registryGetCloudProviders();
+}
+
+/**
+ * Curated model list for a provider. Returns an empty array for
+ * providers not in the registry (local providers, custom).
+ */
+export function getCuratedModels(providerId: string): ModelConfig[] {
+  return registryGetCuratedModels(providerId);
+}
+
+/**
+ * Default base URL for a provider, if curated. Undefined for custom
+ * / local providers where the user picks the URL.
+ */
+export function getProviderBaseUrl(providerId: string): string | undefined {
+  return registryGetProviderBaseUrl(providerId);
+}
+
+/**
+ * Full provider record (id, name, baseUrl, models, supportsDiscovery).
+ */
+export function getProviderInfo(providerId: string): ProviderInfo | undefined {
+  return registryGetProviderInfo(providerId);
+}
+
+/**
+ * True if the provider exposes an OpenAI-compatible /v1/models endpoint
+ * the user can hit on demand to augment the curated list. Today:
+ * OpenRouter, Groq, OpenCode Go.
+ */
+export function providerSupportsDiscovery(providerId: string): boolean {
+  return registryProviderSupportsDiscovery(providerId);
+}
+
+/**
+ * Combine the curated catalog with /v1/models discovery results. The
+ * curated list wins on conflict; discovered entries are appended in
+ * the order the provider returned them. The `discovered` side accepts
+ * a wider shape than `ModelConfig` because the runtime result of
+ * `normalizeProviderModels` may leave `contextWindow` undefined.
+ */
+export function mergeDiscoveredModels(
+  curated: ModelConfig[],
+  discovered: Array<{ id: string; name: string; contextWindow?: number; vision?: boolean }>,
+): ModelConfig[] {
+  return registryMergeDiscoveredModels(curated, discovered);
 }

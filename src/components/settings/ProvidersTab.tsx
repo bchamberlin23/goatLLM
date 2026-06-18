@@ -4,16 +4,16 @@ import { ProviderCard } from "./ProviderCard";
 import { LocalProviderCard } from "./LocalProviderCard";
 import { CustomProviderSection } from "./CustomProviderSection";
 import { SettingsGroup } from "./SettingsGroup";
+import { getCloudProviders } from "../../lib/providers";
 
-const CLOUD_PROVIDERS = [
-  { id: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com" },
-  { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1" },
-  { id: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
-  { id: "mimo", name: "MiMo", baseUrl: "https://token-plan-sgp.xiaomimimo.com/v1" },
-  { id: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
-  { id: "opencode-go", name: "OpenCode Go", baseUrl: "https://opencode.ai/zen/go/v1" },
-  { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1" },
-];
+/**
+ * Cloud providers shown in the Settings tab. Derived from the unified
+ * registry in `src/lib/model-registry.ts` so adding a provider there
+ * automatically surfaces it here. Mirrors pi-ai's
+ * `BUILT_IN_PROVIDER_DISPLAY_NAMES` approach: the catalog is the
+ * single source of truth.
+ */
+const CLOUD_PROVIDERS = getCloudProviders();
 
 export function ProvidersTab() {
   const providerConfigs = useChatStore((s) => s.providerConfigs);
