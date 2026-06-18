@@ -1361,7 +1361,7 @@ dependencies = [
  "glob",
  "notify",
  "pdf-extract",
- "quick-xml 0.31.0",
+ "quick-xml 0.39.4",
  "regex",
  "reqwest 0.12.28",
  "rusqlite",

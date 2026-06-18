@@ -21,7 +21,7 @@ base64 = "0.22"
 pdf-extract = "0.7"
 zip = "0.6"
 calamine = "0.24"
-quick-xml = "0.31"
+quick-xml = "0.39"
 dirs = "5"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros"] }
 notify = "6"
