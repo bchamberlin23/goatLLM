@@ -39,7 +39,7 @@ pub(crate) use git::{diff_file, git_blame, git_branch, git_commit, git_log, git_
 pub(crate) use latex::compile_latex;
 pub(crate) use memory::{
     memory_delete, memory_increment_uses, memory_insert, memory_list, memory_search,
-    memory_search_text,
+    memory_search_text, memory_settings_load, memory_settings_save, memory_update,
 };
 pub(crate) use misc::{
     run_python, sync_export_state, sync_import_state, unwatch_workspace, watch_workspace,
@@ -118,6 +118,9 @@ macro_rules! generate_handler {
             crate::commands::memory::memory_search,
             crate::commands::memory::memory_search_text,
             crate::commands::memory::memory_increment_uses,
+            crate::commands::memory::memory_update,
+            crate::commands::memory::memory_settings_load,
+            crate::commands::memory::memory_settings_save,
             crate::commands::documents::document_workspaces_load,
             crate::commands::documents::document_workspace_save,
             crate::commands::documents::document_workspace_delete,

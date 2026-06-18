@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { addMemory, listMemories, deleteMemory, searchMemories } from "../lib/memory";
+import { addMemory, listMemories, deleteMemory, searchMemories, updateMemory } from "../lib/memory";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("../lib/semantic-index", () => ({
@@ -11,6 +11,7 @@ describe("Memory Manager Client Functions", () => {
   let embedQuery: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    localStorage.clear();
     const apiMod = await import("@tauri-apps/api/core");
     invoke = apiMod.invoke as unknown as ReturnType<typeof vi.fn>;
     invoke.mockReset();
@@ -71,6 +72,33 @@ describe("Memory Manager Client Functions", () => {
     await deleteMemory("mem-123");
 
     expect(invoke).toHaveBeenCalledWith("memory_delete", { id: "mem-123" });
+  });
+
+  it("updateMemory regenerates embeddings and sends editable metadata", async () => {
+    embedQuery.mockResolvedValue([0.2, 0.3, 0.4]);
+    invoke.mockImplementation(async (cmd) => {
+      if (cmd === "memory_list") return [
+        { id: "mem-123", text: "Old", category: "fact", scope: "global", uses: 0, created_at: 100 },
+      ];
+      return undefined;
+    });
+
+    await updateMemory("mem-123", {
+      text: "This project uses pnpm",
+      category: "project",
+      scope: "project",
+      workspacePath: "/repo",
+    });
+
+    expect(invoke).toHaveBeenCalledWith("memory_update", expect.objectContaining({
+      id: "mem-123",
+      text: "This project uses pnpm",
+      category: "project",
+      scope: "project",
+      workspacePath: "/repo",
+      embedding: [0.2, 0.3, 0.4],
+      model: "nomic-embed-text",
+    }));
   });
 
   it("searchMemories attempts semantic search first and returns results", async () => {

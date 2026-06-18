@@ -21,6 +21,7 @@ import {
   Check,
   Copy,
   Trash2,
+  Edit3,
   RefreshCw,
   Play,
   Pin,
@@ -46,6 +47,7 @@ import {
   type RetrievalPreviewHit,
 } from "../../lib/document-workspace";
 import { computeNextScheduledRun, type ScheduledAgentRun } from "../../lib/scheduled-agents";
+import { buildMemoryProvenance } from "../../lib/memory-extraction";
 import { invoke } from "@tauri-apps/api/core";
 
 const TAB_STORAGE_KEY = "goatllm-settings-tab";
@@ -696,6 +698,8 @@ function MemorySettings() {
   const setRagSettings = useChatStore((s) => s.setRagSettings);
   const memoryEnabled = useChatStore((s) => s.memoryEnabled);
   const setMemoryEnabled = useChatStore((s) => s.setMemoryEnabled);
+  const memoryExtractionSettings = useChatStore((s) => s.memoryExtractionSettings);
+  const setMemoryExtractionSettings = useChatStore((s) => s.setMemoryExtractionSettings);
   const documentWorkspaces = useChatStore((s) => s.documentWorkspaces);
   const activeDocumentWorkspaceId = useChatStore((s) => s.activeDocumentWorkspaceId);
   const createDocumentWorkspace = useChatStore((s) => s.createDocumentWorkspace);
@@ -706,11 +710,17 @@ function MemorySettings() {
   const updateKnowledgeDocument = useChatStore((s) => s.updateKnowledgeDocument);
   const ollamaUrl = useChatStore((s) => s.ollamaUrl);
   const embeddingModel = useChatStore((s) => s.embeddingModel);
+  const workspacePath = useChatStore((s) => s.workspacePath);
   const [memText, setMemText] = useState("");
   const [memCategory, setMemCategory] = useState("fact");
+  const [memScope, setMemScope] = useState<"global" | "project">("global");
   const [memQuery, setMemQuery] = useState("");
   const [memList, setMemList] = useState<Memory[]>([]);
   const [memStatus, setMemStatus] = useState("");
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [editMemoryText, setEditMemoryText] = useState("");
+  const [editMemoryCategory, setEditMemoryCategory] = useState("fact");
+  const [editMemoryScope, setEditMemoryScope] = useState<"global" | "project">("global");
   const [workspaceName, setWorkspaceName] = useState("");
   const [documentStatus, setDocumentStatus] = useState("");
   const [retrievalQuery, setRetrievalQuery] = useState("");
@@ -735,7 +745,10 @@ function MemorySettings() {
     if (!memText.trim()) return;
     try {
       const { addMemory } = await import("../../lib/memory");
-      await addMemory(memText, memCategory);
+      await addMemory(memText, memCategory, {
+        scope: memScope,
+        workspacePath: memScope === "project" ? workspacePath : null,
+      });
       setMemText("");
       setMemStatus("Memory saved.");
       refreshMemories();
@@ -762,6 +775,31 @@ function MemorySettings() {
       await deleteMemory(id);
       refreshMemories();
     } catch { /* ignore */ }
+  };
+
+  const startEditMemory = (memory: Memory) => {
+    setEditingMemoryId(memory.id);
+    setEditMemoryText(memory.text);
+    setEditMemoryCategory(memory.category);
+    setEditMemoryScope(memory.scope === "project" ? "project" : "global");
+  };
+
+  const saveEditMemory = async () => {
+    if (!editingMemoryId || !editMemoryText.trim()) return;
+    try {
+      const { updateMemory } = await import("../../lib/memory");
+      await updateMemory(editingMemoryId, {
+        text: editMemoryText,
+        category: editMemoryCategory,
+        scope: editMemoryScope,
+        workspacePath: editMemoryScope === "project" ? workspacePath : null,
+      });
+      setEditingMemoryId(null);
+      setMemStatus("Memory updated.");
+      refreshMemories();
+    } catch (e) {
+      setMemStatus(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const ensureDocumentWorkspace = () => {
@@ -903,8 +941,14 @@ function MemorySettings() {
           <ToggleRow enabled={ragSettings.conversationMemory} onToggle={(v) => setRagSettings({ ...ragSettings, conversationMemory: v })} title="Conversation memory" description="Use conversation-specific facts." />
           <ToggleRow enabled={ragSettings.retrievalPreview} onToggle={(v) => setRagSettings({ ...ragSettings, retrievalPreview: v })} title="Retrieval preview" description="Show retrieved snippets." />
           <ToggleRow enabled={ragSettings.provenance} onToggle={(v) => setRagSettings({ ...ragSettings, provenance: v })} title="Provenance" description="Track where context came from." />
+          <ToggleRow enabled={memoryExtractionSettings.enabled} onToggle={(v) => setMemoryExtractionSettings({ ...memoryExtractionSettings, enabled: v })} title="Automatic extraction" description="Conservatively save explicit durable facts after a turn." />
+          <ToggleRow enabled={memoryExtractionSettings.globalScope} onToggle={(v) => setMemoryExtractionSettings({ ...memoryExtractionSettings, globalScope: v })} title="Global extraction" description="Allow user-level preferences and stable facts." />
+          <ToggleRow enabled={memoryExtractionSettings.projectScope} onToggle={(v) => setMemoryExtractionSettings({ ...memoryExtractionSettings, projectScope: v })} title="Project extraction" description="Allow repo/workspace-specific facts." />
           <Field label="Max retrieved">
             <TextInput type="number" min={1} max={24} value={ragSettings.maxRetrievedMemories} onChange={(e) => setRagSettings({ ...ragSettings, maxRetrievedMemories: Number(e.target.value) || 8 })} />
+          </Field>
+          <Field label="Max extracted">
+            <TextInput type="number" min={1} max={8} value={memoryExtractionSettings.maxCandidatesPerTurn} onChange={(e) => setMemoryExtractionSettings({ ...memoryExtractionSettings, maxCandidatesPerTurn: Number(e.target.value) || 3 })} />
           </Field>
         </div>
       </SettingsGroup>
@@ -1033,12 +1077,16 @@ function MemorySettings() {
       </SettingsGroup>
 
       <SettingsGroup title="Add memory" description="Save a fact, preference, or task for future retrieval.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_1fr]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[120px_120px_1fr]">
           <Select value={memCategory} onChange={(e) => setMemCategory(e.target.value)}>
             <option value="fact">Fact</option>
             <option value="preference">Preference</option>
             <option value="project">Project</option>
             <option value="task">Task</option>
+          </Select>
+          <Select value={memScope} onChange={(e) => setMemScope(e.target.value as "global" | "project")}>
+            <option value="global">Global</option>
+            <option value="project">Project</option>
           </Select>
           <div className="flex gap-2">
             <TextInput value={memText} onChange={(e) => setMemText(e.target.value)} placeholder="What should goatLLM remember?" className="flex-1" />
@@ -1057,14 +1105,44 @@ function MemorySettings() {
           {memStatus && <p className="text-[11px] text-text-3">{memStatus}</p>}
           <div className="flex flex-col gap-1 max-h-[250px] overflow-y-auto">
             {memList.map((mem) => (
-              <div key={mem.id} className="rounded-lg border border-hairline bg-black/20 px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[10px] uppercase text-accent">{mem.category}</span>
-                    <p className="mt-0.5 text-[12px] text-text-2">{mem.text}</p>
+              <div key={mem.id} className="rounded-lg border border-hairline bg-surface-3 px-3 py-2">
+                {editingMemoryId === mem.id ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[120px_120px_1fr]">
+                      <Select value={editMemoryCategory} onChange={(e) => setEditMemoryCategory(e.target.value)}>
+                        <option value="fact">Fact</option>
+                        <option value="preference">Preference</option>
+                        <option value="project">Project</option>
+                        <option value="task">Task</option>
+                      </Select>
+                      <Select value={editMemoryScope} onChange={(e) => setEditMemoryScope(e.target.value as "global" | "project")}>
+                        <option value="global">Global</option>
+                        <option value="project">Project</option>
+                      </Select>
+                      <TextInput value={editMemoryText} onChange={(e) => setEditMemoryText(e.target.value)} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={saveEditMemory} className="primary-action rounded-md px-3 py-1 text-[11px] font-medium">Save</button>
+                      <button onClick={() => setEditingMemoryId(null)} className="control-pill rounded-md px-3 py-1 text-[11px]">Cancel</button>
+                    </div>
                   </div>
-                  <button onClick={() => deleteMem(mem.id)} className="control-icon p-0.5 rounded text-text-3 hover:text-red-400 shrink-0"><Trash2 size={12} /></button>
-                </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] uppercase text-accent">{mem.category}</span>
+                        <span className="text-[10px] uppercase text-text-3">{mem.scope ?? "global"}</span>
+                        {mem.auto_extracted && <span className="text-[10px] uppercase text-text-3">auto</span>}
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-text-2">{mem.text}</p>
+                      <p className="mt-1 text-[10.5px] text-text-3">{buildMemoryProvenance(mem)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button onClick={() => startEditMemory(mem)} className="control-icon rounded p-1 text-text-3 hover:text-text-1" aria-label="Edit memory"><Edit3 size={12} /></button>
+                      <button onClick={() => deleteMem(mem.id)} className="control-icon rounded p-1 text-text-3 hover:text-error" aria-label="Delete memory"><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -50,6 +50,14 @@ import {
   updateScheduledAgentAfterRun,
   type ScheduledAgentRun,
 } from "../lib/scheduled-agents";
+import {
+  DEFAULT_MEMORY_EXTRACTION_SETTINGS,
+  loadMemoryExtractionSettings,
+  loadMemoryExtractionSettingsFromJournal,
+  persistMemoryExtractionSettings,
+  sanitizeMemoryExtractionSettings,
+  type MemoryExtractionSettings,
+} from "../lib/memory-extraction";
 import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifact-edits";
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
@@ -1334,6 +1342,8 @@ export interface ChatStore {
   setSearchBackend: (backend: "searxng" | "tavily") => void;
   memoryEnabled: boolean;
   setMemoryEnabled: (enabled: boolean) => void;
+  memoryExtractionSettings: MemoryExtractionSettings;
+  setMemoryExtractionSettings: (settings: MemoryExtractionSettings) => void;
   searxngStatus: string | null;
   setSearxngStatus: (status: string | null) => void;
   workspaceHealthEnabled: boolean;
@@ -1682,6 +1692,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       freeWebSearchToken: "",
       searchBackend: "searxng",
       memoryEnabled: true,
+      memoryExtractionSettings: loadMemoryExtractionSettingsFromJournal(),
       searxngStatus: null,
       workspaceHealthEnabled: false,
       manualTasksEnabled: false,
@@ -3902,6 +3913,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ memoryEnabled: enabled });
         try { localStorage.setItem("goatllm-memory-enabled", enabled ? "true" : "false"); } catch {}
       },
+      setMemoryExtractionSettings: (settings) => {
+        const safe = sanitizeMemoryExtractionSettings(settings);
+        set({ memoryExtractionSettings: safe });
+        persistMemoryExtractionSettings(safe);
+      },
       setSearxngStatus: (status) => {
         set({ searxngStatus: status });
       },
@@ -4637,6 +4653,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
           const documentWorkspaces = await loadDocumentWorkspaces();
           const scheduledAgentState = await loadScheduledAgentState(sanitizeScheduledAgents);
+          const memoryExtractionSettings = await loadMemoryExtractionSettings();
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4670,6 +4687,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearchToken,
             searchBackend,
             memoryEnabled,
+            memoryExtractionSettings,
             searxngStatus: null,
             workspaceHealthEnabled,
             manualTasksEnabled,
@@ -4792,6 +4810,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             agents: sanitizeScheduledAgents(loadJsonValue<unknown>(SCHEDULED_AGENTS_KEY, [])),
             runs: sanitizeScheduledAgentRuns([]),
           }));
+          const memoryExtractionSettings = await loadMemoryExtractionSettings().catch(() => ({
+            ...DEFAULT_MEMORY_EXTRACTION_SETTINGS,
+          }));
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -4809,6 +4830,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             freeWebSearchToken,
             searchBackend,
             memoryEnabled,
+            memoryExtractionSettings,
             searxngStatus: null,
             workspaceHealthEnabled,
             manualTasksEnabled,

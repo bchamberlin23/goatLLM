@@ -30,6 +30,7 @@ import { providerSupportsNativePdf } from "../../../lib/native-pdf";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../../../lib/prompt-templates";
 import { readSkillFile } from "../../../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../../../lib/jjagent";
+import { extractAndPersistTurnMemories } from "../../../lib/memory-extraction";
 import type { ResearchProgress } from "../../../lib/deep-research";
 import { useSpeechToText } from "../../../lib/speech";
 
@@ -527,6 +528,8 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       }
     }
 
+    const sourceUserContent = displayContent;
+    let sourceUserMessageId: string | undefined;
     if (!isResend) {
       // Auto-pin messages that carry non-trivial attachments. Without this,
       // a 30KB PDF extraction can fall out of the recency budget on the next
@@ -535,7 +538,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       const hasHeavyAttachment =
         currentFiles.length > 0 &&
         currentFiles.some((f) => f.sizeBytes > 4 * 1024 || /\.(pdf|docx|pptx|xlsx|ipynb|rtf)$/i.test(f.filename));
-      addMessage({
+      const userMessage = addMessage({
         conversationId: convId,
         role: "user",
         content: displayContent,
@@ -543,6 +546,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         pinned: hasHeavyAttachment || undefined,
         steered: overrides?.steered || undefined,
       });
+      sourceUserMessageId = userMessage.id;
       logMessage(convId!, "user", displayContent, "");
       // Mark the conversation as "title pending" the moment the user sends so
       // the sidebar can show a shimmer instead of the placeholder "New chat".
@@ -1316,6 +1320,17 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         // Any remaining streaming flags from this message clear here so
         // the canvas auto-flips from code to preview view.
         finalizeStreamingArtifacts(convId!, assistantMsg.id);
+        const extractionSettings = getStore().memoryExtractionSettings;
+        if (getStore().memoryEnabled && extractionSettings.enabled) {
+          void extractAndPersistTurnMemories({
+            userText: sourceUserContent,
+            assistantText: displayContent,
+            workspacePath: currentWorkspace,
+            settings: extractionSettings,
+            conversationId: convId!,
+            sourceMessageIds: [sourceUserMessageId, assistantMsg.id].filter((id): id is string => !!id),
+          }).catch((e) => console.warn("Failed to extract memories:", e));
+        }
         // Title generation is kicked off when the user sends (see above), so
         // by the time we get here the conversation has usually been renamed
         // already. We just clear the shimmer flag if it somehow lingered.
