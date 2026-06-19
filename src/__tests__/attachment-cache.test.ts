@@ -9,12 +9,15 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   putAttachmentText,
   getAttachmentText,
+  getAttachmentImage,
+  listAttachmentImages,
   listAttachments,
   hasAttachments,
   clearConversation,
   readSlice,
   searchAttachment,
   buildPreview,
+  formatAttachmentImageReference,
   _resetForTests,
 } from "../lib/attachment-cache";
 
@@ -117,5 +120,62 @@ describe("attachment-cache", () => {
     const preview = buildPreview(entry);
     expect(preview).toContain("just three");
     expect(preview).not.toContain("middle elided");
+  });
+
+  it("stores PDF visual assets with the attachment text", () => {
+    const entry = putAttachmentText("c1", "worksheet.pdf", "PDF", "Problem text", {
+      visualAssets: [
+        {
+          id: "worksheet_p01_img01",
+          sourceFilename: "worksheet.pdf",
+          filename: "worksheet_p01_img01.jpg",
+          page: 1,
+          mimeType: "image/jpeg",
+          dataUrl: "data:image/jpeg;base64,abc123",
+          width: 640,
+          height: 480,
+        },
+      ],
+    });
+
+    expect(entry.visualAssets).toHaveLength(1);
+    expect(getAttachmentText("c1", "worksheet.pdf")?.visualAssets?.[0]?.id).toBe("worksheet_p01_img01");
+    expect(listAttachmentImages("c1", "worksheet.pdf").map((asset) => asset.id)).toEqual(["worksheet_p01_img01"]);
+  });
+
+  it("looks up a cached PDF image by filename and model-visible id", () => {
+    putAttachmentText("c1", "worksheet.pdf", "PDF", "Problem text", {
+      visualAssets: [
+        {
+          id: "worksheet_p02_img03",
+          sourceFilename: "worksheet.pdf",
+          filename: "worksheet_p02_img03.jpg",
+          page: 2,
+          mimeType: "image/jpeg",
+          dataUrl: "data:image/jpeg;base64,def456",
+        },
+      ],
+    });
+
+    const asset = getAttachmentImage("c1", "worksheet.pdf", "worksheet_p02_img03");
+    expect(asset?.dataUrl).toBe("data:image/jpeg;base64,def456");
+    expect(getAttachmentImage("c1", "other.pdf", "worksheet_p02_img03")).toBeUndefined();
+  });
+
+  it("formats Markdown image references that point back to cached assets", () => {
+    const ref = formatAttachmentImageReference({
+      id: "worksheet_p03_img01",
+      sourceFilename: "worksheet.pdf",
+      filename: "worksheet_p03_img01.jpg",
+      page: 3,
+      mimeType: "image/jpeg",
+      dataUrl: "data:image/jpeg;base64,abc123",
+      width: 800,
+      height: 600,
+    });
+
+    expect(ref).toBe(
+      "![worksheet_p03_img01 — page 3, 800x600](attachment-image://worksheet.pdf/worksheet_p03_img01)",
+    );
   });
 });

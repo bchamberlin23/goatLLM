@@ -16,6 +16,20 @@
  */
 import type { Attachment } from "../stores/chat";
 
+export interface AttachmentImageAsset {
+  /** Stable model-visible id, e.g. `worksheet_p03_img02`. */
+  id: string;
+  /** Original attachment filename this asset came from. */
+  sourceFilename: string;
+  /** Derived asset filename for display/download surfaces. */
+  filename: string;
+  page: number;
+  mimeType: string;
+  dataUrl: string;
+  width?: number;
+  height?: number;
+}
+
 export interface CachedAttachment {
   conversationId: string;
   filename: string;
@@ -35,6 +49,10 @@ export interface CachedAttachment {
    *  this to route through provider-native PDF parts (Anthropic) or to
    *  surface a clear "please use a vision model" note elsewhere. */
   scannedPdf?: boolean;
+  /** Visual assets extracted from a source document. For PDFs these are
+   *  image XObjects referenced from the Markdown body with
+   *  `attachment-image://<pdf>/<asset-id>` URLs. */
+  visualAssets?: AttachmentImageAsset[];
 }
 
 const cache = new Map<string, CachedAttachment>();
@@ -48,7 +66,7 @@ export function putAttachmentText(
   filename: string,
   kindLabel: string,
   fullText: string,
-  options?: { scannedPdf?: boolean },
+  options?: { scannedPdf?: boolean; visualAssets?: AttachmentImageAsset[] },
 ): CachedAttachment {
   const totalLines = fullText.split("\n").length;
   const outline = sniffOutline(fullText, kindLabel);
@@ -61,6 +79,7 @@ export function putAttachmentText(
     totalChars: fullText.length,
     outline,
     scannedPdf: options?.scannedPdf,
+    visualAssets: options?.visualAssets,
   };
   cache.set(key(conversationId, filename), entry);
   return entry;
@@ -90,11 +109,43 @@ export function listAttachments(conversationId: string): CachedAttachment[] {
   return out;
 }
 
+export function listAttachmentImages(
+  conversationId: string,
+  filename?: string,
+): AttachmentImageAsset[] {
+  const out: AttachmentImageAsset[] = [];
+  for (const entry of cache.values()) {
+    if (entry.conversationId !== conversationId) continue;
+    if (filename && entry.filename !== filename) continue;
+    out.push(...(entry.visualAssets ?? []));
+  }
+  return out;
+}
+
+export function getAttachmentImage(
+  conversationId: string,
+  filename: string,
+  imageId: string,
+): AttachmentImageAsset | undefined {
+  return getAttachmentText(conversationId, filename)?.visualAssets?.find(
+    (asset) => asset.id === imageId,
+  );
+}
+
 export function hasAttachments(conversationId: string): boolean {
   for (const v of cache.values()) {
     if (v.conversationId === conversationId) return true;
   }
   return false;
+}
+
+export function formatAttachmentImageReference(asset: AttachmentImageAsset): string {
+  const dimensions =
+    asset.width && asset.height ? `, ${asset.width}x${asset.height}` : "";
+  const label = `${asset.id} — page ${asset.page}${dimensions}`;
+  const source = encodeURIComponent(asset.sourceFilename);
+  const id = encodeURIComponent(asset.id);
+  return `![${label}](attachment-image://${source}/${id})`;
 }
 
 /** Drop everything for a conversation (e.g. on delete). */
