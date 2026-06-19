@@ -32,8 +32,7 @@ import { applyCompactionReplay } from "../../../lib/compaction/replay";
 import { extractAndAppend } from "../../../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../../../lib/url-fetch";
 import { log } from "../../../lib/logger";
-import { isLikelyScannedPdf } from "../../../lib/attachment-cache";
-import { providerSupportsNativePdf } from "../../../lib/native-pdf";
+import { pdfVisualPartsForMessage } from "../../../lib/pdf-visuals";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../../../lib/prompt-templates";
 import { readSkillFile } from "../../../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../../../lib/jjagent";
@@ -764,23 +763,21 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       if (m.role === "user" && typeof m.content === "string") {
         // Re-attach native binary parts from the original message if present.
         // - Images go through every vision-capable provider.
-        // - Scanned/empty-text PDFs go as native file parts to Anthropic
-        //   (server-side OCR + layout); on other providers they fall back
-        //   to the inlined `(no extractable text)` note plus a hint.
+        // - PDFs go as native file parts to providers that support PDF input.
+        // - Other vision providers receive extracted PDF image assets that
+        //   correspond to the Markdown `attachment-image://...` references.
         const origMsg = history.find((h) => h.role === "user" && h.content === m.content);
         const imgs = origMsg?.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-        const nativePdf =
-          modelIsVision && providerSupportsNativePdf(llmConfig.provider);
-        const scannedPdfs = nativePdf
-          ? (origMsg?.attachments?.filter((a) =>
-              (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
-              isLikelyScannedPdf(convId!, a.filename),
-            ) ?? [])
+        const pdfVisualParts = origMsg?.attachments
+          ? pdfVisualPartsForMessage(convId!, origMsg.attachments, {
+              modelIsVision,
+              provider: llmConfig.provider,
+            })
           : [];
-        if (imgs.length > 0 || scannedPdfs.length > 0) {
+        if (imgs.length > 0 || pdfVisualParts.length > 0) {
           const parts: LlmContentPart[] = [];
           for (const img of imgs) parts.push({ type: "image", image: img.dataUrl, mimeType: img.mimeType });
-          for (const pdf of scannedPdfs) parts.push({ type: "file", data: pdf.dataUrl, mimeType: "application/pdf" });
+          parts.push(...pdfVisualParts);
           if (m.content.trim()) parts.unshift({ type: "text", text: m.content as string });
           return { role: "user" as const, content: parts };
         }
