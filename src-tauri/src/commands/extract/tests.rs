@@ -1,3 +1,4 @@
+use super::pdf_images::{mime_type_for_filters, pdf_asset_id};
 use super::*;
 
 #[test]
@@ -14,4 +15,25 @@ fn test_cap_text_does_not_split_utf8() {
     let capped = cap_text("नमस्ते world".to_string(), 5);
     assert!(capped.starts_with("न"));
     assert!(capped.contains("more characters truncated"));
+}
+
+#[test]
+fn test_pdf_asset_id_sanitizes_filename_and_uses_page_and_index() {
+    assert_eq!(
+        pdf_asset_id("Physics HW #1.pdf", 3, 12),
+        "physics_hw_1_p03_img12"
+    );
+}
+
+#[test]
+fn test_pdf_image_mime_type_for_supported_filters() {
+    assert_eq!(
+        mime_type_for_filters(&["DCTDecode".to_string()]),
+        Some("image/jpeg")
+    );
+    assert_eq!(
+        mime_type_for_filters(&["JPXDecode".to_string()]),
+        Some("image/jp2")
+    );
+    assert_eq!(mime_type_for_filters(&["FlateDecode".to_string()]), None);
 }

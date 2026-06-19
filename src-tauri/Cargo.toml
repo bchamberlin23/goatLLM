@@ -21,6 +21,7 @@ base64 = "0.22"
 rand = "0.8"
 sha2 = "0.10"
 pdf-extract = "0.7"
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }
 zip = "0.6"
 calamine = "0.24"
 quick-xml = "0.31"

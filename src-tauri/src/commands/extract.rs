@@ -1,5 +1,6 @@
 pub(crate) mod ocr_audio;
 pub(crate) mod office;
+pub(crate) mod pdf_images;
 
 use std::fs;
 use std::sync::Mutex;
@@ -8,6 +9,7 @@ pub(crate) use ocr_audio::{
     audio_transcription_available, ocr_available, ocr_image, transcribe_audio,
 };
 pub(crate) use office::{extract_docx_text, extract_pptx_text, extract_xlsx_text};
+pub(crate) use pdf_images::extract_pdf_images;
 
 use super::workspace::{check_denylist_ws, get_ws_patterns, resolve_path, WorkspaceState};
 

@@ -1359,6 +1359,7 @@ dependencies = [
  "calamine",
  "dirs 5.0.1",
  "glob",
+ "lopdf",
  "notify",
  "pdf-extract",
  "quick-xml 0.31.0",

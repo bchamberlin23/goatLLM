@@ -1,15 +1,15 @@
 #![allow(unused_imports)]
 
-pub(crate) mod db;
 pub(crate) mod codex;
+pub(crate) mod db;
 pub(crate) mod documents;
 pub(crate) mod embeddings;
 pub(crate) mod extract;
 pub(crate) mod files;
 pub(crate) mod git;
 pub(crate) mod latex;
-pub(crate) mod memory;
 pub(crate) mod meetings;
+pub(crate) mod memory;
 pub(crate) mod misc;
 pub(crate) mod scheduled_agents;
 pub(crate) mod search;
@@ -22,20 +22,20 @@ pub(crate) use codex::{
     openai_codex_oauth_complete, openai_codex_oauth_start, openai_codex_stream,
 };
 pub(crate) use db::{
-    delete_conversation_db, delete_message_db, get_events, load_all_data,
-    load_compaction_entries, load_messages_for_conversation, log_event, save_compaction_entry,
-    save_conversation, save_message, search_messages,
+    delete_conversation_db, delete_message_db, get_events, load_all_data, load_compaction_entries,
+    load_messages_for_conversation, log_event, save_compaction_entry, save_conversation,
+    save_message, search_messages,
 };
 pub(crate) use documents::{
-    document_chunks_delete, document_chunks_replace, document_chunks_search, document_workspace_delete,
-    document_workspace_save, document_workspaces_load,
+    document_chunks_delete, document_chunks_replace, document_chunks_search,
+    document_workspace_delete, document_workspace_save, document_workspaces_load,
 };
 pub(crate) use embeddings::{
     embeddings_clear, embeddings_count, embeddings_insert, embeddings_search, workspace_chunks,
 };
 pub(crate) use extract::{
-    audio_transcription_available, extract_docx_text, extract_pdf_text, extract_pptx_text,
-    extract_xlsx_text, ocr_available, ocr_image, read_pdf, transcribe_audio,
+    audio_transcription_available, extract_docx_text, extract_pdf_images, extract_pdf_text,
+    extract_pptx_text, extract_xlsx_text, ocr_available, ocr_image, read_pdf, transcribe_audio,
 };
 pub(crate) use files::{
     copy_dir_abs, create_dir_abs, delete_file, goat_agent_dir, home_dir, list_dir, list_dir_abs,
@@ -44,11 +44,11 @@ pub(crate) use files::{
 };
 pub(crate) use git::{diff_file, git_blame, git_branch, git_commit, git_log, git_push, git_status};
 pub(crate) use latex::compile_latex;
+pub(crate) use meetings::{meetings_load, meetings_save};
 pub(crate) use memory::{
     memory_delete, memory_increment_uses, memory_insert, memory_list, memory_search,
     memory_search_text, memory_settings_load, memory_settings_save, memory_update,
 };
-pub(crate) use meetings::{meetings_load, meetings_save};
 pub(crate) use misc::{
     run_python, sync_export_state, sync_import_state, unwatch_workspace, watch_workspace,
 };
@@ -121,6 +121,7 @@ macro_rules! generate_handler {
             crate::commands::embeddings::embeddings_count,
             crate::commands::extract::read_pdf,
             crate::commands::extract::extract_pdf_text,
+            crate::commands::extract::pdf_images::extract_pdf_images,
             crate::commands::extract::office::extract_docx_text,
             crate::commands::extract::office::extract_pptx_text,
             crate::commands::extract::office::extract_xlsx_text,
