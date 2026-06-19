@@ -67,7 +67,9 @@ describe("pdfVisualPartsForMessage", () => {
     });
 
     expect(parts).toEqual([
+      { type: "text", text: "[PDF image asset: worksheet_p01_img01 from worksheet.pdf, page 1]" },
       { type: "image", image: "data:image/jpeg;base64,img1", mimeType: "image/jpeg" },
+      { type: "text", text: "[PDF image asset: worksheet_p02_img01 from worksheet.pdf, page 2]" },
       { type: "image", image: "data:image/jpeg;base64,img2", mimeType: "image/jpeg" },
     ]);
   });

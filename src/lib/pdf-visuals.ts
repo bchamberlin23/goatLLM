@@ -28,14 +28,20 @@ export function pdfVisualPartsForMessage(
   }
 
   const parts: LlmContentPart[] = [];
+  let imagesAdded = 0;
   for (const pdf of pdfs) {
     for (const asset of listAttachmentImages(conversationId, pdf.filename)) {
-      if (parts.length >= MAX_PDF_IMAGE_PARTS) return parts;
+      if (imagesAdded >= MAX_PDF_IMAGE_PARTS) return parts;
+      parts.push({
+        type: "text",
+        text: `[PDF image asset: ${asset.id} from ${pdf.filename}, page ${asset.page}]`,
+      });
       parts.push({
         type: "image",
         image: asset.dataUrl,
         mimeType: asset.mimeType,
       });
+      imagesAdded += 1;
     }
   }
   return parts;
