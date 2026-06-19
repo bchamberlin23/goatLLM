@@ -12,6 +12,10 @@
  * spreadsheets, or PDFs and have the assistant actually read them.
  */
 import type { Attachment } from "../stores/chat";
+import {
+  formatAttachmentImageReference,
+  type AttachmentImageAsset,
+} from "./attachment-cache";
 
 export type AttachmentKind =
   | "image"
@@ -264,6 +268,31 @@ export interface ExtractedAttachment {
    *  was empty/near-empty). The send pipeline routes these through native
    *  PDF parts on Anthropic; other providers see the inline note. */
   scannedPdf?: boolean;
+  /** Visual assets extracted from a document. For PDFs these are image
+   *  XObjects referenced from the Markdown body and cached for vision models. */
+  visualAssets?: AttachmentImageAsset[];
+}
+
+interface PdfImageExtraction {
+  pageCount: number;
+  assets: AttachmentImageAsset[];
+}
+
+function normalizePdfAssets(
+  filename: string,
+  extraction: PdfImageExtraction | null | undefined,
+): AttachmentImageAsset[] {
+  return (extraction?.assets ?? []).map((asset) => ({
+    ...asset,
+    sourceFilename: asset.sourceFilename || filename,
+  }));
+}
+
+function appendPdfVisualReferences(body: string, assets: AttachmentImageAsset[]): string {
+  if (assets.length === 0) return body;
+  const refs = assets.map(formatAttachmentImageReference).join("\n");
+  const heading = assets.length === 1 ? "Extracted PDF image" : "Extracted PDF images";
+  return `${body.trim()}\n\n### ${heading}\n${refs}`.trim();
 }
 
 /** Extract one attachment to a `[Kind: name]\n<body>` block ready to inline
@@ -363,6 +392,16 @@ export async function extractAttachment(att: Attachment): Promise<ExtractedAttac
       const { invoke } = await import("@tauri-apps/api/core");
       const text = await invoke<string>(cmd, { dataUrl: att.dataUrl });
       const trimmed = text.trim();
+      const visualAssets =
+        kind === "pdf"
+          ? normalizePdfAssets(
+              att.filename,
+              await invoke<PdfImageExtraction>("extract_pdf_images", {
+                dataUrl: att.dataUrl,
+                filename: att.filename,
+              }).catch(() => ({ pageCount: 0, assets: [] })),
+            )
+          : [];
       // A PDF that yields almost no text after a successful parse is almost
       // certainly a scan. Threshold matches what `pdf-extract` typically
       // emits even on scanned pages (page numbers, margins, signatures —
@@ -375,12 +414,14 @@ export async function extractAttachment(att: Attachment): Promise<ExtractedAttac
         looksScanned && trimmed.length > 0
           ? `${scannedNote}\n\n${trimmed}`
           : trimmed || fallback;
+      const rawBody = appendPdfVisualReferences(body, visualAssets);
       return {
         kind,
         label,
-        rawBody: trimmed,
+        rawBody,
         scannedPdf: looksScanned,
-        inlinedText: `[${label}: ${att.filename} (${sizeStr})]\n${body}`,
+        visualAssets,
+        inlinedText: `[${label}: ${att.filename} (${sizeStr})]\n${rawBody}`,
       };
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
@@ -433,7 +474,7 @@ export async function extractAndAppend(
           att.filename,
           b.label ?? "File",
           b.rawBody,
-          { scannedPdf: b.scannedPdf },
+          { scannedPdf: b.scannedPdf, visualAssets: b.visualAssets },
         );
       }
     }

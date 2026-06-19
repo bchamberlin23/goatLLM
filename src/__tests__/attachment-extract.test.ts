@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { classify, extractAttachment, extractAndAppend } from "../lib/attachment-extract";
+import { getAttachmentText, _resetForTests } from "../lib/attachment-cache";
 import { stripAttachmentMarkers } from "../components/AttachmentChips";
 import type { Attachment } from "../stores/chat";
 
@@ -17,9 +18,25 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "extract_docx_text") return "Word body";
     if (cmd === "extract_pptx_text") return "Slide body";
     if (cmd === "extract_xlsx_text") return "Sheet body";
+    if (cmd === "extract_pdf_images") return { pageCount: 1, assets: [] };
     throw new Error(`unexpected cmd ${cmd} for ${args.dataUrl.slice(0, 20)}`);
   }),
 }));
+
+async function resetInvokeMock() {
+  const mod = await import("@tauri-apps/api/core");
+  (mod.invoke as unknown as ReturnType<typeof vi.fn>).mockReset();
+  (mod.invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    async (cmd: string, args: { dataUrl: string }) => {
+      if (cmd === "extract_pdf_text") return "PDF body";
+      if (cmd === "extract_docx_text") return "Word body";
+      if (cmd === "extract_pptx_text") return "Slide body";
+      if (cmd === "extract_xlsx_text") return "Sheet body";
+      if (cmd === "extract_pdf_images") return { pageCount: 1, assets: [] };
+      throw new Error(`unexpected cmd ${cmd} for ${args.dataUrl.slice(0, 20)}`);
+    },
+  );
+}
 
 function mk(filename: string, mimeType: string, body = "hello"): Attachment {
   const dataUrl = `data:${mimeType || "application/octet-stream"};base64,${btoa(body)}`;
@@ -62,7 +79,10 @@ describe("classify()", () => {
 });
 
 describe("extractAttachment()", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(async () => {
+    await resetInvokeMock();
+    _resetForTests();
+  });
 
   it("inlines plain text under a [File: ...] header", async () => {
     const r = await extractAttachment(mk("notes.txt", "text/plain", "study hard"));
@@ -122,6 +142,39 @@ describe("extractAttachment()", () => {
     expect(r.scannedPdf).toBeFalsy();
     expect(r.inlinedText).toContain("Lorem ipsum");
   });
+
+  it("adds Markdown image references for extracted PDF visual assets", async () => {
+    const mod = await import("@tauri-apps/api/core");
+    (mod.invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+      if (cmd === "extract_pdf_text") return "Question text before the diagram.";
+      if (cmd === "extract_pdf_images") {
+        return {
+          pageCount: 1,
+          assets: [
+            {
+              id: "worksheet_p01_img01",
+              sourceFilename: "worksheet.pdf",
+              filename: "worksheet_p01_img01.jpg",
+              page: 1,
+              mimeType: "image/jpeg",
+              dataUrl: "data:image/jpeg;base64,abc123",
+              width: 640,
+              height: 480,
+            },
+          ],
+        };
+      }
+      return "";
+    });
+
+    const r = await extractAttachment(mk("worksheet.pdf", "application/pdf"));
+
+    expect(r.inlinedText).toContain("Question text before the diagram.");
+    expect(r.inlinedText).toContain(
+      "![worksheet_p01_img01 — page 1, 640x480](attachment-image://worksheet.pdf/worksheet_p01_img01)",
+    );
+    expect(r.visualAssets?.map((asset) => asset.id)).toEqual(["worksheet_p01_img01"]);
+  });
 });
 
 describe("stripAttachmentMarkers()", () => {
@@ -151,12 +204,44 @@ describe("stripAttachmentMarkers()", () => {
 });
 
 describe("extractAndAppend() multi-attachment budget", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(async () => {
+    await resetInvokeMock();
+    _resetForTests();
+  });
 
   it("keeps the inlined body for a single small PDF intact", async () => {
     const out = await extractAndAppend("summarize", [mk("a.pdf", "application/pdf")]);
     expect(out).toContain("[PDF: a.pdf");
     expect(out).toContain("PDF body");
     expect(out).not.toContain("omitted to fit context");
+  });
+
+  it("caches extracted PDF visual assets for model image access", async () => {
+    const mod = await import("@tauri-apps/api/core");
+    (mod.invoke as unknown as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+      if (cmd === "extract_pdf_text") return "Problem text.";
+      if (cmd === "extract_pdf_images") {
+        return {
+          pageCount: 1,
+          assets: [
+            {
+              id: "problem_p01_img01",
+              sourceFilename: "problem.pdf",
+              filename: "problem_p01_img01.jpg",
+              page: 1,
+              mimeType: "image/jpeg",
+              dataUrl: "data:image/jpeg;base64,abc123",
+            },
+          ],
+        };
+      }
+      return "";
+    });
+
+    await extractAndAppend("solve", [mk("problem.pdf", "application/pdf")], "c1");
+
+    expect(getAttachmentText("c1", "problem.pdf")?.visualAssets?.[0]?.dataUrl).toBe(
+      "data:image/jpeg;base64,abc123",
+    );
   });
 });
