@@ -542,7 +542,7 @@ button:not(:disabled):active {
   --theme-glow-rgb: var(--theme-accent-rgb);
 }
 .mode-mesh {
-  --theme-glow-rgb: 245, 158, 66;
+  --theme-glow-rgb: var(--theme-accent-rgb);
 }
 .mode-lavender {
   --theme-glow-rgb: 99, 102, 241;
@@ -588,7 +588,7 @@ button:not(:disabled):active {
 .liquid-glow-field.mode-mesh {
   background:
     radial-gradient(740px 500px at var(--glow-x, 52%) var(--glow-y, 8%), rgba(var(--theme-glow-rgb), 0.13), rgba(var(--theme-glow-rgb), 0.035) 34%, transparent 68%),
-    radial-gradient(920px 680px at 78% 112%, rgba(255, 190, 112, 0.055), transparent 64%),
+    radial-gradient(920px 680px at 78% 112%, rgba(var(--theme-glow-rgb), 0.055), transparent 64%),
     radial-gradient(820px 620px at 6% -8%, rgba(255, 255, 255, 0.038), transparent 62%);
   filter: blur(18px) saturate(1.08);
 }
@@ -598,7 +598,7 @@ button:not(:disabled):active {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.026), transparent 28%, rgba(245, 158, 66, 0.026) 58%, transparent 82%),
+    linear-gradient(115deg, rgba(255, 255, 255, 0.026), transparent 28%, rgba(var(--theme-glow-rgb), 0.026) 58%, transparent 82%),
     linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px);
   background-size: 100% 100%, 24px 24px, 24px 24px;

@@ -129,7 +129,7 @@ export function InterfaceTab() {
             </div>
             <span className="text-[11px] leading-relaxed text-text-4 mt-1">
               {glowBackgroundMode === "match" && "Seamlessly mirrors your current theme color as a dynamic ambient gradient."}
-              {glowBackgroundMode === "mesh" && "Signature Amber tri-gradient with a subtle tech mesh grid overlay."}
+              {glowBackgroundMode === "mesh" && "Your theme color with a subtle tech mesh grid overlay."}
               {glowBackgroundMode === "lavender" && "Extremely soft lavender/indigo blending for minimal distraction."}
               {glowBackgroundMode === "fluid" && "Active lava-lamp liquid flow with floating blobs that follow the cursor."}
               {glowBackgroundMode === "aurora" && "Diagonal waves of green, teal, and purple northern lights."}

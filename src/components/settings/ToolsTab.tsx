@@ -498,7 +498,7 @@ export function ToolsTab() {
                                 ? "bg-blue-500/10 text-blue-400"
                                 : m.category === "task"
                                   ? "bg-green-500/10 text-green-400"
-                                  : "bg-orange-500/10 text-accent"
+                                  : "bg-accent/10 text-accent"
                           }`}>
                             {m.category}
                           </span>
