@@ -501,8 +501,8 @@ button:not(:disabled):active {
 
 /* --- Ambient glow field custom modes --- */
 
-/* 1. Blocky mode (Classic glow with grid lines) */
-.liquid-glow-field.mode-blocky {
+/* 1. Mesh mode (Classic glow with grid lines) */
+.liquid-glow-field.mode-mesh {
   background:
     radial-gradient(740px 500px at var(--glow-x, 52%) var(--glow-y, 8%), rgba(245, 158, 66, 0.13), rgba(245, 158, 66, 0.035) 34%, transparent 68%),
     radial-gradient(920px 680px at 78% 112%, rgba(255, 190, 112, 0.055), transparent 64%),
@@ -510,7 +510,7 @@ button:not(:disabled):active {
   filter: blur(18px) saturate(1.08);
 }
 
-.liquid-glow-field.mode-blocky::after {
+.liquid-glow-field.mode-mesh::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -523,8 +523,8 @@ button:not(:disabled):active {
   opacity: 0.7;
 }
 
-/* 2. Smooth mode (Velvety, soft pastel) */
-.liquid-glow-field.mode-smooth {
+/* 2. Lavender mode (Velvety, soft pastel) */
+.liquid-glow-field.mode-lavender {
   background:
     radial-gradient(1000px 700px at var(--glow-x, 52%) var(--glow-y, 10%), rgba(99, 102, 241, 0.08), rgba(99, 102, 241, 0.01) 40%, transparent 70%),
     radial-gradient(1200px 800px at 85% 90%, rgba(236, 72, 153, 0.03), transparent 60%),
@@ -533,7 +533,7 @@ button:not(:disabled):active {
   opacity: 0.85;
 }
 
-.liquid-glow-field.mode-smooth::after {
+.liquid-glow-field.mode-lavender::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1048,5 +1048,35 @@ button:not(:disabled):active {
 
 .dr-drawer-backdrop {
   animation: dr-fade-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+/* Traveling Border Beam Animation */
+.animate-border-beam {
+  stroke-dasharray: 20 80;
+  animation: border-beam 4s linear infinite;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 8px rgba(245, 158, 66, 0.6));
+}
+
+@keyframes border-beam {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+.composer-surface.animated-border {
+  /* Reduce/remove static orange glow to let the border beam stand out */
+  box-shadow:
+    0 24px 70px -34px rgba(0, 0, 0, 0.92),
+    0 1px 0 rgba(255, 255, 255, 0.065) inset;
+}
+.composer-surface.animated-border:focus-within {
+  box-shadow:
+    0 26px 80px -38px rgba(0, 0, 0, 0.98),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset !important;
 }
 

@@ -1503,8 +1503,10 @@ export interface ChatStore {
 
   glowBackgroundEnabled: boolean;
   setGlowBackgroundEnabled: (enabled: boolean) => void;
-  glowBackgroundMode: "blocky" | "smooth" | "fluid" | "aurora" | "cyberpunk" | "nebula";
-  setGlowBackgroundMode: (mode: "blocky" | "smooth" | "fluid" | "aurora" | "cyberpunk" | "nebula") => void;
+  animatedBorderEnabled: boolean;
+  setAnimatedBorderEnabled: (enabled: boolean) => void;
+  glowBackgroundMode: "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula";
+  setGlowBackgroundMode: (mode: "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula") => void;
 
   /** When true (default), a subtle click sound plays when an agent/design
    *  turn completes. When false, completion is silent. */
@@ -1793,7 +1795,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       advancedArtifacts: true,
       showDesignCritique: false,
       glowBackgroundEnabled: false,
-      glowBackgroundMode: "blocky",
+      glowBackgroundMode: "mesh",
+      animatedBorderEnabled: false,
       completionSound: true,
       subagentsEnabled: true,
       // ── Skills ──
@@ -4253,6 +4256,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-glow-bg-enabled", enabled ? "true" : "false"); } catch {}
       },
 
+      setAnimatedBorderEnabled: (enabled) => {
+        set({ animatedBorderEnabled: enabled });
+        try { localStorage.setItem("goatllm-animated-border-enabled", enabled ? "true" : "false"); } catch {}
+      },
+
       setGlowBackgroundMode: (mode) => {
         set({ glowBackgroundMode: mode });
         try { localStorage.setItem("goatllm-glow-bg-mode", mode); } catch {}
@@ -4797,8 +4805,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const advancedArtifacts = localStorage.getItem("goatllm-advanced-artifacts") !== "false";
         const showDesignCritique = localStorage.getItem("goatllm-show-design-critique") === "true";
         const glowBackgroundEnabled = localStorage.getItem("goatllm-glow-bg-enabled") === "true";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
-        const glowBackgroundMode = (localStorage.getItem("goatllm-glow-bg-mode") as any) || "blocky";
+        let glowBackgroundMode = (localStorage.getItem("goatllm-glow-bg-mode") as any) || "mesh";
+        if (glowBackgroundMode === "blocky") glowBackgroundMode = "mesh";
+        if (glowBackgroundMode === "smooth") glowBackgroundMode = "lavender";
+        const animatedBorderEnabled = localStorage.getItem("goatllm-animated-border-enabled") === "true";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
         const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
         try {
@@ -5027,6 +5037,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             showDesignCritique,
             glowBackgroundEnabled,
             glowBackgroundMode,
+            animatedBorderEnabled,
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
@@ -5174,6 +5185,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             showDesignCritique,
             glowBackgroundEnabled,
             glowBackgroundMode,
+            animatedBorderEnabled,
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,

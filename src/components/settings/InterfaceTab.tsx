@@ -34,6 +34,8 @@ export function InterfaceTab() {
   const setCompletionSound = useChatStore((s) => s.setCompletionSound);
   const glowBackgroundEnabled = useChatStore((s) => s.glowBackgroundEnabled);
   const setGlowBackgroundEnabled = useChatStore((s) => s.setGlowBackgroundEnabled);
+  const animatedBorderEnabled = useChatStore((s) => s.animatedBorderEnabled);
+  const setAnimatedBorderEnabled = useChatStore((s) => s.setAnimatedBorderEnabled);
   const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
   const setGlowBackgroundMode = useChatStore((s) => s.setGlowBackgroundMode);
   const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
@@ -81,11 +83,17 @@ export function InterfaceTab() {
           title="Enable dynamic background"
           description="Render a responsive ambient glow gradient that moves with your mouse."
         />
+        <ToggleRow
+          enabled={animatedBorderEnabled}
+          onToggle={setAnimatedBorderEnabled}
+          title="Animated input border glow"
+          description="Make the amber border highlight travel around the message input box."
+        />
         {glowBackgroundEnabled && (
           <div className="mt-3 flex flex-col gap-1.5 pl-1">
             <span className="text-[12px] font-medium text-text-2">Glow Mode</span>
             <div className="grid grid-cols-3 gap-2 mt-1 sm:grid-cols-6">
-              {(["blocky", "smooth", "fluid", "aurora", "cyberpunk", "nebula"] as const).map((mode) => (
+              {(["mesh", "lavender", "fluid", "aurora", "cyberpunk", "nebula"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -101,8 +109,8 @@ export function InterfaceTab() {
               ))}
             </div>
             <span className="text-[11px] leading-relaxed text-text-4 mt-1">
-              {glowBackgroundMode === "blocky" && "Original classic tri-gradient with tech mesh grid overlay."}
-              {glowBackgroundMode === "smooth" && "Extremely soft lavender/indigo blending for minimal distraction."}
+              {glowBackgroundMode === "mesh" && "Signature amber tri-gradient with a subtle tech mesh grid overlay."}
+              {glowBackgroundMode === "lavender" && "Extremely soft lavender/indigo blending for minimal distraction."}
               {glowBackgroundMode === "fluid" && "Active lava-lamp liquid flow with floating blobs that follow the cursor."}
               {glowBackgroundMode === "aurora" && "Diagonal waves of green, teal, and purple northern lights."}
               {glowBackgroundMode === "cyberpunk" && "Neon pink and blue pulse with a low-res scanline overlay."}

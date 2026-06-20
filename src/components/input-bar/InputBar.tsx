@@ -38,6 +38,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const tavilyApiKey = useChatStore((s) => s.tavilyApiKey);
   const searchBackend = useChatStore((s) => s.searchBackend);
   const featureFlags = useChatStore((s) => s.featureFlags);
+  const animatedBorderEnabled = useChatStore((s) => s.animatedBorderEnabled);
   const plusMenuVisibility = useChatStore((s) => s.plusMenuVisibility);
   const voiceSettings = useChatStore((s) => s.voiceSettings);
   const pendingDroppedFiles = useChatStore((s) => s.pendingDroppedFiles);
@@ -137,7 +138,24 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     <ImageGenModal providerConfigs={providerConfigs} imageGenSettings={imageGenSettings} activeId={activeId} addImageArtifact={addImageArtifact}>
       {({ open: openImageGen }) => (
       <div className="w-full max-w-[720px] min-w-0">
-      <div className={["composer-surface relative w-full min-w-0 rounded-[24px]", showPlusMenu || showSkillPicker ? "z-[95]" : "", isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4", "transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px"].join(" ")}>
+      <div className={["composer-surface relative w-full min-w-0 rounded-[24px]", animatedBorderEnabled ? "animated-border" : "", showPlusMenu || showSkillPicker ? "z-[95]" : "", isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4", "transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px"].join(" ")}>
+        {animatedBorderEnabled && (
+          <div className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ zIndex: 10 }}>
+            <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
+              <rect
+                x="0"
+                y="0"
+                width="100%"
+                height="100%"
+                rx="24"
+                ry="24"
+                fill="none"
+                className="animate-border-beam"
+                pathLength="100"
+              />
+            </svg>
+          </div>
+        )}
         <ComposerErrorBanner message={error} onDismiss={() => setError(null)} />
         <AttachmentChips files={files} onRemove={handleRemoveFile} />
         <SkillPicker open={false} activeId={activeId} activeSkillNames={activeSkillNames} pendingSkills={pendingSkills} skillsForCurrentMode={skillsForCurrentMode} discoveredSkillCount={discoveredSkills.length} disabledSkills={disabledSkills} agentMode={agentMode} onPendingSkillsChange={setPendingSkills} onConversationSkillsChange={setConversationSkills} onClose={() => setShowSkillPicker(false)} />
