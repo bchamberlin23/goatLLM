@@ -6,6 +6,13 @@ import { describe, expect, it } from "vitest";
 const readSource = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
 describe("theme accent consistency", () => {
+  it("inlines runtime accent variables into Tailwind utilities", () => {
+    const css = readSource("src/index.css");
+
+    expect(css).toContain("@theme inline {");
+    expect(css).toMatch(/@theme inline \{[\s\S]*?--color-accent: var\(--accent\);/);
+  });
+
   it("keeps user-selectable active states on the dynamic accent token", () => {
     const components = [
       "src/components/ModeToggle.tsx",
