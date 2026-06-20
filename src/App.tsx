@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from "./lib/keyboard";
 import { seedBuiltinSkills } from "./lib/skill-seed";
 import { loadAllSkills } from "./lib/skills";
 import { dueScheduledAgents } from "./lib/scheduled-agents";
+import { useAmbientGlowPosition } from "./lib/ambient-glow";
 
 async function refreshSkills() {
   const state = useChatStore.getState();
@@ -34,6 +35,8 @@ export default function App() {
   const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
+
+  useAmbientGlowPosition(mainRef, glowBackgroundEnabled);
 
   useEffect(() => { hydrate(); }, []);
   useEffect(() => {
@@ -140,15 +143,6 @@ export default function App() {
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
   const handleFocusInput = useCallback(() => useChatStore.getState().focusInput(), []);
-  const handleGlowMove = useCallback((event: PointerEvent<HTMLElement>) => {
-    const el = mainRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
-    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100;
-    el.style.setProperty("--glow-x", `${x}%`);
-    el.style.setProperty("--glow-y", `${y}%`);
-  }, []);
 
   useKeyboardShortcuts({
     onOpenSettings: handleOpenSettings,
@@ -168,7 +162,6 @@ export default function App() {
       <main
         ref={mainRef}
         className="flex-1 h-full flex flex-col relative overflow-hidden"
-        onPointerMove={handleGlowMove}
         style={{
           "--glow-x": "52%",
           "--glow-y": "8%",

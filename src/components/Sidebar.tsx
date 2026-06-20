@@ -404,7 +404,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
             <span className="shrink-0" aria-label="Generating">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.18" strokeWidth="3" />
-                <path d="M21 12a9 9 0 0 0-9-9" stroke="#f59e42" strokeWidth="3" strokeLinecap="round" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="sidebar-theme-accent" />
               </svg>
             </span>
           )}
@@ -588,9 +588,9 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
                     />
                   </button>
                   {isExpanded ? (
-                    <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
+                    <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "sidebar-theme-accent" : "text-[#888]"}`} aria-hidden="true" />
                   ) : (
-                    <Folder size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
+                    <Folder size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "sidebar-theme-accent" : "text-[#888]"}`} aria-hidden="true" />
                   )}
                   <span className={`text-[13px] truncate flex-1 ${isActiveProject ? "text-[#ececec] font-medium" : "text-[#d5d5d5]"}`}>
                     {name}
@@ -1106,7 +1106,7 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
             <span className="shrink-0" aria-label="Generating">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden="true">
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.18" strokeWidth="3" />
-                <path d="M21 12a9 9 0 0 0-9-9" stroke="#f59e42" strokeWidth="3" strokeLinecap="round" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="sidebar-theme-accent" />
               </svg>
             </span>
           )}
@@ -1290,9 +1290,9 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
                     />
                   </button>
                   {isExpanded ? (
-                    <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
+                    <FolderOpen size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "sidebar-theme-accent" : "text-[#888]"}`} aria-hidden="true" />
                   ) : (
-                    <Folder size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "text-[#f59e42]" : "text-[#888]"}`} aria-hidden="true" />
+                    <Folder size={14} strokeWidth={1.5} className={`shrink-0 ${isActiveProject ? "sidebar-theme-accent" : "text-[#888]"}`} aria-hidden="true" />
                   )}
                   <span className={`text-[13px] truncate flex-1 ${isActiveProject ? "text-[#ececec] font-medium" : "text-[#d5d5d5]"}`}>
                     {name}
@@ -1671,7 +1671,7 @@ function NotebookSidebar({ onOpenSettings }: SidebarProps) {
         {isActive && (
           <span
             aria-hidden
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-[2px] rounded-full bg-[#f59e42]"
+            className="sidebar-active-marker absolute left-2 top-1/2 -translate-y-1/2 h-3 w-[2px] rounded-full"
           />
         )}
         <span className="truncate flex-1">{nb.name}</span>
@@ -1999,7 +1999,7 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
         {isActive && (
           <span
             aria-hidden
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-[2px] rounded-full bg-[#f59e42]"
+            className="sidebar-active-marker absolute left-2 top-1/2 -translate-y-1/2 h-3 w-[2px] rounded-full"
           />
         )}
         <span className="truncate flex-1">
@@ -2037,9 +2037,10 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.18" strokeWidth="3" />
                 <path
                   d="M21 12a9 9 0 0 0-9-9"
-                  stroke="#f59e42"
+                  stroke="currentColor"
                   strokeWidth="3"
                   strokeLinecap="round"
+                  className="sidebar-theme-accent"
                 />
               </svg>
             </span>

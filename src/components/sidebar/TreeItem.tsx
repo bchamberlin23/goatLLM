@@ -19,7 +19,7 @@ function Spinner({ size = 12 }: { size?: number }) {
     <span className="inline-flex shrink-0" aria-label="Generating" title="Generating response">
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden="true">
         <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.18" strokeWidth="3" />
-        <path d="M21 12a9 9 0 0 0-9-9" stroke="#f59e42" strokeWidth="3" strokeLinecap="round" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="sidebar-theme-accent" />
       </svg>
     </span>
   );
@@ -75,7 +75,7 @@ export function TreeItem({
       }}
       onContextMenu={onContextMenu}
     >
-      {active && !inset && <span aria-hidden className="absolute left-2 top-1/2 h-3 w-[2px] -translate-y-1/2 rounded-full bg-accent" />}
+      {active && !inset && <span aria-hidden className="sidebar-active-marker absolute left-2 top-1/2 h-3 w-[2px] -translate-y-1/2 rounded-full" />}
       <span className="min-w-0 flex-1 truncate">
         <Title title={title} generating={isGeneratingTitle} />
       </span>
@@ -142,7 +142,7 @@ export function WorkspaceTreeItem({
       >
         <ChevronDown size={11} strokeWidth={2} className={`text-text-4 transition-transform ${expanded ? "" : "-rotate-90"}`} aria-hidden="true" />
       </button>
-      <Icon size={14} strokeWidth={1.5} className={`shrink-0 ${active ? "text-accent" : "text-text-4"}`} aria-hidden="true" />
+      <Icon size={14} strokeWidth={1.5} className={`shrink-0 ${active ? "sidebar-theme-accent" : "text-text-4"}`} aria-hidden="true" />
       <span className={`min-w-0 flex-1 truncate text-[13px] ${active ? "font-medium text-text-1" : "text-[#d5d5d5]"}`}>
         {name}
       </span>
