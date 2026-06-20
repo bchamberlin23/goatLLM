@@ -34,9 +34,9 @@ export default function App() {
   const glowBackgroundEnabled = useChatStore((s) => s.glowBackgroundEnabled);
   const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const mainRef = useRef<HTMLElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
 
-  useAmbientGlowPosition(mainRef, glowBackgroundEnabled);
+  useAmbientGlowPosition(shellRef, glowBackgroundEnabled);
 
   useEffect(() => { hydrate(); }, []);
   useEffect(() => {
@@ -152,33 +152,35 @@ export default function App() {
   });
 
   return (
-    <div className={`w-full h-screen flex overflow-hidden relative bg-bg mode-${glowBackgroundMode}`}>
+    <div
+      ref={shellRef}
+      className={`w-full h-screen flex overflow-hidden relative bg-bg mode-${glowBackgroundMode}`}
+      style={{
+        "--glow-x": "52%",
+        "--glow-y": "8%",
+      } as CSSProperties}
+    >
+      {glowBackgroundEnabled && (
+        <div className={`liquid-glow-field mode-${glowBackgroundMode}`} aria-hidden="true">
+          {glowBackgroundMode === "fluid" && (
+            <>
+              <div className="fluid-blob blob-1" />
+              <div className="fluid-blob blob-2" />
+              <div className="fluid-blob blob-3" />
+              <div className="fluid-blob blob-mouse" />
+            </>
+          )}
+        </div>
+      )}
       <div
-        className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
+        className="relative z-10 h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
         style={{ width: sidebarOpen ? 244 : 0 }}
       >
         <Sidebar onOpenSettings={handleOpenSettings} />
       </div>
       <main
-        ref={mainRef}
-        className="flex-1 h-full flex flex-col relative overflow-hidden"
-        style={{
-          "--glow-x": "52%",
-          "--glow-y": "8%",
-        } as CSSProperties}
+        className="relative z-10 flex-1 h-full flex flex-col overflow-hidden"
       >
-        {glowBackgroundEnabled && (
-          <div className={`liquid-glow-field mode-${glowBackgroundMode}`} aria-hidden="true">
-            {glowBackgroundMode === "fluid" && (
-              <>
-                <div className="fluid-blob blob-1" />
-                <div className="fluid-blob blob-2" />
-                <div className="fluid-blob blob-3" />
-                <div className="fluid-blob blob-mouse" />
-              </>
-            )}
-          </div>
-        )}
         <ChatView onOpenSettings={handleOpenSettings} />
       </main>
       <button
