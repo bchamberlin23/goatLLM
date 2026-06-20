@@ -127,7 +127,7 @@ function SkillCard({
       aria-pressed={active}
       className={`soft-card group relative flex flex-col text-left rounded-xl overflow-hidden transition-all ${
         active
-          ? "border-accent/60 bg-accent/[0.06] shadow-[0_14px_34px_-28px_rgba(245,158,66,0.9)]"
+          ? "border-accent/60 bg-accent/[0.06] shadow-[0_14px_34px_-28px_rgba(var(--theme-accent-rgb),0.9)]"
           : "hover:border-hairline-strong hover:bg-white/5"
       }`}
     >

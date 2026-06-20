@@ -300,7 +300,7 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       {isDragging && (
         <div className="motion-reveal absolute inset-0 z-50 flex items-center justify-center bg-sunken/82 backdrop-blur-md">
           <div className="liquid-surface motion-surface-in flex flex-col items-center gap-3 p-8 rounded-2xl border border-accent/35">
-            <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shadow-[0_12px_34px_-20px_rgba(245,158,66,0.9)]">
+            <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shadow-[0_12px_34px_-20px_rgba(var(--theme-accent-rgb),0.9)]">
               <Upload size={22} strokeWidth={1.75} className="text-accent" />
             </div>
             <span className="text-[15px] font-medium text-accent">Drop files here</span>

@@ -246,7 +246,7 @@ export function LocalModelsSection() {
       )}
 
       {error && (
-        <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-500/[0.06] border border-amber-500/15 rounded-lg text-[12px] text-accent leading-relaxed">
+        <div className="flex items-start gap-2 px-3 py-2.5 bg-accent/[0.06] border border-accent/15 rounded-lg text-[12px] text-accent leading-relaxed">
           <AlertCircle size={13} strokeWidth={1.75} className="shrink-0 mt-px text-accent" />
           <span className="whitespace-pre-wrap">{error}</span>
           <button

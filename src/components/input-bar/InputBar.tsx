@@ -138,7 +138,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     <ImageGenModal providerConfigs={providerConfigs} imageGenSettings={imageGenSettings} activeId={activeId} addImageArtifact={addImageArtifact}>
       {({ open: openImageGen }) => (
       <div className="w-full max-w-[720px] min-w-0">
-      <div className={["composer-surface relative w-full min-w-0 rounded-[24px]", animatedBorderEnabled ? "animated-border" : "", showPlusMenu || showSkillPicker ? "z-[95]" : "", isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4", "transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px"].join(" ")}>
+      <div className={["composer-surface relative w-full min-w-0 rounded-[24px]", animatedBorderEnabled ? "animated-border" : "", showPlusMenu || showSkillPicker ? "z-[95]" : "", isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4", "transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px"].join(" ")}>
         {animatedBorderEnabled && (
           <div className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ zIndex: 10 }}>
             <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>

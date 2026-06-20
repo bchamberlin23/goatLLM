@@ -199,7 +199,7 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
   }, [tc.toolName, tc.input]);
 
   return (
-    <div className="motion-surface-in border border-amber-500/35 bg-amber-500/5 rounded-xl p-3.5 flex flex-col gap-3 my-1">
+    <div className="motion-surface-in border border-accent/35 bg-accent/5 rounded-xl p-3.5 flex flex-col gap-3 my-1">
       <div className="flex items-center justify-between">
         <span className="text-[10.5px] font-semibold uppercase tracking-wider text-accent">
           Needs approval
@@ -232,7 +232,7 @@ function ApprovalGate({ tc }: { tc: ToolCallEntry }) {
               </div>
             )}
             {isSuspicious && (
-              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md text-[11.5px] font-semibold text-accent">
+              <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1.5 bg-accent/10 border border-accent/20 rounded-md text-[11.5px] font-semibold text-accent">
                 <AlertTriangle size={12} className="text-accent" />
                 Suspicious — {tc.dangerReason}
               </div>
@@ -1621,7 +1621,7 @@ export function InlineToolCall({
           <>
             {tc.approvalBypassed && (
               <span
-                className="shrink-0 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10.5px] font-medium text-accent"
+                className="shrink-0 rounded border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[10.5px] font-medium text-accent"
                 title="This subagent ran write-capable tools without individual approval cards."
               >
                 Auto-ran tools

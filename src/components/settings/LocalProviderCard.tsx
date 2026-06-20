@@ -97,7 +97,7 @@ export function LocalProviderCard({
   const isError = status === "error";
 
   return (
-    <div className={`soft-card rounded-xl overflow-hidden transition-all ${isOnline ? "border-green-500/20" : isError ? "border-amber-500/25" : ""}`}>
+    <div className={`soft-card rounded-xl overflow-hidden transition-all ${isOnline ? "border-green-500/20" : isError ? "border-accent/25" : ""}`}>
       <div
         className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors"
         onClick={(e) => {
@@ -186,7 +186,7 @@ export function LocalProviderCard({
           </div>
 
           {isError && errorMsg && (
-            <div className="motion-reveal flex items-start gap-2 px-2.5 py-2 bg-amber-500/[0.06] border border-amber-500/15 rounded text-[11.5px] text-accent leading-relaxed">
+            <div className="motion-reveal flex items-start gap-2 px-2.5 py-2 bg-accent/[0.06] border border-accent/15 rounded text-[11.5px] text-accent leading-relaxed">
               <AlertCircle size={12} strokeWidth={1.75} className="shrink-0 mt-px text-accent" />
               <span>{errorMsg}</span>
             </div>

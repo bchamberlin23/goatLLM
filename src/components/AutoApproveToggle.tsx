@@ -43,7 +43,7 @@ export function AutoApproveToggle() {
           id === "yolo"
             ? "bg-error/15 text-error shadow-[0_0_8px_rgba(248,113,113,0.15)]"
             : id === "auto"
-              ? "bg-accent/15 text-accent shadow-[0_0_8px_rgba(245,158,66,0.15)]"
+              ? "bg-accent/15 text-accent shadow-[0_0_8px_rgba(var(--theme-accent-rgb),0.15)]"
               : "bg-white/10 text-text-1";
         return (
           <button

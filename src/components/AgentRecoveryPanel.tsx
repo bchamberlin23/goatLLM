@@ -111,7 +111,7 @@ export function AgentRecoveryPanel() {
             onClick={() => setSelectedId(checkpoint.messageId)}
             className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11.5px] transition-colors ${
               (selected?.id ?? checkpoints[0]?.messageId) === checkpoint.messageId
-                ? "bg-accent/10 text-text-2 shadow-[inset_0_0_0_1px_rgba(245,158,66,0.16)]"
+                ? "bg-accent/10 text-text-2 shadow-[inset_0_0_0_1px_rgba(var(--theme-accent-rgb),0.16)]"
                 : "text-text-3 hover:bg-white/5"
             }`}
           >

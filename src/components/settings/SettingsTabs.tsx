@@ -216,7 +216,7 @@ export function SettingsTabs() {
                 onKeyDown={(e) => handleTabKeyDown(e, index)}
                 className={`motion-feedback flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-[background,border-color,color,box-shadow,transform] max-[760px]:min-w-[180px] ${
                   isActive
-                    ? "border-accent/28 bg-accent/10 text-text-1 shadow-[0_18px_48px_-34px_rgba(245,158,66,0.9),inset_0_1px_0_rgba(255,255,255,0.055)]"
+                    ? "border-accent/28 bg-accent/10 text-text-1 shadow-[0_18px_48px_-34px_rgba(var(--theme-accent-rgb),0.9),inset_0_1px_0_rgba(255,255,255,0.055)]"
                     : "border-transparent text-text-3 hover:border-hairline-strong hover:bg-white/5 hover:text-text-2"
                 }`}
               >
