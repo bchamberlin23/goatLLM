@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type CSSProperties, type PointerEvent } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties, type PointerEvent } from "react";
 import { PanelLeft } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatView } from "./components/ChatView";
@@ -33,7 +33,7 @@ export default function App() {
   const glowBackgroundEnabled = useChatStore((s) => s.glowBackgroundEnabled);
   const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [glow, setGlow] = useState({ x: 52, y: 8 });
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => { hydrate(); }, []);
   useEffect(() => {
@@ -141,11 +141,13 @@ export default function App() {
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
   const handleFocusInput = useCallback(() => useChatStore.getState().focusInput(), []);
   const handleGlowMove = useCallback((event: PointerEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setGlow({
-      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100,
-      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100,
-    });
+    const el = mainRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100;
+    el.style.setProperty("--glow-x", `${x}%`);
+    el.style.setProperty("--glow-y", `${y}%`);
   }, []);
 
   useKeyboardShortcuts({
@@ -164,11 +166,12 @@ export default function App() {
         <Sidebar onOpenSettings={handleOpenSettings} />
       </div>
       <main
+        ref={mainRef}
         className="flex-1 h-full flex flex-col relative overflow-hidden"
         onPointerMove={handleGlowMove}
         style={{
-          "--glow-x": `${glow.x}%`,
-          "--glow-y": `${glow.y}%`,
+          "--glow-x": "52%",
+          "--glow-y": "8%",
         } as CSSProperties}
       >
         {glowBackgroundEnabled && (
