@@ -22,7 +22,7 @@ export function OfficePreview({ artifactId, error, html, previewKey, title }: Of
   if (!html) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 flex-1 text-[#a0a0a0]">
-        <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+        <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
         <span className="text-[12.5px]">Rendering preview...</span>
       </div>
     );

@@ -101,7 +101,7 @@ export function useArtifactPanel({
   }, []);
 
   const flashTint = useCallback(
-    (key: string) => (flashed === key ? "bg-[#f59e42]/20 text-[#f59e42]" : ""),
+    (key: string) => (flashed === key ? "bg-accent/20 text-accent" : ""),
     [flashed],
   );
 

@@ -1817,7 +1817,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   return (
     <div className="w-full max-w-[720px] min-w-0">
       <div
-        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${animatedBorderEnabled ? "animated-border" : ""} ${showPlusMenu || showSkillPicker ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(245,158,66,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
+        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${animatedBorderEnabled ? "animated-border" : ""} ${showPlusMenu || showSkillPicker ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
       >
         {animatedBorderEnabled && (
           <div className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ zIndex: 10 }}>
@@ -1906,7 +1906,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
                 <span
                   key={sn}
-                  className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(245,158,66,0.08)]"
+                  className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(var(--theme-accent-rgb),0.08)]"
                 >
                   <Wand2 size={10} strokeWidth={1.75} className="shrink-0 opacity-80" aria-hidden="true" />
                   <span>{sn}</span>
@@ -2098,7 +2098,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                           const selected = pendingSkills.includes(skill.name);
                           const modeColor =
                             skill.mode === "agent"
-                              ? "text-[#d4944a] bg-[#f59e42]/10 border-[#f59e42]/20"
+                              ? "text-[#d4944a] bg-accent/10 border-accent/20"
                               : skill.mode === "chat"
                                 ? "text-[#7eb8f7] bg-[#3b82f6]/10 border-[#3b82f6]/20"
                                 : "text-[#b4a0f7] bg-[#8b5cf6]/10 border-[#8b5cf6]/20";
@@ -2182,7 +2182,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               onClick={handleToggleMic}
               className={`control-icon p-1.5 rounded-md transition-colors ${
                 speech.listening
-                  ? "text-[#f59e42] bg-[#f59e42]/10 border-[#f59e42]/25"
+                  ? "text-accent bg-accent/10 border-accent/25"
                   : ""
               }`}
               aria-label={speech.listening ? "Stop dictation" : "Start dictation"}
@@ -2203,7 +2203,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                 type="button"
                 onClick={() => setPlanMode(false)}
                 title="Plan mode — read-only investigation. Click to turn off."
-                className="flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#f59e42]/10 hover:bg-[#f59e42]/15 border border-[#f59e42]/30 text-[12px] font-medium text-[#f59e42] transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-accent/10 hover:bg-accent/15 border border-accent/30 text-[12px] font-medium text-accent transition-colors shrink-0"
               >
                 <ListChecks size={12} strokeWidth={2} aria-hidden="true" />
                 <span>Plan</span>

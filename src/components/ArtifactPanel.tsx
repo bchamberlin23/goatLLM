@@ -355,7 +355,7 @@ function ArtifactContent({
           <div className="flex-1 relative">
             <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
               <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
-                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
                 <span className="text-[11px]">Resolving references…</span>
               </div>
             </div>
@@ -385,7 +385,7 @@ function ArtifactContent({
         <>
           {pdfLoading && (
             <div className="flex flex-col items-center justify-center gap-3 flex-1 text-[#a0a0a0]">
-              <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+              <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
               <span className="text-[12.5px]">Compiling…</span>
               <span className="text-[11px] text-[#888888]">First run downloads the LaTeX engine ({String.fromCharCode(0x007e)}30 MB)</span>
             </div>
@@ -436,7 +436,7 @@ function ArtifactContent({
       if (!officeHtml) {
         return (
           <div className="flex flex-col items-center justify-center gap-3 flex-1 text-[#a0a0a0]">
-            <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+            <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
             <span className="text-[12.5px]">Rendering preview…</span>
           </div>
         );
@@ -463,7 +463,7 @@ function ArtifactContent({
           <div className="flex-1 relative">
             <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
               <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
-                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
                 <span className="text-[11px]">Resolving references…</span>
               </div>
             </div>
@@ -716,21 +716,21 @@ function HistoryMenu({
                 onClose();
               }}
               className={`flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors ${
-                isActive ? "bg-[#f59e42]/10" : "hover:bg-white/[0.06]"
+                isActive ? "bg-accent/10" : "hover:bg-white/[0.06]"
               }`}
             >
               <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                ver.source === "agent" ? "bg-[#60a5fa]" : "bg-[#f59e42]"
+                ver.source === "agent" ? "bg-[#60a5fa]" : "bg-accent"
               }`} />
               <div className="flex flex-col min-w-0 flex-1">
-                <span className={`text-[12px] truncate ${isActive ? "text-[#f59e42]" : "text-[#d5d5d5]"}`}>
+                <span className={`text-[12px] truncate ${isActive ? "text-accent" : "text-[#d5d5d5]"}`}>
                   {ver.source === "agent" ? "Agent" : "You"}
                   {ver.restoredFrom !== undefined && ` (restored)`}
                   {i === versions.length - 1 ? " — latest" : ""}
                 </span>
                 <span className="text-[10.5px] text-[#888]">{fmt(ver.createdAt)}</span>
               </div>
-              {isActive && <span className="text-[10px] text-[#f59e42] shrink-0">current</span>}
+              {isActive && <span className="text-[10px] text-accent shrink-0">current</span>}
             </button>
           );
         })}
@@ -1137,7 +1137,7 @@ export function ArtifactPanel() {
 
   // Brief amber tint when a button is pressed, so the click registers visually.
   const flashTint = (key: string) =>
-    flashed === key ? "bg-[#f59e42]/20 text-[#f59e42]" : "";
+    flashed === key ? "bg-accent/20 text-accent" : "";
 
   const handleClose = () => { flash("close"); setActiveArtifact(null); setWsFile(null); };
   const handleUndo = () => { if (activeArtifact && activeId) { flash("undo"); undoArtifact(activeId, activeArtifact.id); } };
@@ -1476,12 +1476,12 @@ export function ArtifactPanel() {
                     }
                   }}
                   placeholder="Enter URL or search..."
-                  className="flex-1 px-3 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-md text-[13px] text-[#ececec] placeholder:text-[#666] focus:outline-none focus:border-[#f59e42]/40"
+                  className="flex-1 px-3 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-md text-[13px] text-[#ececec] placeholder:text-[#666] focus:outline-none focus:border-accent/40"
                 />
                 <button
                   onClick={() => handleBrowserNavigate(browserUrl)}
                   disabled={!browserUrl.trim()}
-                  className="px-3 py-1.5 bg-[#f59e42]/20 hover:bg-[#f59e42]/30 text-[#f59e42] rounded-md text-[12px] font-medium transition-colors disabled:opacity-30"
+                  className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-md text-[12px] font-medium transition-colors disabled:opacity-30"
                 >
                   Go
                 </button>
@@ -1533,7 +1533,7 @@ export function ArtifactPanel() {
                   <div className="flex-1 relative">
                     <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c1e]/80 z-10">
                       <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
-                        <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                        <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
                         <span className="text-[11px]">Resolving references…</span>
                       </div>
                     </div>
@@ -1620,7 +1620,7 @@ export function ArtifactPlaceholderCard({
         </span>
         <span className="text-[11px] text-[#a0a0a0] thinking-line">{verb}…</span>
       </div>
-      <span className="w-1.5 h-1.5 rounded-full bg-[#f59e42] animate-[pulse-soft_1.6s_ease-in-out_infinite] shrink-0" />
+      <span className="w-1.5 h-1.5 rounded-full bg-accent animate-[pulse-soft_1.6s_ease-in-out_infinite] shrink-0" />
     </div>
   );
 }

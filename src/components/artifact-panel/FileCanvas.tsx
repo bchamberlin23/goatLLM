@@ -237,7 +237,7 @@ export function FileCanvas({
           <div className="flex-1 relative">
             <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1c]/80 z-10">
               <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
-                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+                <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
                 <span className="text-[11px]">Resolving references...</span>
               </div>
             </div>
@@ -312,13 +312,13 @@ export function BrowserCanvas({
             if (event.key === "Enter") onNavigate(url);
           }}
           placeholder="Enter URL or search..."
-          className="flex-1 px-3 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-md text-[13px] text-[#ececec] placeholder:text-[#888888] focus:outline-none focus:border-[#f59e42]/40"
+          className="flex-1 px-3 py-1.5 bg-white/[0.06] border border-white/[0.08] rounded-md text-[13px] text-[#ececec] placeholder:text-[#888888] focus:outline-none focus:border-accent/40"
         />
         <button
           type="button"
           onClick={() => onNavigate(url)}
           disabled={!url.trim()}
-          className="px-3 py-1.5 bg-[#f59e42]/20 hover:bg-[#f59e42]/30 text-[#f59e42] rounded-md text-[12px] font-medium transition-colors disabled:opacity-30"
+          className="px-3 py-1.5 bg-accent/20 hover:bg-accent/30 text-accent rounded-md text-[12px] font-medium transition-colors disabled:opacity-30"
         >
           Go
         </button>

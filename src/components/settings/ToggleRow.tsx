@@ -16,7 +16,7 @@ export function ToggleRow({
   return (
     <div
       className={`soft-card flex items-center justify-between gap-3 p-3.5 rounded-xl transition-all ${
-        enabled ? "border-accent/25 shadow-[0_10px_30px_-24px_rgba(245,158,66,0.75)]" : ""
+        enabled ? "border-accent/25 shadow-[0_10px_30px_-24px_rgba(var(--theme-accent-rgb),0.75)]" : ""
       } ${dimmedWhen ? "opacity-60" : ""}`}
     >
       <div className="flex flex-col gap-1 min-w-0 flex-1">
@@ -39,7 +39,7 @@ export function ToggleRow({
           onClick={() => onToggle(!enabled)}
           className={`motion-feedback relative w-10 h-6 rounded-full border transition-all ${
             enabled
-              ? "bg-accent border-accent shadow-[0_8px_20px_-10px_rgba(245,158,66,0.9)]"
+              ? "bg-accent border-accent shadow-[0_8px_20px_-10px_rgba(var(--theme-accent-rgb),0.9)]"
               : "bg-white/5 border-hairline-strong hover:bg-white/10"
           }`}
         >

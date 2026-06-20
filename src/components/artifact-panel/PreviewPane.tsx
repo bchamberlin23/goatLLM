@@ -28,7 +28,7 @@ function LoadingOverlay({ children }: { children: ReactNode }) {
     <div className="flex-1 relative">
       <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1c]/80 z-10">
         <div className="flex flex-col items-center gap-2 text-[#a0a0a0]">
-          <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-[#f59e42] animate-spin" />
+          <div className="w-5 h-5 rounded-full border-2 border-white/10 border-t-accent animate-spin" />
           <span className="text-[11px]">Resolving references...</span>
         </div>
       </div>

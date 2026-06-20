@@ -33,6 +33,7 @@ export default function App() {
   const toggleSidebar = useChatStore((s) => s.toggleSidebar);
   const glowBackgroundEnabled = useChatStore((s) => s.glowBackgroundEnabled);
   const glowBackgroundMode = useChatStore((s) => s.glowBackgroundMode);
+  const themeColor = useChatStore((s) => s.themeColor);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -154,7 +155,7 @@ export default function App() {
   return (
     <div
       ref={shellRef}
-      className={`w-full h-screen flex overflow-hidden relative bg-bg mode-${glowBackgroundMode}`}
+      className={`w-full h-screen flex overflow-hidden relative bg-bg mode-${glowBackgroundMode} theme-${themeColor}`}
       style={{
         "--glow-x": "52%",
         "--glow-y": "8%",

@@ -70,16 +70,16 @@ export function HistoryPane({ artifact, onClose, onRestoreVersion }: HistoryPane
                 onClose();
               }}
               className={`motion-row flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-left transition-colors ${
-                isActive ? "bg-[#f59e42]/10" : "hover:bg-white/[0.06]"
+                isActive ? "bg-accent/10" : "hover:bg-white/[0.06]"
               }`}
             >
               <div
                 className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                  version.source === "agent" ? "bg-[#60a5fa]" : "bg-[#f59e42]"
+                  version.source === "agent" ? "bg-[#60a5fa]" : "bg-accent"
                 }`}
               />
               <div className="flex flex-col min-w-0 flex-1">
-                <span className={`text-[12px] truncate ${isActive ? "text-[#f59e42]" : "text-[#d5d5d5]"}`}>
+                <span className={`text-[12px] truncate ${isActive ? "text-accent" : "text-[#d5d5d5]"}`}>
                   {version.source === "agent" ? "Agent" : "You"}
                   {version.restoredFrom !== undefined && " (restored)"}
                   {versionIndex === versions.length - 1 ? " - latest" : ""}
@@ -88,7 +88,7 @@ export function HistoryPane({ artifact, onClose, onRestoreVersion }: HistoryPane
                   {formatTimestamp(version.createdAt)}
                 </span>
               </div>
-              {isActive && <span className="text-[10px] text-[#f59e42] shrink-0">current</span>}
+              {isActive && <span className="text-[10px] text-accent shrink-0">current</span>}
             </button>
           );
         })}

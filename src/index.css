@@ -19,11 +19,11 @@
   --color-text-3: #a0a0a0;
   --color-text-4: #888888;
 
-  /* Accent + semantics */
-  --color-accent: #f59e42;
-  --color-accent-hover: #f0903a;
+  /* Accent + semantics — overridden per-theme via .theme-* classes */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-success: #34d399;
-  --color-warning: #f59e42;
+  --color-warning: var(--accent);
   --color-error: #f87171;
   --color-info: #60a5fa;
 }
@@ -45,10 +45,11 @@
   --text-3: #a0a0a0;
   --text-4: #888888;
 
-  /* Accent + semantics */
+  /* Accent + semantics — defaults (amber), overridden by .theme-* classes */
   --accent: #f59e42;
   --accent-hover: #f0903a;
   --accent-soft: rgba(245, 158, 66, 0.10);
+  --theme-accent-rgb: 245, 158, 66;
   --success: #34d399;
   --warning: #f59e42;
   --error: #f87171;
@@ -152,7 +153,7 @@ textarea,
 }
 
 ::selection {
-  background: rgba(245, 158, 66, 0.26);
+  background: rgba(var(--theme-accent-rgb), 0.26);
   color: var(--text-1);
 }
 
@@ -163,10 +164,10 @@ button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
 [tabindex]:not([tabindex="-1"]):not(input):not(textarea):focus-visible {
-  outline: 1.5px solid rgba(245, 158, 66, 0.68);
+  outline: 1.5px solid rgba(var(--theme-accent-rgb), 0.68);
   outline-offset: 2px;
   border-radius: 6px;
-  box-shadow: 0 0 0 4px rgba(245, 158, 66, 0.10);
+  box-shadow: 0 0 0 4px rgba(var(--theme-accent-rgb), 0.10);
 }
 
 input:focus,
@@ -500,7 +501,46 @@ button:not(:disabled):active {
   transition: opacity 300ms var(--ease-out);
 }
 
+/* --- Theme Color Classes --- */
+/* Each class overrides accent tokens + the accent RGB triplet.
+   Applied to the shell div via theme-${themeColor}. */
+.theme-amber {
+  --accent: #f59e42;
+  --accent-hover: #f0903a;
+  --accent-soft: rgba(245, 158, 66, 0.10);
+  --theme-accent-rgb: 245, 158, 66;
+}
+.theme-blue {
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.10);
+  --theme-accent-rgb: 59, 130, 246;
+}
+.theme-emerald {
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-soft: rgba(16, 185, 129, 0.10);
+  --theme-accent-rgb: 16, 185, 129;
+}
+.theme-rose {
+  --accent: #f43f5e;
+  --accent-hover: #e11d48;
+  --accent-soft: rgba(244, 63, 94, 0.10);
+  --theme-accent-rgb: 244, 63, 94;
+}
+.theme-violet {
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-soft: rgba(139, 92, 246, 0.10);
+  --theme-accent-rgb: 139, 92, 246;
+}
+
 /* --- Glow Mode Specific Variable Overrides --- */
+/* These only set --theme-glow-rgb for the ambient glow field.
+   UI surfaces use --theme-accent-rgb (set by theme classes above). */
+.mode-match {
+  --theme-glow-rgb: var(--theme-accent-rgb);
+}
 .mode-mesh {
   --theme-glow-rgb: 245, 158, 66;
 }
@@ -521,6 +561,28 @@ button:not(:disabled):active {
 }
 
 /* --- Ambient glow field custom modes --- */
+
+/* 0. Match mode (Cohesive glow mirroring theme color) */
+.liquid-glow-field.mode-match {
+  background:
+    radial-gradient(740px 500px at var(--glow-x, 52%) var(--glow-y, 8%), rgba(var(--theme-glow-rgb), 0.13), rgba(var(--theme-glow-rgb), 0.035) 34%, transparent 68%),
+    radial-gradient(920px 680px at 78% 112%, rgba(var(--theme-glow-rgb), 0.055), transparent 64%),
+    radial-gradient(820px 620px at 6% -8%, rgba(255, 255, 255, 0.038), transparent 62%);
+  filter: blur(18px) saturate(1.08);
+}
+
+.liquid-glow-field.mode-match::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.026), transparent 28%, rgba(var(--theme-glow-rgb), 0.026) 58%, transparent 82%),
+    linear-gradient(rgba(255, 255, 255, 0.007) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.007) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
 
 /* 1. Mesh mode (Classic glow with grid lines) */
 .liquid-glow-field.mode-mesh {
@@ -751,7 +813,7 @@ button:not(:disabled):active {
   border-radius: inherit;
   background:
     radial-gradient(520px 180px at 18% 0%, rgba(255, 255, 255, 0.07), transparent 62%),
-    radial-gradient(360px 160px at 92% 12%, rgba(var(--theme-glow-rgb), 0.08), transparent 68%);
+    radial-gradient(360px 160px at 92% 12%, rgba(var(--theme-accent-rgb), 0.08), transparent 68%);
   opacity: 0.82;
 }
 
@@ -760,7 +822,7 @@ button:not(:disabled):active {
   border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
     0 34px 110px rgba(0, 0, 0, 0.56),
-    0 0 0 1px rgba(var(--theme-glow-rgb), 0.035),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.035),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(26px) saturate(1.18);
   -webkit-backdrop-filter: blur(26px) saturate(1.18);
@@ -768,12 +830,12 @@ button:not(:disabled):active {
 
 .popover-surface {
   background:
-    radial-gradient(360px 190px at 18% 0%, rgba(var(--theme-glow-rgb), 0.105), transparent 62%),
+    radial-gradient(360px 190px at 18% 0%, rgba(var(--theme-accent-rgb), 0.105), transparent 62%),
     linear-gradient(180deg, rgba(50, 50, 53, 0.985), rgba(34, 34, 37, 0.985));
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     0 22px 70px rgba(0, 0, 0, 0.66),
-    0 0 0 1px rgba(var(--theme-glow-rgb), 0.035),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.035),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(24px) saturate(1.18);
   -webkit-backdrop-filter: blur(24px) saturate(1.18);
@@ -781,13 +843,13 @@ button:not(:disabled):active {
 
 .composer-surface {
   background:
-    radial-gradient(560px 180px at 74% -60px, rgba(var(--theme-glow-rgb), 0.12), transparent 64%),
+    radial-gradient(560px 180px at 74% -60px, rgba(var(--theme-accent-rgb), 0.12), transparent 64%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.024)),
     rgba(38, 38, 40, 0.84);
   border: 1px solid rgba(255, 255, 255, 0.088);
   box-shadow:
     0 24px 70px -34px rgba(0, 0, 0, 0.92),
-    0 0 42px -28px rgba(var(--theme-glow-rgb), 0.86),
+    0 0 42px -28px rgba(var(--theme-accent-rgb), 0.86),
     0 1px 0 rgba(255, 255, 255, 0.065) inset;
   backdrop-filter: blur(20px) saturate(1.12);
   -webkit-backdrop-filter: blur(20px) saturate(1.12);
@@ -816,20 +878,20 @@ button:not(:disabled):active {
 }
 
 .primary-action {
-  border: 1px solid rgba(245, 158, 66, 0.68);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.68);
   background:
-    linear-gradient(180deg, rgba(255, 218, 166, 0.18) 0%, rgba(245, 158, 66, 0) 42%),
-    #f59e42;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(var(--theme-accent-rgb), 0) 42%),
+    var(--accent);
   color: #1a1a1c;
   box-shadow:
-    0 8px 22px rgba(245, 158, 66, 0.18),
+    0 8px 22px rgba(var(--theme-accent-rgb), 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.38);
   transition: background var(--d-short) var(--ease-out), box-shadow var(--d-short) var(--ease-out), transform var(--d-short) var(--ease-out);
 }
 
 .primary-action:hover {
   background: var(--accent-hover);
-  box-shadow: 0 14px 32px -14px rgba(245, 158, 66, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  box-shadow: 0 14px 32px -14px rgba(var(--theme-accent-rgb), 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .segmented-shell {
@@ -857,21 +919,21 @@ button:not(:disabled):active {
 }
 
 .sidebar-action:hover {
-  border-color: rgba(var(--theme-glow-rgb), 0.16);
+  border-color: rgba(var(--theme-accent-rgb), 0.16);
   background:
-    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.075), rgba(var(--theme-glow-rgb), 0.025)),
+    linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.075), rgba(var(--theme-accent-rgb), 0.025)),
     rgba(255, 255, 255, 0.03);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .sidebar-action:active {
-  background: rgba(var(--theme-glow-rgb), 0.12);
+  background: rgba(var(--theme-accent-rgb), 0.12);
 }
 
 .sidebar-action-active {
-  border: 1px solid rgba(var(--theme-glow-rgb), 0.22);
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.22);
   background:
-    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.14), rgba(var(--theme-glow-rgb), 0.055));
+    linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.14), rgba(var(--theme-accent-rgb), 0.055));
   color: var(--text-1);
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.18),
@@ -881,17 +943,17 @@ button:not(:disabled):active {
 .sidebar-search {
   border: 1px solid rgba(255, 255, 255, 0.06);
   background:
-    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.045), rgba(var(--theme-glow-rgb), 0.012)),
+    linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.045), rgba(var(--theme-accent-rgb), 0.012)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.032));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .sidebar-theme-accent {
-  color: rgb(var(--theme-glow-rgb));
+  color: rgb(var(--theme-accent-rgb));
 }
 
 .sidebar-active-marker {
-  background: rgb(var(--theme-glow-rgb));
+  background: rgb(var(--theme-accent-rgb));
 }
 
 /* --- Notebook (freeform board) --- */
@@ -902,7 +964,7 @@ button:not(:disabled):active {
 .notebook-board {
   background-color: var(--bg);
   background-image:
-    radial-gradient(680px 420px at 24% -8%, rgba(var(--theme-glow-rgb), 0.05), transparent 72%),
+    radial-gradient(680px 420px at 24% -8%, rgba(var(--theme-accent-rgb), 0.05), transparent 72%),
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 100% 100%, 23px 23px;
   background-position: 0 0, -1px -1px;
@@ -927,8 +989,8 @@ button:not(:disabled):active {
   border-color: var(--hairline-strong);
   box-shadow:
     0 30px 70px -28px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(var(--theme-glow-rgb), 0.14),
-    0 0 26px -16px rgba(var(--theme-glow-rgb), 0.5),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.14),
+    0 0 26px -16px rgba(var(--theme-accent-rgb), 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -942,8 +1004,8 @@ button:not(:disabled):active {
 .notebook-rail {
   border-left: 1px solid rgba(255, 255, 255, 0.072);
   background:
-    radial-gradient(360px 300px at 100% -24px, rgba(var(--theme-glow-rgb), 0.1), transparent 64%),
-    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.03) 0%, rgba(var(--theme-glow-rgb), 0.005) 100%),
+    radial-gradient(360px 300px at 100% -24px, rgba(var(--theme-accent-rgb), 0.1), transparent 64%),
+    linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.03) 0%, rgba(var(--theme-accent-rgb), 0.005) 100%),
     linear-gradient(180deg, rgba(42, 42, 45, 0.72) 0%, rgba(32, 32, 35, 0.78) 60%, rgba(27, 27, 30, 0.82) 100%);
   box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(20px) saturate(1.1);
@@ -951,12 +1013,12 @@ button:not(:disabled):active {
 }
 
 .sidebar-search:focus-within {
-  border-color: rgba(var(--theme-glow-rgb), 0.32);
+  border-color: rgba(var(--theme-accent-rgb), 0.32);
   background:
-    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.11), rgba(var(--theme-glow-rgb), 0.035)),
+    linear-gradient(180deg, rgba(var(--theme-accent-rgb), 0.11), rgba(var(--theme-accent-rgb), 0.035)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.04));
   box-shadow:
-    0 0 0 3px rgba(var(--theme-glow-rgb), 0.09),
+    0 0 0 3px rgba(var(--theme-accent-rgb), 0.09),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -1016,12 +1078,12 @@ button:not(:disabled):active {
 
 @keyframes dr-card-glow {
   0%, 100% {
-    border-color: rgba(245, 158, 66, 0.06);
+    border-color: rgba(var(--theme-accent-rgb), 0.06);
     box-shadow: 0 0 16px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
   50% {
-    border-color: rgba(245, 158, 66, 0.15);
-    box-shadow: 0 0 24px rgba(245, 158, 66, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    border-color: rgba(var(--theme-accent-rgb), 0.15);
+    box-shadow: 0 0 24px rgba(var(--theme-accent-rgb), 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 }
 
@@ -1087,9 +1149,9 @@ button:not(:disabled):active {
 .animate-border-beam {
   stroke-dasharray: 20 80;
   animation: border-beam 4s linear infinite;
-  stroke: rgba(var(--theme-glow-rgb), 1);
+  stroke: rgba(var(--theme-accent-rgb), 1);
   stroke-width: 1.5;
-  filter: drop-shadow(0 0 3px rgba(var(--theme-glow-rgb), 1)) drop-shadow(0 0 8px rgba(var(--theme-glow-rgb), 0.6));
+  filter: drop-shadow(0 0 3px rgba(var(--theme-accent-rgb), 1)) drop-shadow(0 0 8px rgba(var(--theme-accent-rgb), 0.6));
 }
 
 @keyframes border-beam {

@@ -254,7 +254,7 @@ export function InlineWidgetPlaceholder({ title }: { title?: string }) {
         <span className="text-[11.5px] font-medium text-[#d5d5d5] truncate flex-1">
           {title?.trim() || "Widget"}
         </span>
-        <span className="w-1.5 h-1.5 rounded-full bg-[#f59e42] animate-[pulse-soft_1.6s_ease-in-out_infinite] shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-[pulse-soft_1.6s_ease-in-out_infinite] shrink-0" />
       </div>
       <div className="px-3.5 py-4 text-[12px] text-[#a0a0a0] thinking-line">Building widget…</div>
     </div>

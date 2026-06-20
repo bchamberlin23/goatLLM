@@ -1505,8 +1505,10 @@ export interface ChatStore {
   setGlowBackgroundEnabled: (enabled: boolean) => void;
   animatedBorderEnabled: boolean;
   setAnimatedBorderEnabled: (enabled: boolean) => void;
-  glowBackgroundMode: "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula";
-  setGlowBackgroundMode: (mode: "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula") => void;
+  themeColor: "amber" | "blue" | "emerald" | "rose" | "violet";
+  setThemeColor: (color: "amber" | "blue" | "emerald" | "rose" | "violet") => void;
+  glowBackgroundMode: "match" | "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula";
+  setGlowBackgroundMode: (mode: "match" | "mesh" | "lavender" | "fluid" | "aurora" | "cyberpunk" | "nebula") => void;
 
   /** When true (default), a subtle click sound plays when an agent/design
    *  turn completes. When false, completion is silent. */
@@ -1797,6 +1799,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       glowBackgroundEnabled: false,
       glowBackgroundMode: "mesh",
       animatedBorderEnabled: false,
+      themeColor: "amber",
       completionSound: true,
       subagentsEnabled: true,
       // ── Skills ──
@@ -4266,6 +4269,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try { localStorage.setItem("goatllm-glow-bg-mode", mode); } catch {}
       },
 
+      setThemeColor: (color) => {
+        set({ themeColor: color });
+        try { localStorage.setItem("goatllm-theme-color", color); } catch {}
+      },
+
       setCompletionSound: (enabled) => {
         set({ completionSound: enabled });
         try { localStorage.setItem("goatllm-completion-sound", enabled ? "true" : "false"); } catch {}
@@ -4809,6 +4817,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         if (glowBackgroundMode === "blocky") glowBackgroundMode = "mesh";
         if (glowBackgroundMode === "smooth") glowBackgroundMode = "lavender";
         const animatedBorderEnabled = localStorage.getItem("goatllm-animated-border-enabled") === "true";
+        const themeColor = (localStorage.getItem("goatllm-theme-color") as any) || "amber";
+        const validThemes = ["amber", "blue", "emerald", "rose", "violet"];
+        const safeThemeColor = validThemes.includes(themeColor) ? themeColor : "amber";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
         const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
         try {
@@ -5038,6 +5049,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             glowBackgroundEnabled,
             glowBackgroundMode,
             animatedBorderEnabled,
+            themeColor: safeThemeColor,
             completionSound,
             subagentsEnabled,
             permissionMode: savedMode,
