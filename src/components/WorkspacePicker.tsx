@@ -84,10 +84,10 @@ export function WorkspacePicker() {
     <div className="relative shrink-0">
       <button
         onClick={() => setOpen_((v) => !v)}
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] transition-colors ${
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-medium transition-all ${
           workspacePath
-            ? "text-text-2 hover:text-text-1 hover:bg-white/5"
-            : "text-text-3 hover:text-text-1 hover:bg-white/5"
+            ? "bg-white/[0.03] border-white/5 text-text-2 hover:bg-white/[0.06] hover:border-white/10 hover:text-text-1"
+            : "bg-white/[0.01] border-white/[0.03] text-text-3 hover:bg-white/[0.04] hover:border-white/5 hover:text-text-1"
         }`}
         title={workspacePath ?? "No workspace"}
       >
