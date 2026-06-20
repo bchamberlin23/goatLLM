@@ -156,33 +156,38 @@ export default function App() {
   });
 
   return (
-    <div className="w-full h-screen flex overflow-hidden relative bg-bg">
+    <div
+      className="w-full h-screen flex overflow-hidden relative bg-bg"
+      onPointerMove={handleGlowMove}
+    >
+      {glowBackgroundEnabled && (
+        <div
+          className={`liquid-glow-field mode-${glowBackgroundMode}`}
+          aria-hidden="true"
+          style={{
+            "--glow-x": `${glow.x}%`,
+            "--glow-y": `${glow.y}%`,
+          } as CSSProperties}
+        >
+          {glowBackgroundMode === "fluid" && (
+            <>
+              <div className="fluid-blob blob-1" />
+              <div className="fluid-blob blob-2" />
+              <div className="fluid-blob blob-3" />
+              <div className="fluid-blob blob-mouse" />
+            </>
+          )}
+        </div>
+      )}
       <div
-        className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
+        className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out relative z-10"
         style={{ width: sidebarOpen ? 244 : 0 }}
       >
         <Sidebar onOpenSettings={handleOpenSettings} />
       </div>
       <main
-        className="flex-1 h-full flex flex-col relative overflow-hidden"
-        onPointerMove={handleGlowMove}
-        style={{
-          "--glow-x": `${glow.x}%`,
-          "--glow-y": `${glow.y}%`,
-        } as CSSProperties}
+        className="flex-1 h-full flex flex-col relative overflow-hidden z-10"
       >
-        {glowBackgroundEnabled && (
-          <div className={`liquid-glow-field mode-${glowBackgroundMode}`} aria-hidden="true">
-            {glowBackgroundMode === "fluid" && (
-              <>
-                <div className="fluid-blob blob-1" />
-                <div className="fluid-blob blob-2" />
-                <div className="fluid-blob blob-3" />
-                <div className="fluid-blob blob-mouse" />
-              </>
-            )}
-          </div>
-        )}
         <ChatView onOpenSettings={handleOpenSettings} />
       </main>
       <button
