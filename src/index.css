@@ -7,11 +7,11 @@
 
   /* ─── Color tokens (mirrors :root vars, exposed as Tailwind utilities) ─── */
   /* Surfaces — text-bg, bg-bg, border-hairline, etc. */
-  --color-bg: #1a1a1c;
-  --color-surface-1: #2a2a2c;
-  --color-surface-2: #2d2d2d;
-  --color-surface-3: #212122;
-  --color-sunken: #161618;
+  --color-bg: #0a0a0c;
+  --color-surface-1: #131315;
+  --color-surface-2: #1a1a1c;
+  --color-surface-3: #0f0f11;
+  --color-sunken: #050506;
 
   /* Text */
   --color-text-1: #ececec;
@@ -31,13 +31,13 @@
 /* ─── Design tokens (DESIGN.md is the source of truth) ─── */
 :root {
   /* Surfaces */
-  --bg: #1a1a1c;
-  --surface-1: #2a2a2c;
-  --surface-2: #2d2d2d;
-  --surface-3: #212122;
-  --sunken: #161618;
-  --hairline: rgba(255, 255, 255, 0.06);
-  --hairline-strong: rgba(255, 255, 255, 0.10);
+  --bg: #0a0a0c;
+  --surface-1: #131315;
+  --surface-2: #1a1a1c;
+  --surface-3: #0f0f11;
+  --sunken: #050506;
+  --hairline: rgba(255, 255, 255, 0.05);
+  --hairline-strong: rgba(255, 255, 255, 0.09);
 
   /* Text */
   --text-1: #ececec;
@@ -65,8 +65,8 @@
   /* Refined depth */
   --shadow-soft: 0 18px 52px rgba(0, 0, 0, 0.36);
   --shadow-float: 0 24px 80px rgba(0, 0, 0, 0.52), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.026)), rgba(37, 37, 39, 0.82);
-  --glass-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.112), rgba(255, 255, 255, 0.035)), rgba(35, 35, 37, 0.91);
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)), rgba(18, 18, 20, 0.85);
+  --glass-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)), rgba(14, 14, 16, 0.92);
 }
 
 /* Tabular numerals — apply to anything where numbers should align in columns
@@ -249,9 +249,18 @@ button:not(:disabled):active {
 
 /* ─── Shimmer ─── */
 .shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--text-3) 20%,
+    #ffffff 50%,
+    var(--text-3) 80%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer-sweep 2.2s linear infinite;
   display: inline-block;
-  color: var(--text-2);
-  animation: pulse-soft 1.8s var(--ease-out) infinite;
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -370,9 +379,9 @@ button:not(:disabled):active {
 
 /* ─── Code blocks ─── */
 .code-block {
-  background: #161618;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
+  background: var(--sunken);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px;
   overflow: hidden;
   margin: 10px 0;
   font-family: var(--font-mono);
@@ -725,38 +734,39 @@ button:not(:disabled):active {
 
 .modal-surface {
   background: var(--glass-bg-strong);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.075);
   box-shadow:
-    0 34px 110px rgba(0, 0, 0, 0.56),
-    0 0 0 1px rgba(245, 158, 66, 0.035),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 34px 110px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(245, 158, 66, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(26px) saturate(1.18);
   -webkit-backdrop-filter: blur(26px) saturate(1.18);
 }
 
 .popover-surface {
   background:
-    radial-gradient(360px 190px at 18% 0%, rgba(245, 158, 66, 0.105), transparent 62%),
-    linear-gradient(180deg, rgba(50, 50, 53, 0.985), rgba(34, 34, 37, 0.985));
-  border: 1px solid rgba(255, 255, 255, 0.14);
+    radial-gradient(360px 190px at 18% 0%, rgba(245, 158, 66, 0.07), transparent 62%),
+    linear-gradient(180deg, rgba(26, 26, 28, 0.985), rgba(18, 18, 20, 0.985));
+  border: 1px solid rgba(255, 255, 255, 0.075);
   box-shadow:
-    0 22px 70px rgba(0, 0, 0, 0.66),
-    0 0 0 1px rgba(245, 158, 66, 0.035),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 22px 70px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(245, 158, 66, 0.02),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(24px) saturate(1.18);
   -webkit-backdrop-filter: blur(24px) saturate(1.18);
+  border-radius: 16px;
 }
 
 .composer-surface {
   background:
-    radial-gradient(560px 180px at 74% -60px, rgba(245, 158, 66, 0.12), transparent 64%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.024)),
-    rgba(38, 38, 40, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.088);
+    radial-gradient(560px 180px at 74% -60px, rgba(245, 158, 66, 0.08), transparent 64%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    rgba(22, 22, 25, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.055);
   box-shadow:
-    0 24px 70px -34px rgba(0, 0, 0, 0.92),
-    0 0 42px -28px rgba(245, 158, 66, 0.86),
-    0 1px 0 rgba(255, 255, 255, 0.065) inset;
+    0 24px 70px -34px rgba(0, 0, 0, 0.95),
+    0 0 42px -28px rgba(245, 158, 66, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
   backdrop-filter: blur(20px) saturate(1.12);
   -webkit-backdrop-filter: blur(20px) saturate(1.12);
 }
@@ -810,14 +820,14 @@ button:not(:disabled):active {
 }
 
 .sidebar-surface {
-  border-right: 1px solid rgba(255, 255, 255, 0.072);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
   background:
-    radial-gradient(380px 280px at 18px -24px, rgba(245, 158, 66, 0.14), transparent 62%),
-    radial-gradient(300px 240px at 100% 48%, rgba(255, 255, 255, 0.045), transparent 72%),
-    linear-gradient(180deg, rgba(44, 44, 47, 0.9) 0%, rgba(37, 37, 40, 0.92) 44%, rgba(29, 29, 31, 0.95) 100%);
+    radial-gradient(380px 280px at 18px -24px, rgba(245, 158, 66, 0.09), transparent 62%),
+    radial-gradient(300px 240px at 100% 48%, rgba(255, 255, 255, 0.025), transparent 72%),
+    linear-gradient(180deg, rgba(14, 14, 16, 0.95) 0%, rgba(10, 10, 11, 0.97) 44%, rgba(8, 8, 9, 0.98) 100%);
   box-shadow:
-    inset -1px 0 0 rgba(255, 255, 255, 0.035),
-    18px 0 70px rgba(0, 0, 0, 0.24);
+    inset -1px 0 0 rgba(255, 255, 255, 0.02),
+    18px 0 70px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(24px) saturate(1.14);
   -webkit-backdrop-filter: blur(24px) saturate(1.14);
 }

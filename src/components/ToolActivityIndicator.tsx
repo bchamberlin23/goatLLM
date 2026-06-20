@@ -62,7 +62,7 @@ export function ToolActivityIndicator() {
 
   return (
     <div className="motion-status-in flex w-full max-w-[720px] items-center justify-center px-1 py-1.5">
-      <div className="liquid-surface flex items-center gap-2 px-3 py-1.5 rounded-lg">
+      <div className="liquid-surface flex items-center gap-2.5 px-4 py-1.5 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
