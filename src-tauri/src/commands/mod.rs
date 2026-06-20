@@ -2,6 +2,7 @@
 
 pub(crate) mod codex;
 pub(crate) mod db;
+pub(crate) mod discovered_models;
 pub(crate) mod documents;
 pub(crate) mod embeddings;
 pub(crate) mod extract;
@@ -26,6 +27,7 @@ pub(crate) use db::{
     load_messages_for_conversation, log_event, save_compaction_entry, save_conversation,
     save_message, search_messages,
 };
+pub(crate) use discovered_models::{discovered_models_load, discovered_models_save};
 pub(crate) use documents::{
     document_chunks_delete, document_chunks_replace, document_chunks_search,
     document_workspace_delete, document_workspace_save, document_workspaces_load,
@@ -146,6 +148,8 @@ macro_rules! generate_handler {
             crate::commands::documents::document_chunks_replace,
             crate::commands::documents::document_chunks_delete,
             crate::commands::documents::document_chunks_search,
+            crate::commands::discovered_models::discovered_models_load,
+            crate::commands::discovered_models::discovered_models_save,
             crate::commands::scheduled_agents::scheduled_agents_load,
             crate::commands::scheduled_agents::scheduled_agents_save,
             crate::commands::misc::watch_workspace,

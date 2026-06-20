@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useChatStore } from "../stores/chat";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 
@@ -291,6 +291,24 @@ describe("ChatStore", () => {
       const curated = models.find((m) => m.id === "openrouter:anthropic/claude-3.5-sonnet")!;
       expect(curated.name).toBe("Claude 3.5 Sonnet");
       expect(curated.contextWindow).toBe(200_000);
+    });
+
+    it("refreshes every configured cloud provider that supports discovery", async () => {
+      useChatStore.setState({
+        providerConfigs: {
+          openrouter: { apiKey: "sk-router" },
+          groq: { apiKey: "sk-groq" },
+          anthropic: { apiKey: "sk-anthropic" },
+        },
+      });
+      const discoverCloudModels = vi.fn().mockResolvedValue(undefined);
+      useChatStore.setState({ discoverCloudModels });
+
+      await useChatStore.getState().discoverAllCloudModels();
+
+      expect(discoverCloudModels).toHaveBeenCalledTimes(2);
+      expect(discoverCloudModels).toHaveBeenCalledWith("openrouter");
+      expect(discoverCloudModels).toHaveBeenCalledWith("groq");
     });
 
     it("does not merge discovery for providers that don't opt in", () => {

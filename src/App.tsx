@@ -27,6 +27,7 @@ export default function App() {
   const _hydrated = useChatStore((s) => s._hydrated);
   const checkAllProvidersHealth = useChatStore((s) => s.checkAllProvidersHealth);
   const discoverAllLocalModels = useChatStore((s) => s.discoverAllLocalModels);
+  const discoverAllCloudModels = useChatStore((s) => s.discoverAllCloudModels);
   const checkCodexAuthStatus = useChatStore((s) => s.checkCodexAuthStatus);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
@@ -53,6 +54,7 @@ export default function App() {
   useEffect(() => { if (_hydrated) checkAllProvidersHealth(); }, [_hydrated]);
   useEffect(() => { if (_hydrated) void checkCodexAuthStatus(); }, [_hydrated, checkCodexAuthStatus]);
   useEffect(() => { if (_hydrated) void discoverAllLocalModels(); }, [_hydrated]);
+  useEffect(() => { if (_hydrated) void discoverAllCloudModels(); }, [_hydrated, discoverAllCloudModels]);
   useEffect(() => {
     if (!_hydrated) return;
     let unlisten: (() => void) | null = null;
@@ -174,7 +176,7 @@ export default function App() {
         </div>
       )}
       <div
-        className="relative z-10 h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
+        className="relative z-20 h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
         style={{ width: sidebarOpen ? 244 : 0 }}
       >
         <Sidebar onOpenSettings={handleOpenSettings} />

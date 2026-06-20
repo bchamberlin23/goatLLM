@@ -75,6 +75,11 @@ import { isEditArtifact, parseEditBlocks, applyEditBlocks } from "../lib/artifac
 import type { TaskBoard } from "../lib/tools/todo";
 import { contextWindowFromOllamaShow, normalizeProviderModels } from "../lib/model-detection";
 import {
+  loadDiscoveredModels,
+  loadDiscoveredModelsFromJournal,
+  persistDiscoveredModels,
+} from "../lib/discovered-models";
+import {
   DEFAULT_COMPACTION_SETTINGS,
   type CompactionEntry,
   type CompactionSettings,
@@ -1044,8 +1049,9 @@ export interface ChatStore {
 
   /**
    * Models discovered from local provider `/models` endpoints (Ollama,
-   * LM Studio). Non-persisted; refreshed on app start and when the user
-   * edits a local provider's base URL. Keyed by providerId.
+   * LM Studio) and cloud `/v1/models` endpoints. Persisted to the crash-safe
+   * journal and SQLite mirror, then refreshed when the user asks to discover
+   * again. Keyed by providerId.
    */
   discoveredModels: Record<string, { id: string; name: string; contextWindow?: number; vision?: boolean }[]>;
   discoveryStatus: Record<string, "idle" | "loading" | "ok" | "error">;
@@ -1115,6 +1121,8 @@ export interface ChatStore {
   discoverLocalModels: (providerId: string) => Promise<void>;
   /** Refresh every configured local provider in parallel. */
   discoverAllLocalModels: () => Promise<void>;
+  /** Refresh every configured cloud provider with a discovery endpoint. */
+  discoverAllCloudModels: () => Promise<void>;
   /**
    * Hit a cloud provider's /v1/models endpoint and cache the result.
    * No-op for providers without `supportsDiscovery: true` in the
@@ -1710,7 +1718,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       scrollPositions: {},
       providerConfigs: loadProviderConfigs(),
       modelOverrides: loadModelOverrides(),
-      discoveredModels: {},
+      discoveredModels: loadDiscoveredModelsFromJournal(),
       discoveryStatus: {},
       discoveryError: {},
       resendPayload: null,
@@ -4437,13 +4445,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "ok" },
             discoveryError: { ...state.discoveryError, [providerId]: null },
           }));
+          persistDiscoveredModels(get().discoveredModels);
         } catch (e) {
           const reason =
             e instanceof DOMException && e.name === "AbortError"
               ? `Couldn't reach ${baseUrl} (timed out). Is ${local.name} running?`
               : `Couldn't reach ${baseUrl}. Is ${local.name} running?`;
           set((state) => ({
-            discoveredModels: { ...state.discoveredModels, [providerId]: [] },
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
             discoveryError: { ...state.discoveryError, [providerId]: reason },
           }));
@@ -4454,6 +4462,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const { providerConfigs, discoverLocalModels } = get();
         const targets = LOCAL_PROVIDERS.filter((p) => providerConfigs[p.id] !== undefined);
         await Promise.allSettled(targets.map((p) => discoverLocalModels(p.id)));
+      },
+
+      discoverAllCloudModels: async () => {
+        const { providerConfigs, discoverCloudModels } = get();
+        const targets = Object.keys(providerConfigs).filter(providerSupportsDiscovery);
+        await Promise.allSettled(targets.map((providerId) => discoverCloudModels(providerId)));
       },
 
       /**
@@ -4516,13 +4530,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "ok" },
             discoveryError: { ...state.discoveryError, [providerId]: null },
           }));
+          persistDiscoveredModels(get().discoveredModels);
         } catch (e) {
           const reason =
             e instanceof DOMException && e.name === "AbortError"
               ? `Couldn't reach ${baseUrl} (timed out).`
               : `Couldn't reach ${baseUrl}.`;
           set((state) => ({
-            discoveredModels: { ...state.discoveredModels, [providerId]: [] },
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
             discoveryError: { ...state.discoveryError, [providerId]: reason },
           }));
@@ -4825,6 +4839,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         try {
           const data = await loadAllFromDb();
           const providerConfigs = loadProviderConfigs();
+          const discoveredModels = await loadDiscoveredModels();
           // Default new installs onto the bundled free tier so the first
           // chat just works — no Settings detour required.
           const savedModel =
@@ -5029,6 +5044,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             messages: data.messages,
             compactionEntries: data.compactionEntries,
             providerConfigs,
+            discoveredModels,
+            discoveryStatus: Object.fromEntries(Object.keys(discoveredModels).map((providerId) => [providerId, "ok"])),
+            discoveryError: Object.fromEntries(Object.keys(discoveredModels).map((providerId) => [providerId, null])),
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
             firecrawlApiKey: firecrawlKey,
@@ -5126,6 +5144,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         } catch (e) {
           console.warn("[store] Failed to hydrate from DB, using empty state:", e);
           const providerConfigs = loadProviderConfigs();
+          const discoveredModels = await loadDiscoveredModels();
           const savedModel = localStorage.getItem("goatllm-selected-model") || null;
           const tavilyKey = localStorage.getItem("goatllm-tavily-key") || "";
           const firecrawlKey = localStorage.getItem("goatllm-firecrawl-key") || "";
@@ -5177,6 +5196,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               : documentWorkspaces[0]?.id ?? null;
           set({
             providerConfigs,
+            discoveredModels,
+            discoveryStatus: Object.fromEntries(Object.keys(discoveredModels).map((providerId) => [providerId, "ok"])),
+            discoveryError: Object.fromEntries(Object.keys(discoveredModels).map((providerId) => [providerId, null])),
             compactionEntries: {},
             selectedModelId: savedModel,
             tavilyApiKey: tavilyKey,
