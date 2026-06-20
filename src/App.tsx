@@ -156,7 +156,7 @@ export default function App() {
   });
 
   return (
-    <div className="w-full h-screen flex overflow-hidden relative bg-bg">
+    <div className={`w-full h-screen flex overflow-hidden relative bg-bg mode-${glowBackgroundMode}`}>
       <div
         className="h-full overflow-hidden shrink-0 transition-[width] duration-300 ease-out"
         style={{ width: sidebarOpen ? 244 : 0 }}

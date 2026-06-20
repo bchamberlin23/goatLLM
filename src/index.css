@@ -53,6 +53,7 @@
   --warning: #f59e42;
   --error: #f87171;
   --info: #60a5fa;
+  --theme-glow-rgb: 245, 158, 66;
 
   /* Motion */
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
@@ -499,6 +500,26 @@ button:not(:disabled):active {
   transition: opacity 300ms var(--ease-out);
 }
 
+/* --- Glow Mode Specific Variable Overrides --- */
+.mode-mesh {
+  --theme-glow-rgb: 245, 158, 66;
+}
+.mode-lavender {
+  --theme-glow-rgb: 99, 102, 241;
+}
+.mode-fluid {
+  --theme-glow-rgb: 6, 182, 212;
+}
+.mode-aurora {
+  --theme-glow-rgb: 16, 185, 129;
+}
+.mode-cyberpunk {
+  --theme-glow-rgb: 236, 72, 153;
+}
+.mode-nebula {
+  --theme-glow-rgb: 219, 39, 119;
+}
+
 /* --- Ambient glow field custom modes --- */
 
 /* 1. Mesh mode (Classic glow with grid lines) */
@@ -728,7 +749,7 @@ button:not(:disabled):active {
   border-radius: inherit;
   background:
     radial-gradient(520px 180px at 18% 0%, rgba(255, 255, 255, 0.07), transparent 62%),
-    radial-gradient(360px 160px at 92% 12%, rgba(245, 158, 66, 0.08), transparent 68%);
+    radial-gradient(360px 160px at 92% 12%, rgba(var(--theme-glow-rgb), 0.08), transparent 68%);
   opacity: 0.82;
 }
 
@@ -737,7 +758,7 @@ button:not(:disabled):active {
   border: 1px solid rgba(255, 255, 255, 0.11);
   box-shadow:
     0 34px 110px rgba(0, 0, 0, 0.56),
-    0 0 0 1px rgba(245, 158, 66, 0.035),
+    0 0 0 1px rgba(var(--theme-glow-rgb), 0.035),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(26px) saturate(1.18);
   -webkit-backdrop-filter: blur(26px) saturate(1.18);
@@ -745,12 +766,12 @@ button:not(:disabled):active {
 
 .popover-surface {
   background:
-    radial-gradient(360px 190px at 18% 0%, rgba(245, 158, 66, 0.105), transparent 62%),
+    radial-gradient(360px 190px at 18% 0%, rgba(var(--theme-glow-rgb), 0.105), transparent 62%),
     linear-gradient(180deg, rgba(50, 50, 53, 0.985), rgba(34, 34, 37, 0.985));
   border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
     0 22px 70px rgba(0, 0, 0, 0.66),
-    0 0 0 1px rgba(245, 158, 66, 0.035),
+    0 0 0 1px rgba(var(--theme-glow-rgb), 0.035),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(24px) saturate(1.18);
   -webkit-backdrop-filter: blur(24px) saturate(1.18);
@@ -758,13 +779,13 @@ button:not(:disabled):active {
 
 .composer-surface {
   background:
-    radial-gradient(560px 180px at 74% -60px, rgba(245, 158, 66, 0.12), transparent 64%),
+    radial-gradient(560px 180px at 74% -60px, rgba(var(--theme-glow-rgb), 0.12), transparent 64%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.078), rgba(255, 255, 255, 0.024)),
     rgba(38, 38, 40, 0.84);
   border: 1px solid rgba(255, 255, 255, 0.088);
   box-shadow:
     0 24px 70px -34px rgba(0, 0, 0, 0.92),
-    0 0 42px -28px rgba(245, 158, 66, 0.86),
+    0 0 42px -28px rgba(var(--theme-glow-rgb), 0.86),
     0 1px 0 rgba(255, 255, 255, 0.065) inset;
   backdrop-filter: blur(20px) saturate(1.12);
   -webkit-backdrop-filter: blur(20px) saturate(1.12);
@@ -821,7 +842,7 @@ button:not(:disabled):active {
 .sidebar-surface {
   border-right: 1px solid rgba(255, 255, 255, 0.072);
   background:
-    radial-gradient(380px 280px at 18px -24px, rgba(245, 158, 66, 0.14), transparent 62%),
+    radial-gradient(380px 280px at 18px -24px, rgba(var(--theme-glow-rgb), 0.14), transparent 62%),
     radial-gradient(300px 240px at 100% 48%, rgba(255, 255, 255, 0.045), transparent 72%),
     linear-gradient(180deg, rgba(44, 44, 47, 0.9) 0%, rgba(37, 37, 40, 0.92) 44%, rgba(29, 29, 31, 0.95) 100%);
   box-shadow:
@@ -847,9 +868,9 @@ button:not(:disabled):active {
 }
 
 .sidebar-action-active {
-  border: 1px solid rgba(245, 158, 66, 0.22);
+  border: 1px solid rgba(var(--theme-glow-rgb), 0.22);
   background:
-    linear-gradient(180deg, rgba(245, 158, 66, 0.14), rgba(245, 158, 66, 0.055));
+    linear-gradient(180deg, rgba(var(--theme-glow-rgb), 0.14), rgba(var(--theme-glow-rgb), 0.055));
   color: var(--text-1);
   box-shadow:
     0 8px 22px rgba(0, 0, 0, 0.18),
@@ -871,7 +892,7 @@ button:not(:disabled):active {
 .notebook-board {
   background-color: var(--bg);
   background-image:
-    radial-gradient(680px 420px at 24% -8%, rgba(245, 158, 66, 0.05), transparent 72%),
+    radial-gradient(680px 420px at 24% -8%, rgba(var(--theme-glow-rgb), 0.05), transparent 72%),
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 100% 100%, 23px 23px;
   background-position: 0 0, -1px -1px;
@@ -896,8 +917,8 @@ button:not(:disabled):active {
   border-color: var(--hairline-strong);
   box-shadow:
     0 30px 70px -28px rgba(0, 0, 0, 0.95),
-    0 0 0 1px rgba(245, 158, 66, 0.14),
-    0 0 26px -16px rgba(245, 158, 66, 0.5),
+    0 0 0 1px rgba(var(--theme-glow-rgb), 0.14),
+    0 0 26px -16px rgba(var(--theme-glow-rgb), 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -911,7 +932,7 @@ button:not(:disabled):active {
 .notebook-rail {
   border-left: 1px solid rgba(255, 255, 255, 0.072);
   background:
-    radial-gradient(360px 300px at 100% -24px, rgba(245, 158, 66, 0.1), transparent 64%),
+    radial-gradient(360px 300px at 100% -24px, rgba(var(--theme-glow-rgb), 0.1), transparent 64%),
     linear-gradient(180deg, rgba(42, 42, 45, 0.72) 0%, rgba(32, 32, 35, 0.78) 60%, rgba(27, 27, 30, 0.82) 100%);
   box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(20px) saturate(1.1);
@@ -919,11 +940,11 @@ button:not(:disabled):active {
 }
 
 .sidebar-search:focus-within {
-  border-color: rgba(245, 158, 66, 0.32);
+  border-color: rgba(var(--theme-glow-rgb), 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.04));
   box-shadow:
-    0 0 0 3px rgba(245, 158, 66, 0.09),
+    0 0 0 3px rgba(var(--theme-glow-rgb), 0.09),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -1054,9 +1075,9 @@ button:not(:disabled):active {
 .animate-border-beam {
   stroke-dasharray: 20 80;
   animation: border-beam 4s linear infinite;
-  stroke: var(--accent);
+  stroke: rgba(var(--theme-glow-rgb), 1);
   stroke-width: 1.5;
-  filter: drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 8px rgba(245, 158, 66, 0.6));
+  filter: drop-shadow(0 0 3px rgba(var(--theme-glow-rgb), 1)) drop-shadow(0 0 8px rgba(var(--theme-glow-rgb), 0.6));
 }
 
 @keyframes border-beam {
