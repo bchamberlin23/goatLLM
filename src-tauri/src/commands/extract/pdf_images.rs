@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::Serialize;
 
 use super::{decode_attachment_b64, MAX_PDF_BYTES};
@@ -71,9 +72,21 @@ pub(crate) fn extract_pdf_images(
     data_url: String,
     filename: String,
 ) -> Result<PdfImageExtraction, String> {
-    use base64::Engine;
-
     let bytes = decode_attachment_b64(&data_url, MAX_PDF_BYTES, "PDF")?;
+    extract_pdf_images_from_bytes(&bytes, &filename)
+}
+
+pub(crate) fn extract_pdf_images_from_bytes(
+    bytes: &[u8],
+    filename: &str,
+) -> Result<PdfImageExtraction, String> {
+    if bytes.len() as u64 > MAX_PDF_BYTES {
+        return Err(format!(
+            "PDF is {} bytes; max supported is {} bytes (~50MB).",
+            bytes.len(),
+            MAX_PDF_BYTES
+        ));
+    }
     let doc =
         lopdf::Document::load_mem(&bytes).map_err(|e| format!("PDF image parse failed: {}", e))?;
     let pages = doc.get_pages();
@@ -98,12 +111,12 @@ pub(crate) fn extract_pdf_images(
                 continue;
             };
             page_index += 1;
-            let id = pdf_asset_id(&filename, page, page_index);
+            let id = pdf_asset_id(filename, page, page_index);
             let ext = extension_for_mime(mime_type);
             let encoded = base64::engine::general_purpose::STANDARD.encode(image.content);
             assets.push(PdfVisualAsset {
                 id: id.clone(),
-                source_filename: filename.clone(),
+                source_filename: filename.to_string(),
                 filename: format!("{}.{}", id, ext),
                 page,
                 mime_type: mime_type.to_string(),
