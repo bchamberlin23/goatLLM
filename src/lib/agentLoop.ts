@@ -36,6 +36,7 @@ import {
 } from "ai";
 import { createModel } from "./model-factory";
 import { getContextWindow } from "./context-window";
+import { shouldCompact } from "./context-manager";
 import { log } from "./logger";
 import { resolveReasoningRequest } from "./reasoning";
 import type {
@@ -75,9 +76,6 @@ export interface AgentLoopOptions {
 
 /** Steps per API call when running the unbounded agent loop. */
 const BATCH_SIZE = 10;
-
-/** Trigger compaction when input tokens exceed this fraction of context window. */
-const CONTEXT_PRESSURE_THRESHOLD = 0.8;
 
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
@@ -357,9 +355,6 @@ export async function agentLoop(
       let workingMessages = mapMessagesForProvider(messages);
       let totalSteps = 0;
       const contextWindow = getContextWindow(config.provider, config.modelId);
-      const pressureLimit = contextWindow > 0
-        ? Math.floor(contextWindow * CONTEXT_PRESSURE_THRESHOLD)
-        : Infinity;
       const compactionTarget = contextWindow > 0
         ? Math.floor(contextWindow * COMPACTION_TARGET)
         : 0;
@@ -575,7 +570,7 @@ export async function agentLoop(
         const inputTokens = usage?.inputTokens ?? estimateMessageTokens(workingMessages);
         if (usage?.outputTokens) totalOutputTokens += usage.outputTokens;
 
-        if (contextWindow > 0 && inputTokens > pressureLimit) {
+        if (shouldCompact(inputTokens, contextWindow)) {
           // We're at 80%+ of the context window. Compact.
           const before = workingMessages.length;
           workingMessages = compactModelMessages(workingMessages, compactionTarget);

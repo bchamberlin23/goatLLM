@@ -31,6 +31,7 @@ import { shouldShowToolCall } from "../lib/tool-visibility";
 import "./MessageBubble.css";
 
 const EMPTY_MESSAGES: Message[] = [];
+const USER_MESSAGE_COLLAPSE_THRESHOLD = 1200;
 
 function stripMarkdown(md: string): string {
   return md
@@ -865,6 +866,7 @@ function StreamingSegmentedText({
 function UserMessageContent({ message }: { message: Message }) {
   const cleaned = useMemo(() => stripAttachmentMarkers(message.content), [message.content]);
   const hasAttachments = !!message.attachments && message.attachments.length > 0;
+  const [expanded, setExpanded] = useState(false);
 
   // Design-mode form submissions are opaque payloads like "[form answers — discovery]\nsurface: ...".
   // Render a subtle indicator instead of the raw text.
@@ -890,22 +892,55 @@ function UserMessageContent({ message }: { message: Message }) {
     return /(```|^#{1,6}\s|^\s*[-*]\s+|\[[^\]]+\]\([^)]+\))/m.test(cleaned);
   }, [cleaned]);
   const useRichRender = hasMath || hasMarkdown;
+  const isCollapsible = !isFormSubmission && cleaned.length > USER_MESSAGE_COLLAPSE_THRESHOLD;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [message.id, cleaned]);
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-1.5">
       {hasAttachments && <AttachmentChips attachments={message.attachments!} />}
       {isFormSubmission ? (
         <div className="flex items-center gap-1.5 text-[12px] text-text-4 italic">
           <ListChecks size={13} strokeWidth={1.6} className="text-text-4" />
           Form submitted
         </div>
-      ) : cleaned.length > 0 && (
-        useRichRender ? (
-          <div className="text-[14px] leading-relaxed text-text-1 select-text">
-            <MarkdownRenderer content={cleaned} />
-          </div>
-        ) : (
-          <div className="text-[14px] leading-relaxed text-text-1 whitespace-pre-wrap break-words select-text">{cleaned}</div>
+      ) : (
+        cleaned.length > 0 && (
+          <>
+            <div
+              data-testid="user-message-content"
+              className={isCollapsible && !expanded ? "max-h-48 overflow-hidden" : undefined}
+            >
+              {useRichRender ? (
+                <div className="text-[14px] leading-relaxed text-text-1 select-text">
+                  <MarkdownRenderer content={cleaned} />
+                </div>
+              ) : (
+                <div className="text-[14px] leading-relaxed text-text-1 whitespace-pre-wrap break-words select-text">
+                  {cleaned}
+                </div>
+              )}
+            </div>
+            {isCollapsible && (
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="inline-flex self-start items-center gap-1 text-[12px] font-medium text-text-2 hover:text-text-1 focus-visible:text-text-1 transition-colors"
+                aria-expanded={expanded}
+                aria-label={expanded ? "Collapse message" : "Expand message"}
+              >
+                <ChevronRight
+                  size={13}
+                  strokeWidth={1.75}
+                  className={`transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
+                  aria-hidden="true"
+                />
+                {expanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </>
         )
       )}
     </div>

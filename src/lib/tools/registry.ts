@@ -44,6 +44,18 @@ export function formatToolsForPrompt(tools: ToolSet): string {
 }
 
 /**
+ * Hide tools that require a user-configured service credential. This is
+ * applied immediately before a tool set is passed to the model, so prompts
+ * and executable tools always have the same availability.
+ */
+export function filterToolsForConfiguredServices(tools: ToolSet, firecrawlApiKey: string): ToolSet {
+  if (firecrawlApiKey.trim()) return tools;
+  const availableTools = { ...tools };
+  delete availableTools.scrape_url;
+  return availableTools;
+}
+
+/**
  * Full tool set available when a workspace is active.
  * Read-only tools execute immediately; write tools require user approval.
  */

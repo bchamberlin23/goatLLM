@@ -40,10 +40,8 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const modelOverrides = useChatStore((s) => s.modelOverrides);
   const setModelOverride = useChatStore((s) => s.setModelOverride);
-  const getActiveMessages = useChatStore((s) => s.getActiveMessages);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [pendingModelId, setPendingModelId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [settingsModelId, setSettingsModelId] = useState<string | null>(null);
@@ -60,9 +58,6 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
   const selectedProvider = selectedModel
     ? providers.find((p) => p.id === selectedModel.providerId)
     : null;
-  const activeMessages = getActiveMessages();
-  const hasMessages = activeMessages.length > 0;
-
   // Filter and group
   const filteredModels = useMemo(() => {
     if (!query.trim()) return models;
@@ -97,7 +92,6 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
       setShowCompare(false);
       requestAnimationFrame(() => searchInputRef.current?.focus());
     } else {
-      setPendingModelId(null);
       setSettingsModelId(null);
       setShowCompare(false);
     }
@@ -150,22 +144,11 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
         setIsOpen(false);
         return;
       }
-      if (hasMessages) setPendingModelId(modelId);
-      else {
-        setSelectedModel(modelId);
-        setIsOpen(false);
-      }
-    },
-    [selectedModelId, hasMessages, setSelectedModel],
-  );
-
-  const handleConfirmSwitch = useCallback(() => {
-    if (pendingModelId) {
-      setSelectedModel(pendingModelId);
-      setPendingModelId(null);
+      setSelectedModel(modelId);
       setIsOpen(false);
-    }
-  }, [pendingModelId, setSelectedModel]);
+    },
+    [selectedModelId, setSelectedModel],
+  );
 
   const moveHighlight = useCallback(
     (dir: 1 | -1) => {
@@ -187,7 +170,6 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
         setIsOpen(false);
         return;
       }
-      if (pendingModelId) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         moveHighlight(1);
@@ -199,7 +181,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
         if (highlightedId) handleModelSelect(highlightedId);
       }
     },
-    [moveHighlight, highlightedId, handleModelSelect, pendingModelId],
+    [moveHighlight, highlightedId, handleModelSelect],
   );
 
   const triggerLabel = selectedModel ? selectedModel.name : "Select model";
@@ -258,30 +240,7 @@ export function ModelPicker({ onOpenSettings }: ModelPickerProps = {}) {
           className="popover-surface motion-popover-in absolute bottom-full right-0 mb-2 w-[360px] max-w-[calc(100vw-32px)] rounded-xl z-[200] flex flex-col overflow-hidden"
           onKeyDown={handleKeyDown}
         >
-          {pendingModelId ? (
-            <div className="p-4 flex flex-col gap-3">
-              <div className="flex flex-col gap-1">
-                <p className="text-[13px] font-medium text-text-1">Switch models?</p>
-                <p className="text-[12.5px] text-text-3 leading-relaxed">
-                  The new model will see the full conversation history.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="flex-1 py-1.5 rounded-md text-[13px] text-text-2 hover:bg-white/5 hover:text-text-1 transition-colors"
-                  onClick={() => setPendingModelId(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="primary-action flex-1 py-1.5 rounded-md text-[13px] font-medium transition-colors"
-                  onClick={handleConfirmSwitch}
-                >
-                  Switch
-                </button>
-              </div>
-            </div>
-          ) : settingsModelId ? (
+          {settingsModelId ? (
             <ModelSettingsPanel
               modelId={settingsModelId}
               models={models}

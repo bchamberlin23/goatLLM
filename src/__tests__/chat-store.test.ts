@@ -525,18 +525,41 @@ describe("ChatStore", () => {
   });
 
   describe("messageQueue", () => {
+    it("claims queued messages one at a time in FIFO order", () => {
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      useChatStore.getState().enqueueMessage(convId, "first follow-up");
+      useChatStore.getState().enqueueMessage(convId, "second follow-up");
+      useChatStore.getState().enqueueMessage(convId, "third follow-up");
+
+      expect(useChatStore.getState()).toHaveProperty("beginQueuedMessageDispatch");
+      expect(useChatStore.getState().beginQueuedMessageDispatch(convId)?.content).toBe("first follow-up");
+      expect(useChatStore.getState().beginQueuedMessageDispatch(convId)).toBeUndefined();
+
+      useChatStore.getState().finishQueuedMessageDispatch(convId);
+      expect(useChatStore.getState().beginQueuedMessageDispatch(convId)?.content).toBe("second follow-up");
+
+      useChatStore.getState().finishQueuedMessageDispatch(convId);
+      expect(useChatStore.getState().beginQueuedMessageDispatch(convId)?.content).toBe("third follow-up");
+    });
+
     it("queues messages per conversation and removes empty queues on dequeue", () => {
       const store = freshStore();
       const convId = store.createConversation();
 
       useChatStore.getState().enqueueMessage(convId, "follow up");
 
-      expect(useChatStore.getState().messageQueue[convId]).toEqual([{ content: "follow up" }]);
+      expect(useChatStore.getState().messageQueue[convId]).toEqual([
+        expect.objectContaining({ id: expect.any(String), content: "follow up" }),
+      ]);
       expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({
-        [convId]: [{ content: "follow up" }],
+        [convId]: [expect.objectContaining({ id: expect.any(String), content: "follow up" })],
       });
 
-      expect(useChatStore.getState().dequeueMessage(convId)).toEqual({ content: "follow up" });
+      expect(useChatStore.getState().dequeueMessage(convId)).toEqual(
+        expect.objectContaining({ id: expect.any(String), content: "follow up" }),
+      );
       expect(useChatStore.getState().messageQueue[convId]).toBeUndefined();
       expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({});
     });
@@ -546,7 +569,8 @@ describe("ChatStore", () => {
       const convId = store.createConversation();
 
       useChatStore.getState().enqueueMessage(convId, "revise this");
-      useChatStore.getState().steerMessage(convId, "revise this");
+      const queued = useChatStore.getState().messageQueue[convId][0];
+      useChatStore.getState().steerMessage(convId, queued.id);
 
       expect(useChatStore.getState().messageQueue[convId]).toBeUndefined();
       expect(useChatStore.getState().steerPayload).toEqual({
@@ -565,17 +589,12 @@ describe("ChatStore", () => {
       useChatStore.getState().enqueueMessage(convId, "different turn");
       useChatStore.getState().enqueueMessage(convId, "repeat this");
 
-      (
-        useChatStore.getState().steerMessage as (
-          conversationId: string,
-          content: string,
-          queueIndex?: number,
-        ) => void
-      )(convId, "repeat this", 2);
+      const queued = useChatStore.getState().messageQueue[convId];
+      useChatStore.getState().steerMessage(convId, queued[2].id);
 
       expect(useChatStore.getState().messageQueue[convId]).toEqual([
-        { content: "repeat this" },
-        { content: "different turn" },
+        expect.objectContaining({ id: expect.any(String), content: "repeat this" }),
+        expect.objectContaining({ id: expect.any(String), content: "different turn" }),
       ]);
       expect(useChatStore.getState().steerPayload).toEqual({
         conversationId: convId,
@@ -583,7 +602,10 @@ describe("ChatStore", () => {
         steered: true,
       });
       expect(JSON.parse(localStorage.getItem("goatllm-message-queue") || "{}")).toEqual({
-        [convId]: [{ content: "repeat this" }, { content: "different turn" }],
+        [convId]: [
+          expect.objectContaining({ id: expect.any(String), content: "repeat this" }),
+          expect.objectContaining({ id: expect.any(String), content: "different turn" }),
+        ],
       });
     });
   });

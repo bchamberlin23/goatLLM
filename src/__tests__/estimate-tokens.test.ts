@@ -54,4 +54,22 @@ describe("estimateContextTokens", () => {
     expect(result.usageTokens).toBe(500);
     expect(result.lastUsageIndex).toBe(0);
   });
+
+  it("uses the saved request estimate before provider usage is available", () => {
+    const messages: Message[] = [
+      msg("u1", "user", "hi", 1),
+      msg("a1", "assistant", "", 2, {
+        // The request includes the base system prompt, active skills, project
+        // instructions, tools, and the user message. None of that lives in
+        // the visible transcript, so message-only estimation cannot see it.
+        estimatedContextTokens: 2_400,
+      }),
+    ];
+
+    const result = estimateContextTokens(messages);
+
+    expect(result.tokens).toBe(2_400);
+    expect(result.usageTokens).toBe(2_400);
+    expect(result.lastUsageIndex).toBe(1);
+  });
 });

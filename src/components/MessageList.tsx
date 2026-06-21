@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useShallow } from "zustand/react/shallow";
 import { useChatStore, type Message } from "../stores/chat";
 import { MessageBubble } from "./MessageBubble";
-import { ChevronDown, Navigation } from "lucide-react";
+import { Check, ChevronDown, Navigation, Pencil, Trash2, X } from "lucide-react";
 import { formatDateSeparator, formatLongDateTime, sameDay } from "../lib/datetime";
 import { applyCompactionReplay } from "../lib/compaction/replay";
 import type { CompactionEntry } from "../lib/compaction/types";
@@ -21,10 +21,12 @@ type VirtualListItem =
       id: string;
       message: Message;
       showSeparator: boolean;
+      modelChange: { from: string; to: string } | null;
     }
   | {
       kind: "queued";
       id: string;
+      queueId: string;
       content: string;
       index: number;
     }
@@ -45,6 +47,8 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
   );
   const messageQueue = useChatStore((s) => s.messageQueue);
   const steerMessage = useChatStore((s) => s.steerMessage);
+  const updateQueuedMessage = useChatStore((s) => s.updateQueuedMessage);
+  const removeQueuedMessage = useChatStore((s) => s.removeQueuedMessage);
   const queuedMessages = activeId ? (messageQueue[activeId] ?? []) : [];
   const visibleMessages = useMemo(
     () => applyCompactionReplay(messages, compactionEntries[0] ?? null).timelineMessages,
@@ -65,22 +69,33 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
   const lastScrollTopRef = useRef(0);
 
   const listItems = useMemo<VirtualListItem[]>(() => {
+    let previousModelId: string | undefined;
     const items: VirtualListItem[] = visibleMessages.map((message, i) => {
       const prev = i > 0 ? visibleMessages[i - 1] : null;
       const isDayChange = !prev || !sameDay(prev.createdAt, message.createdAt);
       const showSeparator = isDayChange && !(prev === null && isToday(message.createdAt));
+      const modelChange =
+        message.role === "user" &&
+        message.modelId &&
+        previousModelId &&
+        message.modelId !== previousModelId
+          ? { from: previousModelId, to: message.modelId }
+          : null;
+      if (message.modelId) previousModelId = message.modelId;
       return {
         kind: "message",
         id: message.id,
         message,
         showSeparator,
+        modelChange,
       };
     });
 
     for (let i = 0; i < queuedMessages.length; i++) {
       items.push({
         kind: "queued",
-        id: `queue-${i}`,
+        id: `queue-${queuedMessages[i].id}`,
+        queueId: queuedMessages[i].id,
         content: queuedMessages[i].content,
         index: i,
       });
@@ -96,8 +111,8 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
     estimateSize: (index) => {
       const item = listItems[index];
       if (item.kind === "footer") return 16;
-      if (item.kind === "queued") return 120;
-      return item.showSeparator ? 180 : 140;
+      if (item.kind === "queued") return 52;
+      return item.showSeparator || item.modelChange ? 180 : 140;
     },
     overscan: 4,
     getItemKey: (index) => listItems[index]?.id ?? index,
@@ -304,6 +319,7 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
                 {item.kind === "message" && (
                   <>
                     {item.showSeparator && <DateSeparator ts={item.message.createdAt} />}
+                    {item.modelChange && <ModelChangeSeparator {...item.modelChange} />}
                     <MessageBubble message={item.message} />
                   </>
                 )}
@@ -311,7 +327,9 @@ export function MessageList({ edgeScroll = false }: { edgeScroll?: boolean }) {
                   <QueuedMessageBubble
                     content={item.content}
                     index={item.index}
-                    onSteer={() => activeId && steerMessage(activeId, item.content, item.index)}
+                    onSteer={() => activeId && steerMessage(activeId, item.queueId)}
+                    onEdit={(content) => activeId && updateQueuedMessage(activeId, item.queueId, content)}
+                    onDelete={() => activeId && removeQueuedMessage(activeId, item.queueId)}
                   />
                 )}
                 {item.kind === "footer" && <div className="h-3" aria-hidden="true" />}
@@ -359,34 +377,103 @@ function DateSeparator({ ts }: { ts: number }) {
   );
 }
 
-function QueuedMessageBubble({ content, index, onSteer }: { content: string; index: number; onSteer: () => void }) {
+function ModelChangeSeparator({ from, to }: { from: string; to: string }) {
+  return (
+    <div
+      className="flex items-center gap-3 px-6 py-2 select-none"
+      role="separator"
+      aria-label={`Model changed from ${from} to ${to}`}
+    >
+      <div className="flex items-center gap-3 w-full max-w-[720px] mx-auto">
+        <div className="flex-1 h-px bg-white/5" aria-hidden="true" />
+        <span className="shrink-0 text-[10.5px] font-medium uppercase tracking-wider text-text-3">
+          Model changed from {from} to {to}
+        </span>
+        <div className="flex-1 h-px bg-white/5" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+function QueuedMessageBubble({
+  content,
+  index,
+  onSteer,
+  onEdit,
+  onDelete,
+}: {
+  content: string;
+  index: number;
+  onSteer: () => void;
+  onEdit: (content: string) => void;
+  onDelete: () => void;
+}) {
   const position = index + 1;
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(content);
+
+  const saveEdit = () => {
+    const next = value.trim();
+    if (!next) return;
+    onEdit(next);
+    setEditing(false);
+  };
 
   return (
     <div className="motion-reveal flex flex-col items-end px-6 py-1.5">
-      <div className="soft-card max-w-[85%] sm:max-w-[70%] rounded-2xl rounded-br-md px-4 py-2.5">
-        <div className="mb-1 flex items-center justify-between gap-3">
-          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-text-3">
-            Queued follow-up
-          </span>
-          {index > 0 && (
-            <span className="shrink-0 rounded bg-sunken px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-text-3 border border-hairline">
-              #{position}
-            </span>
+      <div className="soft-card flex w-full max-w-[85%] items-center gap-2 rounded-xl rounded-br-md px-3 py-2 sm:max-w-[70%]">
+        <span className="shrink-0 text-[10.5px] font-semibold uppercase tracking-wider text-text-3">
+          Queued{index > 0 ? ` #${position}` : ""}
+        </span>
+        {editing ? (
+          <input
+            autoFocus
+            className="min-w-0 flex-1 rounded-md border border-hairline bg-surface-1 px-2 py-1 text-[13px] text-text-1 outline-none focus:border-hairline-strong focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") saveEdit();
+              if (event.key === "Escape") {
+                setValue(content);
+                setEditing(false);
+              }
+            }}
+            aria-label={`Edit queued follow-up ${position}`}
+          />
+        ) : (
+          <p className="min-w-0 flex-1 truncate whitespace-nowrap text-[13px] leading-5 text-text-1" title={content}>
+            {content}
+          </p>
+        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {editing ? (
+            <>
+              <button type="button" onClick={saveEdit} className="control-icon flex h-6 w-6 items-center justify-center rounded-md" aria-label={`Save queued follow-up ${position}`} title="Save edit">
+                <Check size={13} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => { setValue(content); setEditing(false); }} className="control-icon flex h-6 w-6 items-center justify-center rounded-md" aria-label={`Cancel edit queued follow-up ${position}`} title="Cancel edit">
+                <X size={13} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onSteer}
+                className="control-icon flex h-6 w-6 items-center justify-center rounded-md text-accent hover:bg-accent/10"
+                aria-label={`Steer queued follow-up ${position}`}
+                title="Steer current response with this queued message"
+              >
+                <Navigation size={13} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => setEditing(true)} className="control-icon flex h-6 w-6 items-center justify-center rounded-md" aria-label={`Edit queued follow-up ${position}`} title="Edit queued message">
+                <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={onDelete} className="control-icon flex h-6 w-6 items-center justify-center rounded-md hover:text-error" aria-label={`Delete queued follow-up ${position}`} title="Delete queued message">
+                <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </>
           )}
-        </div>
-        <p className="text-[14px] leading-relaxed text-text-1 whitespace-pre-wrap break-words select-text">{content}</p>
-        <div className="mt-2 flex justify-end">
-          <button
-            type="button"
-            onClick={onSteer}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-accent/25 bg-accent/10 px-2.5 text-[11.5px] font-semibold text-accent transition-[background,border-color,color] hover:border-accent/35 hover:bg-accent/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/25"
-            aria-label={`Steer now with queued follow-up ${position}`}
-            title="Steer current response with this queued message"
-          >
-            <Navigation size={11} strokeWidth={2} aria-hidden="true" />
-            Steer now
-          </button>
         </div>
       </div>
     </div>

@@ -36,9 +36,13 @@ describe("compaction trigger", () => {
     ).toBe(385);
   });
 
-  it("compacts only when usage exceeds context window minus reserve tokens", () => {
-    expect(shouldCompact(80_000, 100_000, settings)).toBe(false);
-    expect(shouldCompact(84_000, 100_000, settings)).toBe(true);
+  it.each([
+    ["chat", 32_000],
+    ["agent", 128_000],
+    ["design", 1_000_000],
+  ])("starts auto-compaction at 80%% in %s mode", (_mode, contextWindow) => {
+    expect(shouldCompact(Math.floor(contextWindow * 0.8) - 1, contextWindow, settings)).toBe(false);
+    expect(shouldCompact(Math.floor(contextWindow * 0.8), contextWindow, settings)).toBe(true);
   });
 
   it("respects disabled compaction settings", () => {

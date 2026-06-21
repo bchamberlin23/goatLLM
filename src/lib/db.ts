@@ -173,6 +173,8 @@ interface DbMessage {
   edited_files?: string | null;
   model_id?: string | null;
   citations?: string | null;
+  usage_json?: string | null;
+  estimated_context_tokens?: number | null;
 }
 
 interface DbCompactionEntry {
@@ -254,6 +256,8 @@ function fromDbMessage(d: DbMessage): Message {
     editedFiles,
     modelId: d.model_id || undefined,
     citations: parseOptionalJson<Message["citations"]>(d.citations ?? null),
+    usage: parseOptionalJson<Message["usage"]>(d.usage_json ?? null),
+    estimatedContextTokens: d.estimated_context_tokens ?? undefined,
   };
 }
 
@@ -488,6 +492,8 @@ async function invokeSaveMessage(m: Message): Promise<void> {
         m.citations && m.citations.length > 0
           ? JSON.stringify(m.citations)
           : null,
+      usage: m.usage ? JSON.stringify(m.usage) : null,
+      estimatedContextTokens: m.estimatedContextTokens ?? null,
     },
   });
 }

@@ -9,6 +9,7 @@ import type { LlmConfig, LlmMessage } from "./llm";
 import { findCutPoint } from "./compaction/cut-point";
 import { buildTurnPrefixSummary, mergeSplitTurnSummary } from "./compaction/split-turn";
 import {
+  AUTO_COMPACTION_THRESHOLD,
   createCompactionId,
   DEFAULT_COMPACTION_SETTINGS,
   type CompactionEntry,
@@ -19,6 +20,7 @@ import {
 } from "./compaction/types";
 import {
   estimateMessageTokens,
+  estimateTextTokens,
 } from "./compaction/token-estimate";
 
 export type { CompactionSettings } from "./compaction/types";
@@ -64,8 +66,47 @@ export function getLastAssistantUsage(messages: Message[]): { usage: ContextUsag
       outputTokens: message.outputTokens,
     };
     if (calculateContextTokens(usage) > 0) return { usage, index: i };
+    if (typeof message.estimatedContextTokens === "number" && message.estimatedContextTokens > 0) {
+      return { usage: { totalTokens: message.estimatedContextTokens }, index: i };
+    }
   }
   return null;
+}
+
+/**
+ * Estimate a complete request before the provider has returned token usage.
+ * The system prompt is intentionally included here: it contains built-in
+ * instructions, project context, skill bodies, memories, and artifacts that
+ * are not represented by visible chat messages.
+ */
+export function estimateRequestContextTokens(
+  systemPrompt: string | null | undefined,
+  messages: LlmMessage[],
+  tools?: unknown,
+): number {
+  let tokens = estimateTextTokens(systemPrompt);
+  for (const message of messages) {
+    if (typeof message.content === "string") {
+      tokens += estimateTextTokens(message.content);
+      continue;
+    }
+    for (const part of message.content) {
+      if (part.type === "text") tokens += estimateTextTokens(part.text);
+      // Native image and file tokenization differs by model. Their exact cost
+      // is replaced with provider usage as soon as the response completes.
+      else if (part.type === "image") tokens += 1_536;
+      else tokens += Math.ceil((part.data.length * 0.75) / 16);
+    }
+  }
+  if (tools) {
+    try {
+      tokens += estimateTextTokens(JSON.stringify(tools));
+    } catch {
+      // Tool schemas can contain non-serializable implementation details.
+      // Their system-prompt descriptions are still included above.
+    }
+  }
+  return tokens;
 }
 
 export function estimateContextTokens(messages: Message[]): EstimatedContextTokens {
@@ -93,7 +134,7 @@ export function shouldCompact(
 ): boolean {
   if (!settings.enabled) return false;
   if (contextWindow <= 0) return false;
-  return contextTokens > contextWindow - settings.reserveTokens;
+  return contextTokens >= contextWindow * AUTO_COMPACTION_THRESHOLD;
 }
 
 // ── Tool Output Truncation ──

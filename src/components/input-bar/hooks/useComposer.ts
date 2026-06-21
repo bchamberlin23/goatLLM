@@ -12,7 +12,7 @@ import {
 } from "../../../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type LlmMessage, type ToolCallInfo, type ToolResultInfo } from "../../../lib/llm";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../../../lib/openai-codex-subscription";
-import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../../../lib/tools";
+import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, filterToolsForConfiguredServices, isWriteTool } from "../../../lib/tools";
 import { shouldAutoApprove } from "../../../lib/tools/approval";
 import { classifyCommand } from "../../../lib/command-safety";
 import { stripLeakedToolJson } from "../../../lib/sanitize";
@@ -25,12 +25,14 @@ import { logMessage, logToolCall, logToolResult, logError } from "../../../lib/e
 import {
   compactMessages,
   estimateContextTokens,
+  estimateRequestContextTokens,
   shouldCompact,
   summarizeWithLlm,
 } from "../../../lib/context-manager";
 import { applyCompactionReplay } from "../../../lib/compaction/replay";
 import { extractAndAppend } from "../../../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../../../lib/url-fetch";
+import { MAX_WEB_SEARCH_CALLS_PER_TURN } from "../../../lib/web-search";
 import { log } from "../../../lib/logger";
 import { pdfVisualPartsForMessage } from "../../../lib/pdf-visuals";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../../../lib/prompt-templates";
@@ -301,8 +303,6 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       streamArtifactDelta,
       finalizeStreamingArtifacts,
       enqueueMessage,
-      dequeueMessage,
-      setSteerPayload,
       clearDraft,
       setConversationSkills,
     } = getStore();
@@ -552,6 +552,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         conversationId: convId,
         role: "user",
         content: displayContent,
+        modelId: selectedModelId ?? undefined,
         attachments: currentFiles.length > 0 ? currentFiles : undefined,
         pinned: hasHeavyAttachment || undefined,
         steered: overrides?.steered || undefined,
@@ -659,6 +660,9 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
               : hasAttachmentCache
                 ? ATTACHMENT_TOOLS
                 : undefined;
+    if (activeTools) {
+      activeTools = filterToolsForConfiguredServices(activeTools, getStore().firecrawlApiKey);
+    }
     if (!isAgentMode && !isDesignMode && chatCodeExec) {
       activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
     }
@@ -916,11 +920,6 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         if (getStore().completionSound) {
           playCompletionSound();
         }
-        const currentActiveId = getStore().activeId;
-        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
-        if (next) {
-          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
-        }
       } catch (err) {
         const currentMsg = getStore().messages[convId!]?.find((m) => m.id === assistantMsg.id);
         const currentDr = currentMsg?.deepResearch;
@@ -1085,6 +1084,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
             officeArtifacts,
             advancedArtifacts,
             existingArtifacts: (getStore().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
+            hasScrapeUrl: !!getStore().firecrawlApiKey.trim(),
           });
           let out = base;
           if (skillsBlock) out += `\n${skillsBlock}`;
@@ -1112,7 +1112,7 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
       // Suppress web_search pills beyond the hard cap — the tool returns an
       // error to the model but the user never sees a doomed search attempt.
       // Deep Research mode is exempt from the cap (it has its own budget via stepCountIs).
-      if (tc.toolName === "web_search" && !isResearchMode && getStore().webSearchCount >= 2) {
+      if (tc.toolName === "web_search" && !isResearchMode && getStore().webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
         return;
       }
       if (tc.toolName === "exec_command" || tc.toolName === "bash") {
@@ -1231,6 +1231,10 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         console.warn("Failed to search/inject memories:", e);
       }
     }
+
+    updateMessage(convId!, assistantMsg.id, {
+      estimatedContextTokens: estimateRequestContextTokens(finalSystemPrompt, llmMessages, activeTools),
+    });
 
     await streamChat(llmMessages, finalSystemPrompt, llmConfig, {
       onToken: (chunk) => {
@@ -1390,12 +1394,6 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
         // Play completion sound in agent/design mode if enabled.
         if ((isAgentMode || isDesignMode) && getStore().completionSound) {
           playCompletionSound();
-        }
-        // Auto-dispatch next queued message (a normal follow-up, not a steer).
-        const currentActiveId = getStore().activeId;
-        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
-        if (next) {
-          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
         }
       },
       onError: (err) => {

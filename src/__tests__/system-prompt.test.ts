@@ -35,6 +35,13 @@ describe("buildChatSystemPrompt", () => {
     expect(out).toMatch(/current events/i);
   });
 
+  it("makes web search an autonomous evidence tool instead of a forced one-shot step", () => {
+    const out = buildChatSystemPrompt(undefined, false, true);
+    expect(out).toMatch(/Use it autonomously/);
+    expect(out).toMatch(/extracted page evidence/);
+    expect(out).not.toMatch(/only get ONE search per turn/i);
+  });
+
   it("web_search nudge composes with user instructions", () => {
     const out = buildChatSystemPrompt("be brief", false, true);
     expect(out).toMatch(/web_search tool is available/);

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { MessageBubble } from "../components/MessageBubble";
 import { InlineToolCall } from "../components/InlineToolCall";
@@ -35,6 +35,17 @@ function assistantMessage(partial: Partial<Message>): Message {
     conversationId: convId,
     role: "assistant",
     content: "Done.",
+    createdAt: 1,
+    ...partial,
+  };
+}
+
+function userMessage(partial: Partial<Message> = {}): Message {
+  return {
+    id: "user-msg-1",
+    conversationId: convId,
+    role: "user",
+    content: "Hello",
     createdAt: 1,
     ...partial,
   };
@@ -130,5 +141,22 @@ describe("agent turn smoke", () => {
 
     expect(screen.getByText("Here is")).toBeInTheDocument();
     expect(screen.queryByText(/\*\*important/)).not.toBeInTheDocument();
+  });
+
+  it("collapses a large user message until the user expands it", () => {
+    resetChatStore();
+    render(<MessageBubble message={userMessage({ content: "Long prompt. ".repeat(120) })} />);
+
+    const toggle = screen.getByRole("button", { name: "Expand message" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("user-message-content")).toHaveClass("max-h-48");
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByRole("button", { name: "Collapse message" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByTestId("user-message-content")).not.toHaveClass("max-h-48");
   });
 });

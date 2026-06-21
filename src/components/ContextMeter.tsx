@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useChatStore } from "../stores/chat";
-import { estimateTotalTokens, summarizeWithLlm } from "../lib/context-manager";
+import { estimateContextTokens, estimateTotalTokens, summarizeWithLlm } from "../lib/context-manager";
 import { createCompactionId, type CompactionEntry } from "../lib/compaction/types";
 import {
   getContextWindow,
@@ -66,12 +66,12 @@ export function ContextMeter() {
     lastActiveIdRef.current = activeId ?? null;
 
     if (switchedConversation) {
-      setTokens(estimateTotalTokens(messages));
+      setTokens(estimateContextTokens(messages).tokens);
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setTokens(estimateTotalTokens(messages));
+      setTokens(estimateContextTokens(messages).tokens);
     }, 1000);
 
     return () => window.clearTimeout(timer);
@@ -331,7 +331,7 @@ export function ContextMeter() {
                   ? "Getting full. Consider starting a new chat for unrelated topics."
                   : source === "user-override"
                     ? "Window size set by you. Pinned messages are always kept."
-                    : "Tokens estimated at ~4 chars each. Pinned messages are always kept."}
+                    : "Provider usage includes the system prompt, skills, project context, memories, tools, and chat history. Until it arrives, the full request is estimated."}
           </div>
 
           {compactionEntries.length > 1 && (

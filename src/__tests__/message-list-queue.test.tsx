@@ -44,7 +44,7 @@ function resetStore() {
     ],
     activeId: convId,
     messages: { [convId]: [message] },
-    messageQueue: { [convId]: [{ content: "Tighten the conclusion" }] },
+    messageQueue: { [convId]: [{ id: "queued-1", content: "Tighten the conclusion with a longer explanation than fits on one line" }] },
     steerPayload: null,
     streamingConversationId: convId,
     streamingAbortControllers: {},
@@ -68,18 +68,39 @@ describe("MessageList queued messages", () => {
     localStorage.clear();
   });
 
-  it("renders queued follow-ups as pending user turns with a clear steering action", () => {
+  it("renders queued follow-ups as compact one-line turns with steer, edit, and delete actions", () => {
     render(<MessageList />);
 
-    expect(screen.getByText("Queued follow-up")).toBeInTheDocument();
-    expect(screen.getByText("Tighten the conclusion")).toBeInTheDocument();
+    const queuedContent = screen.getByText("Tighten the conclusion with a longer explanation than fits on one line");
+    expect(queuedContent).toHaveClass("truncate");
+    expect(screen.getByRole("button", { name: /steer queued follow-up 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit queued follow-up 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /delete queued follow-up 1/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /steer now/i }));
+    fireEvent.click(screen.getByRole("button", { name: /steer queued follow-up 1/i }));
 
     expect(useChatStore.getState().steerPayload).toEqual({
       conversationId: convId,
-      content: "Tighten the conclusion",
+      content: "Tighten the conclusion with a longer explanation than fits on one line",
       steered: true,
     });
+  });
+
+  it("shows a model-change divider before the next user turn", () => {
+    const now = Date.now();
+    useChatStore.setState({
+      messages: {
+        [convId]: [
+          { id: "user-a", conversationId: convId, role: "user", content: "First turn", createdAt: now, modelId: "model-a" },
+          { id: "assistant-a", conversationId: convId, role: "assistant", content: "First reply", createdAt: now + 1, modelId: "model-a" },
+          { id: "user-b", conversationId: convId, role: "user", content: "Continue", createdAt: now + 2, modelId: "model-b" },
+        ],
+      },
+      messageQueue: {},
+    });
+
+    render(<MessageList />);
+
+    expect(screen.getByText("Model changed from model-a to model-b")).toBeInTheDocument();
   });
 });

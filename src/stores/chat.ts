@@ -518,6 +518,11 @@ export interface Message {
   /** Token usage stats from the LLM provider. */
   outputTokens?: number;
   inputTokens?: number;
+  /**
+   * Approximate size of the complete request at send time, before a provider
+   * can return authoritative usage. Includes injected system prompt content.
+   */
+  estimatedContextTokens?: number;
   usage?: {
     totalTokens?: number;
     inputTokens?: number;
@@ -699,6 +704,7 @@ export interface PlusMenuVisibility {
 }
 
 export interface QueuedMessage {
+  id: string;
   content: string;
 }
 
@@ -1152,12 +1158,19 @@ export interface ChatStore {
   resendPayload: { conversationId: string; content: string; attachments?: Attachment[] } | null;
   /** Agent-mode message queue: messages sent while the LLM is working. */
   messageQueue: Record<string, QueuedMessage[]>;
+  /** Guards the async setup between claiming a queued turn and starting its stream. */
+  messageDispatchingConversationId: string | null;
   steerPayload: { conversationId: string; content: string; steered?: boolean } | null;
   triggerResend: (conversationId: string, content: string, attachments?: Attachment[]) => void;
   clearResend: () => void;
   enqueueMessage: (conversationId: string, content: string) => void;
-  dequeueMessage: (conversationId: string) => { content: string } | undefined;
-  steerMessage: (conversationId: string, content: string, queueIndex?: number) => void;
+  dequeueMessage: (conversationId: string) => QueuedMessage | undefined;
+  /** Atomically claims the next FIFO item; a second claim waits for the first to settle. */
+  beginQueuedMessageDispatch: (conversationId: string) => QueuedMessage | undefined;
+  finishQueuedMessageDispatch: (conversationId: string) => void;
+  updateQueuedMessage: (conversationId: string, messageId: string, content: string) => void;
+  removeQueuedMessage: (conversationId: string, messageId: string) => void;
+  steerMessage: (conversationId: string, messageId: string) => void;
   setSteerPayload: (payload: { conversationId: string; content: string; steered?: boolean } | null) => void;
   /** Resume a partial assistant turn (uses existing thread + reasoning in context). */
   triggerContinue: (conversationId: string) => void;
@@ -1462,7 +1475,7 @@ export interface ChatStore {
   updateManualTodoBoard: (conversationId: string, board: TaskBoard) => void;
 
   /** Per-turn web search call counter. Resets on each send. Caps the model at
-   *  2 searches per turn to prevent runaway search loops. */
+   *  3 searches per turn to prevent runaway search loops. */
   webSearchCount: number;
   incrementWebSearchCount: () => void;
   resetWebSearchCount: () => void;
@@ -1570,6 +1583,28 @@ export interface ChatStore {
 
 const generateId = (): string =>
   `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+function normalizeMessageQueue(value: unknown): Record<string, QueuedMessage[]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([conversationId, rawQueued]) => {
+        const queued = Array.isArray(rawQueued) ? rawQueued : [];
+        return [
+          conversationId,
+          queued
+          .filter((item): item is { id?: unknown; content?: unknown } => !!item && typeof item === "object")
+          .flatMap((item) => {
+            const content = typeof item.content === "string" ? item.content.trim() : "";
+            if (!content) return [];
+            return [{ id: typeof item.id === "string" && item.id ? item.id : generateId(), content }];
+          }),
+        ];
+      })
+      .filter(([, queued]) => queued.length > 0),
+  );
+}
 
 // Tracks the last time each in-flight streaming message was flushed to disk.
 // Used by appendToMessage to throttle writes to ~750ms so partial content
@@ -1722,7 +1757,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       discoveryStatus: {},
       discoveryError: {},
       resendPayload: null,
-      messageQueue: loadJsonValue<Record<string, QueuedMessage[]>>(MESSAGE_QUEUE_KEY, {}),
+      messageQueue: normalizeMessageQueue(loadJsonValue<unknown>(MESSAGE_QUEUE_KEY, {})),
+      messageDispatchingConversationId: null,
       steerPayload: null,
       artifacts: {},
       artifactPanelOpen: false,
@@ -2474,7 +2510,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set((state) => {
           const messageQueue = {
             ...state.messageQueue,
-            [conversationId]: [...(state.messageQueue[conversationId] || []), { content }],
+            [conversationId]: [...(state.messageQueue[conversationId] || []), { id: generateId(), content }],
           };
           saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
           return { messageQueue };
@@ -2494,27 +2530,78 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         return first;
       },
 
-      steerMessage: (conversationId, content, queueIndex) => {
-        const { cancelStreaming } = get();
-        cancelStreaming();
-        const queue = get().messageQueue[conversationId];
-        if (queue) {
-          const removeIndex =
-            typeof queueIndex === "number" && queue[queueIndex]?.content === content
-              ? queueIndex
-              : queue.findIndex((q) => q.content === content);
-          if (removeIndex >= 0) {
-            const filtered = queue.filter((_, index) => index !== removeIndex);
-            set((state) => {
-              const messageQueue = { ...state.messageQueue };
-              if (filtered.length > 0) messageQueue[conversationId] = filtered;
-              else delete messageQueue[conversationId];
-              saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
-              return { messageQueue };
-            });
+      beginQueuedMessageDispatch: (conversationId) => {
+        let next: QueuedMessage | undefined;
+        set((state) => {
+          if (state.messageDispatchingConversationId === conversationId || state.streamingAbortControllers[conversationId]) {
+            return state;
           }
+          const queue = state.messageQueue[conversationId];
+          if (!queue || queue.length === 0) return state;
+          const [first, ...rest] = queue;
+          next = first;
+          const messageQueue = { ...state.messageQueue };
+          if (rest.length > 0) messageQueue[conversationId] = rest;
+          else delete messageQueue[conversationId];
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return { messageQueue, messageDispatchingConversationId: conversationId };
+        });
+        return next;
+      },
+
+      finishQueuedMessageDispatch: (conversationId) => {
+        if (get().messageDispatchingConversationId === conversationId) {
+          set({ messageDispatchingConversationId: null });
         }
-        set({ steerPayload: { conversationId, content, steered: true } });
+      },
+
+      updateQueuedMessage: (conversationId, messageId, content) => {
+        const nextContent = content.trim();
+        if (!nextContent) return;
+        set((state) => {
+          const queue = state.messageQueue[conversationId];
+          if (!queue?.some((message) => message.id === messageId)) return state;
+          const messageQueue = {
+            ...state.messageQueue,
+            [conversationId]: queue.map((message) =>
+              message.id === messageId ? { ...message, content: nextContent } : message,
+            ),
+          };
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return { messageQueue };
+        });
+      },
+
+      removeQueuedMessage: (conversationId, messageId) => {
+        set((state) => {
+          const queue = state.messageQueue[conversationId];
+          if (!queue?.some((message) => message.id === messageId)) return state;
+          const remaining = queue.filter((message) => message.id !== messageId);
+          const messageQueue = { ...state.messageQueue };
+          if (remaining.length > 0) messageQueue[conversationId] = remaining;
+          else delete messageQueue[conversationId];
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return { messageQueue };
+        });
+      },
+
+      steerMessage: (conversationId, messageId) => {
+        const queuedMessage = get().messageQueue[conversationId]?.find((message) => message.id === messageId);
+        if (!queuedMessage) return;
+        get().cancelStreaming();
+        set((state) => {
+          const queue = state.messageQueue[conversationId] ?? [];
+          const remaining = queue.filter((message) => message.id !== messageId);
+          const messageQueue = { ...state.messageQueue };
+          if (remaining.length > 0) messageQueue[conversationId] = remaining;
+          else delete messageQueue[conversationId];
+          saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
+          return {
+            messageQueue,
+            messageDispatchingConversationId: conversationId,
+            steerPayload: { conversationId, content: queuedMessage.content, steered: true },
+          };
+        });
       },
 
       setSteerPayload: (payload) => set({ steerPayload: payload }),
@@ -4722,6 +4809,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // that don't opt in (Anthropic, OpenAI, DeepSeek, MiMo) keep
           // the curated catalog only — discoveredModels is ignored for
           // them so a stale or bogus entry can't leak into the picker.
+          const curatedModels = providerId === "opencode-go"
+            ? mergeDiscoveredModels(
+                CLOUD_PROVIDER_MODELS[providerId] ?? [],
+                getCuratedModels(ZEN_FREE_PROVIDER_ID),
+              )
+            : CLOUD_PROVIDER_MODELS[providerId] ?? [];
           const sourceModels = isLocal
             ? mergeDiscoveredModels(config.models ?? [], discoveredModels[providerId] ?? [])
             : providerSupportsDiscovery(providerId)
@@ -4801,12 +4894,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const { conversations, activeId } = get();
         return conversations.find((c) => c.id === activeId) ?? null;
       },
-          const curatedModels = providerId === "opencode-go"
-            ? mergeDiscoveredModels(
-                CLOUD_PROVIDER_MODELS[providerId] ?? [],
-                getCuratedModels(ZEN_FREE_PROVIDER_ID),
-              )
-            : CLOUD_PROVIDER_MODELS[providerId] ?? [];
 
       getActiveMessages: () => {
         const { messages, activeId } = get();
@@ -5008,14 +5095,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           // Only restore activeId if that conversation actually exists in loaded data
           const validActiveId = activeId && data.conversations.some((c) => c.id === activeId) ? activeId : null;
           const conversationIds = new Set(data.conversations.map((c) => c.id));
-          const savedMessageQueue = loadJsonValue<Record<string, QueuedMessage[]>>(MESSAGE_QUEUE_KEY, {});
+          const savedMessageQueue = normalizeMessageQueue(loadJsonValue<unknown>(MESSAGE_QUEUE_KEY, {}));
           const messageQueue = Object.fromEntries(
             Object.entries(savedMessageQueue)
               .filter(([conversationId, queued]) => conversationIds.has(conversationId) && Array.isArray(queued))
-              .map(([conversationId, queued]) => [
-                conversationId,
-                queued.filter((q) => q && typeof q.content === "string" && q.content.trim().length > 0),
-              ])
+              .map(([conversationId, queued]) => [conversationId, queued])
               .filter(([, queued]) => queued.length > 0),
           ) as Record<string, QueuedMessage[]>;
           saveJsonSetting(MESSAGE_QUEUE_KEY, messageQueue);
@@ -5098,6 +5182,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             autoTriggerSkills,
             activeId: validActiveId,
             messageQueue,
+            messageDispatchingConversationId: null,
             workspacePanelOpen: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelOpen,
             workspacePanelTab: loadJsonSetting(PRODUCT_WORKSPACE_STATE_KEY, DEFAULT_PRODUCT_WORKSPACE_STATE).workspacePanelTab,
             usageSettings: loadUsageSettings(),

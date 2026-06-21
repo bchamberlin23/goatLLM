@@ -59,7 +59,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const setPendingFormSubmission = useChatStore((s) => s.setPendingFormSubmission);
   const addMessage = useChatStore((s) => s.addMessage);
   const clearResend = useChatStore((s) => s.clearResend);
-  const dequeueMessage = useChatStore((s) => s.dequeueMessage);
+  const beginQueuedMessageDispatch = useChatStore((s) => s.beginQueuedMessageDispatch);
+  const finishQueuedMessageDispatch = useChatStore((s) => s.finishQueuedMessageDispatch);
   const setSteerPayload = useChatStore((s) => s.setSteerPayload);
   const setPursueGoalMode = useChatStore((s) => s.setPursueGoalMode);
   const setPlanMode = useChatStore((s) => s.setPlanMode);
@@ -105,9 +106,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (!pendingFormSubmission || pendingFormSubmission.conversationId !== activeId) return;
     const text = pendingFormSubmission.text;
     setPendingFormSubmission(null);
-    addMessage({ conversationId: activeId, role: "user", content: text });
+    addMessage({
+      conversationId: activeId,
+      role: "user",
+      content: text,
+      modelId: selectedModelId ?? undefined,
+    });
     setTimeout(() => sendRef.current?.({ content: text }), 0);
-  }, [activeId, addMessage, pendingFormSubmission, sendRef, setPendingFormSubmission]);
+  }, [activeId, addMessage, pendingFormSubmission, selectedModelId, sendRef, setPendingFormSubmission]);
 
   useEffect(() => {
     if (!resendPayload) return;
@@ -122,17 +128,19 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   useEffect(() => {
     if (!steerPayload || steerPayload.conversationId !== activeId) return;
     const { content, steered } = steerPayload;
+    const conversationId = steerPayload.conversationId;
     setSteerPayload(null);
-    send({ content, fromQueue: true, steered });
-  }, [activeId, send, setSteerPayload, steerPayload]);
+    void send({ content, fromQueue: true, steered })
+      .catch((error) => setError(error instanceof Error ? error.message : "Unable to send queued message."))
+      .finally(() => finishQueuedMessageDispatch(conversationId));
+  }, [activeId, finishQueuedMessageDispatch, send, setError, setSteerPayload, steerPayload]);
 
   useEffect(() => {
     if (!activeId || isStreaming || steerPayload) return;
-    const nextQueued = messageQueue[activeId]?.[0];
-    if (!nextQueued) return;
-    const next = dequeueMessage(activeId);
+    if (!messageQueue[activeId]?.length) return;
+    const next = beginQueuedMessageDispatch(activeId);
     if (next) setSteerPayload({ conversationId: activeId, content: next.content, steered: false });
-  }, [activeId, dequeueMessage, isStreaming, messageQueue, setSteerPayload, steerPayload]);
+  }, [activeId, beginQueuedMessageDispatch, isStreaming, messageQueue, setSteerPayload, steerPayload]);
 
   return (
     <ImageGenModal providerConfigs={providerConfigs} imageGenSettings={imageGenSettings} activeId={activeId} addImageArtifact={addImageArtifact}>

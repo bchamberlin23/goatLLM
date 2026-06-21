@@ -42,6 +42,9 @@ export interface CompactionSettings {
   keepRecentTokens: number;
 }
 
+/** Begin automatic compaction once the active context window is 80% used. */
+export const AUTO_COMPACTION_THRESHOLD = 0.8;
+
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   enabled: true,
   reserveTokens: 16_384,

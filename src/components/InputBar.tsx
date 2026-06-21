@@ -3,7 +3,7 @@ import type { ToolSet } from "ai";
 import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type DeepResearchEvent, type DeepResearchState, type ToolCallEntry, type Message } from "../stores/chat";
 import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type LlmMessage, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
-import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, isWriteTool } from "../lib/tools";
+import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, filterToolsForConfiguredServices, isWriteTool } from "../lib/tools";
 import { shouldAutoApprove } from "../lib/tools/approval";
 import { classifyCommand } from "../lib/command-safety";
 import { stripLeakedToolJson } from "../lib/sanitize";
@@ -16,6 +16,7 @@ import { logMessage, logToolCall, logToolResult, logError } from "../lib/event-l
 import {
   compactMessages,
   estimateContextTokens,
+  estimateRequestContextTokens,
   shouldCompact,
   summarizeWithLlm,
 } from "../lib/context-manager";
@@ -23,6 +24,7 @@ import { applyCompactionReplay } from "../lib/compaction/replay";
 import { extractAndAppend } from "../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../lib/url-fetch";
 import { buildCitationInstructions, selectUsedCitations } from "../lib/citations";
+import { MAX_WEB_SEARCH_CALLS_PER_TURN } from "../lib/web-search";
 import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { providerSupportsNativePdf } from "../lib/native-pdf";
 import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
@@ -220,7 +222,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const resendPayload = useChatStore((s) => s.resendPayload);
   const clearResend = useChatStore((s) => s.clearResend);
   const enqueueMessage = useChatStore((s) => s.enqueueMessage);
-  const dequeueMessage = useChatStore((s) => s.dequeueMessage);
+  const beginQueuedMessageDispatch = useChatStore((s) => s.beginQueuedMessageDispatch);
+  const finishQueuedMessageDispatch = useChatStore((s) => s.finishQueuedMessageDispatch);
   const messageQueue = useChatStore((s) => s.messageQueue);
   const steerPayload = useChatStore((s) => s.steerPayload);
   const setSteerPayload = useChatStore((s) => s.setSteerPayload);
@@ -803,6 +806,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               : hasAttachmentCache
                 ? ATTACHMENT_TOOLS
                 : undefined;
+    if (activeTools) {
+      activeTools = filterToolsForConfiguredServices(activeTools, useChatStore.getState().firecrawlApiKey);
+    }
     if (!isAgentMode && !isDesignMode && chatCodeExec) {
       activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
     }
@@ -1068,11 +1074,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (useChatStore.getState().completionSound) {
           playCompletionSound();
         }
-        const currentActiveId = useChatStore.getState().activeId;
-        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
-        if (next) {
-          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
-        }
       } catch (err) {
         const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
         const currentDr = currentMsg?.deepResearch;
@@ -1237,6 +1238,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             officeArtifacts,
             advancedArtifacts,
             existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
+            hasScrapeUrl: !!useChatStore.getState().firecrawlApiKey.trim(),
           });
           let out = base;
           if (skillsBlock) out += `\n${skillsBlock}`;
@@ -1264,7 +1266,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       // Suppress web_search pills beyond the hard cap — the tool returns an
       // error to the model but the user never sees a doomed search attempt.
       // Deep Research mode is exempt from the cap (it has its own budget via stepCountIs).
-      if (tc.toolName === "web_search" && !isResearchMode && useChatStore.getState().webSearchCount >= 2) {
+      if (tc.toolName === "web_search" && !isResearchMode && useChatStore.getState().webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
         return;
       }
       if (tc.toolName === "exec_command" || tc.toolName === "bash") {
@@ -1395,6 +1397,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
       const citationBlock = buildCitationInstructions(documentSources, hasWebSearch);
       if (citationBlock) finalSystemPrompt += `\n${citationBlock}\n`;
     }
+
+    useChatStore.getState().updateMessage(convId!, assistantMsg.id, {
+      estimatedContextTokens: estimateRequestContextTokens(finalSystemPrompt, llmMessages, activeTools),
+    });
 
     await streamChat(llmMessages, finalSystemPrompt, llmConfig, {
       onToken: (chunk) => {
@@ -1567,12 +1573,6 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if ((isAgentMode || isDesignMode) && useChatStore.getState().completionSound) {
           playCompletionSound();
         }
-        // Auto-dispatch next queued message (a normal follow-up, not a steer).
-        const currentActiveId = useChatStore.getState().activeId;
-        const next = currentActiveId === convId ? dequeueMessage(convId!) : undefined;
-        if (next) {
-          setSteerPayload({ conversationId: convId!, content: next.content, steered: false });
-        }
       },
       onError: (err) => {
         // If the user aborted, don't surface an error — onDone has already
@@ -1642,7 +1642,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     renameConversation, setTitleGenerating, conversations,
     addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
     detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts,
-    enqueueMessage, dequeueMessage, setSteerPayload, clearDraft]);
+    enqueueMessage, setSteerPayload, clearDraft]);
 
   // Keep the ref pointed at the latest handleSend so the question-form
   // effect (which fires from outside this component) doesn't see a stale
@@ -1660,19 +1660,21 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (!steerPayload) return;
     if (steerPayload.conversationId !== activeId) return;
     const { content, steered } = steerPayload;
+    const conversationId = steerPayload.conversationId;
     setSteerPayload(null);
-    handleSend({ content, fromQueue: true, steered });
-  }, [steerPayload, activeId, setSteerPayload, handleSend]);
+    void handleSend({ content, fromQueue: true, steered })
+      .catch((error) => setError(error instanceof Error ? error.message : "Unable to send queued message."))
+      .finally(() => finishQueuedMessageDispatch(conversationId));
+  }, [steerPayload, activeId, setSteerPayload, handleSend, finishQueuedMessageDispatch]);
 
   useEffect(() => {
     if (!activeId || isStreaming || steerPayload) return;
-    const nextQueued = messageQueue[activeId]?.[0];
-    if (!nextQueued) return;
-    const next = dequeueMessage(activeId);
+    if (!messageQueue[activeId]?.length) return;
+    const next = beginQueuedMessageDispatch(activeId);
     if (next) {
       setSteerPayload({ conversationId: activeId, content: next.content, steered: false });
     }
-  }, [activeId, isStreaming, messageQueue, steerPayload, dequeueMessage, setSteerPayload]);
+  }, [activeId, isStreaming, messageQueue, steerPayload, beginQueuedMessageDispatch, setSteerPayload]);
 
   // Handle @ file reference selection
   const handleFileRefSelect = useCallback((path: string) => {

@@ -44,6 +44,10 @@ When adding any feature that introduces data a user would expect to survive acro
 3. **Test the reload cycle** — verify that Cmd+Q → reopen restores every piece of user-visible data exactly as it appeared before closing. Pay special attention to timestamps (no "Working for 3d" artifacts), attachment data URLs, artifact version history, and mode toggles that should reset per-session (research, plan).
 4. **Don't persist things that should be per-session** — research mode, plan mode, web search count, and similar one-shot toggles must reset on every reload. Remove their localStorage keys during hydrate rather than restoring them.
 
+## YAGNI
+
+Follow You Aren't Gonna Need It: implement only what the current request requires. Do not add speculative abstractions, configuration, extensibility, dependencies, or features for hypothetical future needs. When a future requirement becomes concrete, add the smallest solution that serves it.
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.

@@ -23,6 +23,7 @@ export {
 export {
   READ_ONLY_TOOLS,
   WRITE_TOOLS,
+  filterToolsForConfiguredServices,
   ALL_TOOLS,
   RESEARCH_TOOLS,
   PLAN_TOOLS,

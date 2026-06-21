@@ -35,6 +35,8 @@ pub(crate) struct DbMessage {
     edited_files: Option<String>,
     model_id: Option<String>,
     citations: Option<String>,
+    usage_json: Option<String>,
+    estimated_context_tokens: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,6 +96,8 @@ pub(crate) struct SaveMessageRequest {
     edited_files: Option<String>,
     model_id: Option<String>,
     citations: Option<String>,
+    usage_json: Option<String>,
+    estimated_context_tokens: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,7 +162,7 @@ pub(crate) fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData,
         .collect();
 
     let mut msg_stmt = db
-        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations FROM messages ORDER BY created_at ASC")
+        .prepare("SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations, usage_json, estimated_context_tokens FROM messages ORDER BY created_at ASC")
         .map_err(|e| e.to_string())?;
 
     let messages: Vec<DbMessage> = msg_stmt
@@ -177,6 +181,8 @@ pub(crate) fn load_all_data(state: tauri::State<'_, DbState>) -> Result<AllData,
                 edited_files: row.get(10)?,
                 model_id: row.get(11)?,
                 citations: row.get(12)?,
+                usage_json: row.get(13)?,
+                estimated_context_tokens: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -259,7 +265,7 @@ pub(crate) fn save_message(
         0
     };
     db.execute(
-        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        "INSERT OR REPLACE INTO messages (id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations, usage_json, estimated_context_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         rusqlite::params![
             payload.id,
             payload.conversation_id,
@@ -273,7 +279,9 @@ pub(crate) fn save_message(
             payload.turn_duration_ms,
             payload.edited_files,
             payload.model_id,
-            payload.citations
+            payload.citations,
+            payload.usage_json,
+            payload.estimated_context_tokens
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -321,7 +329,7 @@ pub(crate) fn load_messages_for_conversation(
     let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
     let mut stmt = db
         .prepare(
-            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations \
+            "SELECT id, conversation_id, role, content, tool_calls, attachments, created_at, pinned, thinking_content, turn_duration_ms, edited_files, model_id, citations, usage_json, estimated_context_tokens \
              FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .map_err(|e| e.to_string())?;
@@ -341,6 +349,8 @@ pub(crate) fn load_messages_for_conversation(
                 edited_files: row.get(10)?,
                 model_id: row.get(11)?,
                 citations: row.get(12)?,
+                usage_json: row.get(13)?,
+                estimated_context_tokens: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?
