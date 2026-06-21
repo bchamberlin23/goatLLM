@@ -5,7 +5,7 @@ import { approveExecution, denyExecution } from "../lib/tools";
 import { computeDiff, type DiffResult } from "../lib/diff-utils";
 import { DiffView } from "./DiffView";
 import { Shimmer } from "./ThinkingIndicator";
-import { ChevronDown, AlertTriangle, ArrowUpRight, File, Folder, Globe, CheckCircle2, Copy, Check, Sliders, Terminal } from "lucide-react";
+import { ChevronDown, AlertTriangle, ArrowUpRight, File, Folder, Globe, CheckCircle2, Copy, Check, Sliders, Terminal, Search, ListChecks, Users, FileCode } from "lucide-react";
 import { ansiToHtml, hasAnsi } from "../lib/ansi";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
@@ -955,52 +955,131 @@ function TerminalOutput({ text, toolName }: { text: string; toolName: string }) 
 
 export { TerminalOutput };
 
-// ── Terminal View (Tailored) ───────────────────────────────────────
+// ── Tool Panel Shell ───────────────────────────────────────────────
+//
+// Shared container for every expanded tool view. Provides:
+//  - A 3px semantic accent strip on the left edge (identifies tool type at a glance)
+//  - A header bar with icon, title, optional target (path/query/command), optional badge
+//  - A body region with proper surface depth
+//
+// The strip uses the existing semantic palette (info/success/accent/error/text-2)
+// — it's functional identification, not decoration.
+
+type SemanticColor = "text-info" | "text-success" | "text-accent" | "text-error" | "text-text-2";
+
+const STRIP_BG: Record<SemanticColor, string> = {
+  "text-info": "bg-info",
+  "text-success": "bg-success",
+  "text-accent": "bg-accent",
+  "text-error": "bg-error",
+  "text-text-2": "bg-text-2",
+};
+
+function ToolPanelShell({
+  accent,
+  icon,
+  title,
+  target,
+  badge,
+  children,
+}: {
+  accent: SemanticColor;
+  icon: ReactElement;
+  title: string;
+  target?: string;
+  badge?: { label: string; color: string };
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col shadow-lg motion-expand-content">
+      <div className="relative flex items-center gap-2 px-3.5 py-2.5 border-b border-hairline bg-white/[0.03]">
+        <span
+          className={`absolute left-0 top-0 bottom-0 w-[3px] ${STRIP_BG[accent]}`}
+          aria-hidden
+        />
+        <span className={`shrink-0 ${accent}`}>{icon}</span>
+        <span className="text-[12px] font-semibold text-text-1 shrink-0">{title}</span>
+        {target && (
+          <code className="text-[11px] text-text-4 font-mono truncate min-w-0 flex-1">
+            {target}
+          </code>
+        )}
+        {badge && (
+          <span
+            className={`shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.04] border border-hairline ${badge.color}`}
+          >
+            {badge.label}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col">{children}</div>
+    </div>
+  );
+}
+
+// ── Section label (used inside panel bodies) ───────────────────────
+
+function SectionLabel({ children, icon }: { children: ReactNode; icon?: ReactElement }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+// ── Code surface (unified pre styling for file/terminal content) ───
+
+function CodeSurface({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <pre
+      className={`p-3 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[240px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1 ${className}`}
+    >
+      {children}
+    </pre>
+  );
+}
+
+// ── Terminal View ──────────────────────────────────────────────────
 
 function TerminalView({ tc }: { tc: ToolCallEntry }) {
   const command = getInputField(tc.input, "command") || getInputField(tc.input, "CommandLine") || "(unknown command)";
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-mono text-[11.5px] leading-relaxed shadow-lg">
-      {/* Terminal Window Header */}
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02] select-none">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-error" />
-          <span className="w-2.5 h-2.5 rounded-full bg-accent" />
-          <span className="w-2.5 h-2.5 rounded-full bg-success" />
+    <ToolPanelShell
+      accent="text-text-2"
+      icon={<Terminal size={14} strokeWidth={1.75} />}
+      title="Terminal"
+      target={command}
+      badge={{ label: "bash", color: "text-text-2" }}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-2.5">
+        <div className="flex items-start gap-2 font-mono text-[12px] leading-relaxed">
+          <span className="text-accent select-none shrink-0 font-semibold">$</span>
+          <span className="text-text-1 select-all break-all font-medium">{command}</span>
         </div>
-        <span className="text-[10px] text-text-4 font-sans font-medium uppercase tracking-wider">Terminal — bash</span>
-        <div className="w-12" />
-      </div>
-
-      {/* Terminal Content */}
-      <div className="p-3.5 flex flex-col gap-2 bg-black/[0.15]">
-        {/* Command line */}
-        <div className="flex items-start gap-2 text-accent">
-          <span className="text-text-4 select-none">$</span>
-          <span className="font-semibold select-all break-all">{command}</span>
-        </div>
-        
-        {/* Output */}
         {output.trim() ? (
-          <div className="border-t border-hairline pt-2 mt-1 max-h-[300px] overflow-auto select-text">
+          <div className="border-t border-hairline pt-2.5 max-h-[300px] overflow-auto">
             <PlainOutput text={output} toolName={tc.toolName} />
           </div>
         ) : (
-          <div className="text-[10.5px] text-text-4 italic pt-1">Command completed with no output</div>
+          <div className="flex items-center gap-1.5 text-[11px] text-text-4 italic pt-0.5">
+            <CheckCircle2 size={11} className="text-success/60" strokeWidth={2} />
+            Command completed with no output
+          </div>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
-// ── File Operation View (Tailored) ─────────────────────────────────
+// ── File Operation View ────────────────────────────────────────────
 
 function FileOperationView({ tc }: { tc: ToolCallEntry }) {
   const name = tc.toolName;
   const path = getInputField(tc.input, "path") || getInputField(tc.input, "TargetFile") || getInputField(tc.input, "AbsolutePath") || "(unknown path)";
-  
+
   const isRead = name === "read_file" || name === "view_file";
   const isWrite = name === "write_file";
   const isEdit = name === "edit_file" || name === "str_replace" || name === "multi_replace_file_content" || name === "replace_file_content";
@@ -1008,71 +1087,60 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
   const isMarkdown = path.toLowerCase().endsWith(".md") || path.toLowerCase().endsWith(".mdx") || path.toLowerCase().endsWith(".markdown");
 
-  let opLabel = "File Action";
-  let opColor = "text-text-2";
-  if (isRead) { opLabel = "Read File"; opColor = "text-info"; }
-  else if (isWrite) { opLabel = "Write File"; opColor = "text-success"; }
-  else if (isEdit) { opLabel = "Edit File"; opColor = "text-accent"; }
-  else if (isDiff) { opLabel = "Diff File"; opColor = "text-accent"; }
+  const accent: SemanticColor = isRead ? "text-info" : isWrite ? "text-success" : "text-accent";
+  let opLabel = "File";
+  if (isRead) opLabel = "Read";
+  else if (isWrite) opLabel = "Write";
+  else if (isEdit) opLabel = "Edit";
+  else if (isDiff) opLabel = "Diff";
 
   const obj = (tc.input && typeof tc.input === "object" ? tc.input : {}) as Record<string, unknown>;
   const startLine = obj.StartLine ?? obj.startLine ?? obj.offset;
   const endLine = obj.EndLine ?? obj.endLine ?? obj.limit;
   const outputText = String(tc.output ?? "");
 
-  return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <File size={13} className={isRead ? "text-info" : isWrite ? "text-success" : "text-accent"} />
-          <span className="font-mono font-semibold text-text-1 select-all truncate max-w-[280px]">
-            {path.split("/").pop()}
-          </span>
-          <span className="text-[10px] text-text-4 truncate max-w-[150px] font-mono select-all">
-            {path}
-          </span>
-        </div>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-hairline ${opColor}`}>
-          {opLabel}
-        </span>
-      </div>
+  const metadata: Array<{ label: string; value: string; color?: string }> = [];
+  if (startLine !== undefined) metadata.push({ label: "start", value: String(startLine) });
+  if (endLine !== undefined) metadata.push({ label: "end", value: String(endLine) });
+  if (obj.Overwrite !== undefined) metadata.push({
+    label: "overwrite",
+    value: String(obj.Overwrite),
+    color: obj.Overwrite ? "text-error" : "text-success",
+  });
 
-      <div className="p-3.5 flex flex-col gap-3 bg-black/[0.15]">
-        <div className="grid grid-cols-[100px_1fr] gap-y-1.5 gap-x-3 text-[11px] text-text-4 font-mono border-b border-hairline pb-2">
-          {startLine !== undefined && (
-            <div className="contents">
-              <span>Start Line:</span>
-              <span className="text-text-2 tabular-nums">{String(startLine)}</span>
-            </div>
-          )}
-          {endLine !== undefined && (
-            <div className="contents">
-              <span>End Line / Limit:</span>
-              <span className="text-text-2 tabular-nums">{String(endLine)}</span>
-            </div>
-          )}
-          {obj.Overwrite !== undefined && (
-            <div className="contents">
-              <span>Overwrite:</span>
-              <span className={obj.Overwrite ? "text-error" : "text-success"}>{String(obj.Overwrite)}</span>
-            </div>
-          )}
-        </div>
+  return (
+    <ToolPanelShell
+      accent={accent}
+      icon={<FileCode size={14} strokeWidth={1.75} />}
+      title={path.split("/").pop() || path}
+      target={path}
+      badge={{ label: opLabel, color: accent }}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-3">
+        {metadata.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {metadata.map((m) => (
+              <span
+                key={m.label}
+                className="inline-flex items-center gap-1 rounded-md border border-hairline bg-white/[0.03] px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums"
+              >
+                <span className="text-text-4 uppercase tracking-wider text-[9.5px]">{m.label}</span>
+                <span className={m.color ?? "text-text-2"}>{m.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
         {isRead && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
-              File Contents
-            </span>
+            <SectionLabel>Contents</SectionLabel>
             {outputText.trim() ? (
               isMarkdown ? (
                 <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
                   <MarkdownRenderer content={outputText} />
                 </div>
               ) : (
-                <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
-                  {outputText}
-                </pre>
+                <CodeSurface>{outputText}</CodeSurface>
               )
             ) : (
               <span className="text-text-4 italic text-[11px]">Empty file</span>
@@ -1082,18 +1150,14 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isWrite && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
-              Written Content
-            </span>
+            <SectionLabel>Written</SectionLabel>
             {isMarkdown ? (
               <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
                 <MarkdownRenderer content={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} />
               </div>
             ) : (
               renderMassiveContent(obj) ?? (
-                <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
-                  {String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")}
-                </pre>
+                <CodeSurface>{String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")}</CodeSurface>
               )
             )}
           </div>
@@ -1101,27 +1165,28 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isEdit && (
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
-              Modifications
-            </span>
+            <SectionLabel>Modifications</SectionLabel>
             {obj.ReplacementChunks ? (
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
                 {(obj.ReplacementChunks as any[]).map((chunk, idx) => (
-                  <div key={idx} className="border border-hairline rounded-lg overflow-hidden bg-black/20">
-                    <div className="px-2.5 py-1 bg-white/[0.02] border-b border-hairline text-[10px] text-text-4 font-mono">
-                      Chunk #{idx + 1} (Lines {chunk.StartLine ?? "?"} - {chunk.EndLine ?? "?"})
+                  <div key={idx} className="border border-hairline rounded-lg overflow-hidden bg-bg">
+                    <div className="px-2.5 py-1.5 bg-white/[0.03] border-b border-hairline text-[10.5px] text-text-4 font-mono flex items-center gap-2">
+                      <span className="text-text-3 font-semibold">Chunk {idx + 1}</span>
+                      <span className="tabular-nums">
+                        L{chunk.StartLine ?? "?"}–{chunk.EndLine ?? "?"}
+                      </span>
                     </div>
-                    <div className="p-2 flex flex-col gap-2">
-                      <div>
-                        <span className="text-[10px] text-error/70 font-semibold uppercase block mb-0.5 select-none">Target</span>
-                        <pre className="p-2 bg-red-950/10 border border-red-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-error">
+                    <div className="p-2.5 flex flex-col gap-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9.5px] text-error font-semibold uppercase tracking-wider select-none">− Target</span>
+                        <pre className="p-2 bg-error/[0.06] border border-error/15 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-error/90">
                           {chunk.TargetContent}
                         </pre>
                       </div>
-                      <div>
-                        <span className="text-[10px] text-success/70 font-semibold uppercase block mb-0.5 select-none">Replacement</span>
-                        <pre className="p-2 bg-emerald-950/10 border border-emerald-500/10 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-success">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9.5px] text-success font-semibold uppercase tracking-wider select-none">+ Replacement</span>
+                        <pre className="p-2 bg-success/[0.06] border border-success/15 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-success/90">
                           {chunk.ReplacementContent}
                         </pre>
                       </div>
@@ -1132,9 +1197,8 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
             ) : (
               renderMassiveContent(obj)
             )}
-            
             {outputText.trim() && (
-              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-success/80 font-mono">
+              <div className="flex items-center gap-1.5 text-[11px] text-success font-mono">
                 <CheckCircle2 size={12} className="text-success" />
                 <span>{outputText}</span>
               </div>
@@ -1144,20 +1208,16 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isDiff && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
-              Diff View
-            </span>
-            <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
-              {outputText}
-            </pre>
+            <SectionLabel>Diff</SectionLabel>
+            <CodeSurface>{outputText}</CodeSurface>
           </div>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
-// ── Grep Results View (Tailored) ───────────────────────────────────
+// ── Grep Results View ──────────────────────────────────────────────
 
 function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
   const query = getInputField(tc.input, "query") || getInputField(tc.input, "pattern") || getInputField(tc.input, "Query") || "(unknown pattern)";
@@ -1191,46 +1251,38 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
   }
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
+    <ToolPanelShell
+      accent="text-text-2"
+      icon={<Search size={14} strokeWidth={1.75} />}
+      title="Search"
+      target={searchPath || "."}
+      badge={{ label: `${isJsonl ? results.length : 0} matches`, color: "text-text-2" }}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <Globe size={13} className="text-info" />
-          <span className="font-semibold text-text-1">Project Search</span>
-        </div>
-        <span className="text-[10px] text-text-4 font-mono">
-          {searchPath || "."}
-        </span>
-      </div>
-
-      <div className="p-3.5 flex flex-col gap-3 bg-black/[0.15]">
-        <div className="flex items-center justify-between border-b border-hairline pb-2 font-mono text-[11px] text-text-4">
-          <div>
-            <span>Query: </span>
-            <span className="text-accent font-semibold">"{query}"</span>
-          </div>
-          <div>
-            <span className="text-text-2 tabular-nums font-semibold">{isJsonl ? results.length : "0"}</span>
-            <span> matches</span>
-          </div>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">Query</span>
+          <code className="text-[12px] text-accent font-mono font-medium break-all">
+            {query}
+          </code>
         </div>
 
         {isJsonl && results.length > 0 ? (
           <div className="max-h-[250px] overflow-auto flex flex-col gap-2">
             {Object.entries(groupedMatches).map(([filePath, fileMatches]) => (
-              <div key={filePath} className="border border-hairline rounded-lg overflow-hidden bg-black/15">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/[0.01] border-b border-hairline text-[10.5px] font-mono text-text-2">
-                  <File size={11} className="text-text-4" />
+              <div key={filePath} className="border border-hairline rounded-lg overflow-hidden bg-bg">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/[0.03] border-b border-hairline text-[10.5px] font-mono">
+                  <File size={11} className="text-text-4 shrink-0" />
                   <span className="font-semibold text-text-1 truncate">{filePath.split("/").pop()}</span>
-                  <span className="text-text-4 truncate max-w-[200px]">{filePath}</span>
+                  <span className="text-text-4 truncate min-w-0 flex-1">{filePath}</span>
+                  <span className="text-text-4 tabular-nums shrink-0">{fileMatches.length}</span>
                 </div>
-
                 <div className="flex flex-col">
                   {fileMatches.map((m, idx) => (
                     <div key={idx} className="flex gap-2 items-baseline px-2.5 py-1.5 hover:bg-white/[0.02] border-b border-hairline last:border-0 font-mono text-[11px]">
                       {m.LineNumber !== undefined && (
-                        <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-8 text-right select-none">{m.LineNumber}</span>
+                        <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-7 text-right select-none">{m.LineNumber}</span>
                       )}
-                      <span className="text-text-3 whitespace-pre-wrap break-all flex-1 select-text">
+                      <span className="text-text-3 whitespace-pre-wrap break-all flex-1 select-text min-w-0">
                         {m.LineContent ? (
                           m.LineContent.trimStart().split(query).map((part, i, arr) => (
                             <span key={i}>
@@ -1249,33 +1301,29 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
             ))}
           </div>
         ) : !isJsonl && output.trim() ? (
-          <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[180px] overflow-auto text-text-2">
-            {output}
-          </pre>
+          <CodeSurface className="max-h-[180px] text-text-2">{output}</CodeSurface>
         ) : (
           <div className="text-[11px] text-text-4 italic">No matches found.</div>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
-// ── Todo View (Tailored) ───────────────────────────────────────────
+// ── Todo View ──────────────────────────────────────────────────────
 
 function TodoView({ tc }: { tc: ToolCallEntry }) {
   const name = tc.toolName;
-
   const outputText = String(tc.output ?? "");
 
-  let actionLabel = "Todo Task";
-  let color = "text-text-2";
-  if (name === "todo_create") { actionLabel = "Task Created"; color = "text-success"; }
-  else if (name === "todo_update") { actionLabel = "Task Updated"; color = "text-accent"; }
-  else if (name === "todo_delete") { actionLabel = "Task Deleted"; color = "text-error"; }
-  else if (name === "todo_list") { actionLabel = "Todo List"; color = "text-info"; }
-  else if (name === "todo_get") { actionLabel = "Task Retrieved"; color = "text-info"; }
+  let actionLabel = "Task";
+  let accent: SemanticColor = "text-text-2";
+  if (name === "todo_create") { actionLabel = "Created"; accent = "text-success"; }
+  else if (name === "todo_update") { actionLabel = "Updated"; accent = "text-accent"; }
+  else if (name === "todo_delete") { actionLabel = "Deleted"; accent = "text-error"; }
+  else if (name === "todo_list") { actionLabel = "List"; accent = "text-info"; }
+  else if (name === "todo_get") { actionLabel = "Retrieved"; accent = "text-info"; }
 
-  // Extract task board serialized state from comment markers
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
   let boardTasks: any[] = [];
   const BOARD_MARKER = "<!-- TODO_BOARD";
@@ -1301,18 +1349,13 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
   const actionSummary = start !== -1 ? outputText.slice(0, start).trim() : outputText;
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <Sliders size={13} className="text-success" />
-          <span className="font-semibold text-text-1">Workspace Tasks</span>
-        </div>
-        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/[0.03] border border-hairline ${color}`}>
-          {actionLabel}
-        </span>
-      </div>
-
-      <div className="p-3.5 bg-black/[0.15] flex flex-col gap-3">
+    <ToolPanelShell
+      accent={accent}
+      icon={<ListChecks size={14} strokeWidth={1.75} />}
+      title="Tasks"
+      badge={{ label: actionLabel, color: accent }}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-2.5">
         {actionSummary && name !== "todo_list" && (
           <div className="text-[11px] font-mono text-text-4 pb-2 border-b border-hairline">
             {actionSummary.split("\n\n")[0]}
@@ -1328,22 +1371,19 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
               const isBlocked = t.blockedBy && t.blockedBy.length > 0;
 
               return (
-                <div key={t.id} className="flex items-center gap-2.5 p-2.5 bg-white/[0.02] border border-hairline rounded-lg hover:bg-white/[0.03] transition-all">
-                  <span className={`w-4 h-4 rounded border transition-colors ${
-                    isCompleted 
-                      ? "border-success bg-success/15 text-success" 
-                      : isInProgress 
-                        ? "border-accent bg-accent/10 text-accent" 
+                <div key={t.id} className="flex items-center gap-2.5 p-2.5 bg-bg border border-hairline rounded-lg hover:border-hairline-strong transition-colors">
+                  <span className={`w-4 h-4 rounded border transition-colors flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isCompleted
+                      ? "border-success bg-success/15 text-success"
+                      : isInProgress
+                        ? "border-accent bg-accent/10 text-accent"
                         : "border-white/20"
-                  } flex items-center justify-center text-[10px] font-bold shrink-0`}>
+                  }`}>
                     {isCompleted && "✓"}
                     {isInProgress && "›"}
                   </span>
-                  
                   <div className="flex-1 min-w-0">
-                    <div className={`font-semibold text-[11.5px] truncate ${
-                      isCompleted ? "text-text-4 line-through font-normal" : "text-text-2"
-                    }`}>
+                    <div className={`text-[12px] truncate ${isCompleted ? "text-text-4 line-through" : "text-text-1 font-medium"}`}>
                       {t.title}
                     </div>
                     {t.description && (
@@ -1352,14 +1392,13 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
                       </div>
                     )}
                   </div>
-
                   <div className="flex items-center gap-1.5 shrink-0">
                     {isBlocked && !isCompleted && (
-                      <span className="text-[9px] px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/10 rounded font-mono" title={`Blocked by: ${t.blockedBy.join(", ")}`}>
+                      <span className="text-[9px] px-1.5 py-0.5 bg-error/10 text-error border border-error/15 rounded font-mono" title={`Blocked by: ${t.blockedBy.join(", ")}`}>
                         Blocked
                       </span>
                     )}
-                    <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.03] text-text-4 border border-hairline rounded font-mono select-all">
+                    <span className="text-[9px] px-1.5 py-0.5 bg-white/[0.03] text-text-4 border border-hairline rounded font-mono select-all tabular-nums">
                       {t.id.slice(-8)}
                     </span>
                   </div>
@@ -1368,16 +1407,16 @@ function TodoView({ tc }: { tc: ToolCallEntry }) {
             })}
           </div>
         ) : (
-          <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto text-text-2 select-text">
+          <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[160px] overflow-auto text-text-2 select-text">
             {actionSummary}
           </pre>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
-// ── Web Operation View (Tailored) ──────────────────────────────────
+// ── Web Operation View ─────────────────────────────────────────────
 
 function WebOpView({ tc }: { tc: ToolCallEntry }) {
   const name = tc.toolName;
@@ -1387,70 +1426,56 @@ function WebOpView({ tc }: { tc: ToolCallEntry }) {
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <Globe size={13} className="text-info" />
-          <span className="font-semibold text-text-1">
-            {isSearch ? "Web Search" : isScrape ? "Web Scrape" : "Web Fetch"}
-          </span>
-        </div>
-        <span className="text-[10px] text-accent font-mono truncate max-w-[200px] select-all">
-          {query}
-        </span>
-      </div>
-
-      <div className="p-3.5 bg-black/[0.15]">
+    <ToolPanelShell
+      accent="text-info"
+      icon={<Globe size={14} strokeWidth={1.75} />}
+      title={isSearch ? "Web Search" : isScrape ? "Web Scrape" : "Web Fetch"}
+      target={query}
+    >
+      <div className="px-3.5 py-3">
         {isSearch ? (
           <WebSearchOutput output={output} />
         ) : (
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">
-              {isScrape ? "Scraped Page Content" : "Fetched Page Content"}
-            </span>
-            <div className="p-3.5 bg-black/20 border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
+            <SectionLabel>{isScrape ? "Scraped content" : "Fetched content"}</SectionLabel>
+            <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[280px] overflow-auto select-text text-text-1">
               <MarkdownRenderer content={output} />
             </div>
           </div>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
-// ── Subagent View (Tailored) ───────────────────────────────────────
+// ── Subagent View ──────────────────────────────────────────────────
 
 function SubagentView({ tc }: { tc: ToolCallEntry }) {
   const task = getInputField(tc.input, "task") || getInputField(tc.input, "name") || "subagent task";
   const output = String(tc.output ?? "");
 
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
-        <div className="flex items-center gap-2">
-          <Sliders size={13} className="text-accent" />
-          <span className="font-semibold text-text-1">Agentic Loop</span>
-        </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 rounded bg-white/[0.03] px-2 py-0.5 border border-hairline">
-          Subagent
-        </span>
-      </div>
-
-      <div className="p-3.5 bg-black/[0.15] flex flex-col gap-2">
-        <div className="border border-hairline bg-white/[0.01] rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-text-4 uppercase tracking-wider mb-1">Assigned Task</div>
-          <p className="text-[12px] font-medium text-text-1">{task}</p>
+    <ToolPanelShell
+      accent="text-accent"
+      icon={<Users size={14} strokeWidth={1.75} />}
+      title="Subagent"
+      badge={{ label: "Agent", color: "text-accent" }}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-2.5">
+        <div className="border-l-2 border-accent/30 pl-3 py-1">
+          <div className="text-[9.5px] font-semibold uppercase tracking-wider text-text-4 mb-1 select-none">Assigned task</div>
+          <p className="text-[12.5px] font-medium text-text-1 leading-relaxed">{task}</p>
         </div>
         {output.trim() && (
-          <div className="flex flex-col gap-1.5 mt-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">Output / Status</span>
-            <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11px] max-h-[120px] overflow-auto text-text-2">
+          <div className="flex flex-col gap-1.5">
+            <SectionLabel icon={<Terminal size={10} strokeWidth={2} />}>Output</SectionLabel>
+            <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[140px] overflow-auto text-text-2 select-text">
               {output}
             </pre>
           </div>
         )}
       </div>
-    </div>
+    </ToolPanelShell>
   );
 }
 
@@ -1504,46 +1529,45 @@ function PersonalizedToolPanel({ tc }: { tc: ToolCallEntry }) {
   if (name === "list_dir") {
     const path = getInputField(tc.input, "path") || ".";
     return (
-      <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
-        <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
-          <div className="flex items-center gap-2">
-            <Folder size={13} className="text-accent" />
-            <span className="font-semibold text-text-1">Directory Listing</span>
-          </div>
-          <span className="text-[10px] text-text-4 font-mono">{path}</span>
-        </div>
-        <div className="p-3 bg-black/[0.15]">
+      <ToolPanelShell
+        accent="text-accent"
+        icon={<Folder size={14} strokeWidth={1.75} />}
+        title="Directory"
+        target={path}
+      >
+        <div className="p-3">
           <FileListOutput output={String(tc.output ?? "")} />
         </div>
-      </div>
+      </ToolPanelShell>
     );
   }
 
   const hasOutput = tc.output !== undefined;
   return (
-    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col shadow-lg">
-      <div className="px-3.5 py-2.5 bg-white/[0.01] border-b border-hairline flex flex-col gap-2">
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-4">
-          <Sliders size={11} className="text-accent" strokeWidth={2} />
-          Parameters
+    <ToolPanelShell
+      accent="text-text-2"
+      icon={<Sliders size={14} strokeWidth={1.75} />}
+      title={name}
+    >
+      <div className="px-3.5 py-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <SectionLabel icon={<Sliders size={10} strokeWidth={2} />}>Parameters</SectionLabel>
+          {tc.input && typeof tc.input === "object" ? (
+            <div className="bg-bg border border-hairline rounded-lg p-2.5 max-h-[200px] overflow-auto">
+              <JsonInspectorNode value={tc.input} depth={0} />
+            </div>
+          ) : (
+            <div className="text-[11.5px] font-mono text-text-2">{String(tc.input)}</div>
+          )}
         </div>
-        {tc.input && typeof tc.input === "object" ? (
-          <JsonInspectorNode value={tc.input} depth={0} />
-        ) : (
-          <div className="text-[11.5px] font-mono text-text-2">{String(tc.input)}</div>
+        {hasOutput && (
+          <div className="flex flex-col gap-1.5">
+            <SectionLabel icon={<Terminal size={10} strokeWidth={2} />}>Result</SectionLabel>
+            <ToolOutput tc={tc} />
+          </div>
         )}
       </div>
-
-      {hasOutput && (
-        <div className="px-3.5 py-2.5 bg-black/[0.15] border-t border-hairline flex flex-col gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-4">
-            <Terminal size={11} className="text-success" strokeWidth={2} />
-            Result
-          </div>
-          <ToolOutput tc={tc} />
-        </div>
-      )}
-    </div>
+    </ToolPanelShell>
   );
 }
 
