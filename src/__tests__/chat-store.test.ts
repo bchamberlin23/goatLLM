@@ -293,6 +293,23 @@ describe("ChatStore", () => {
       expect(curated.contextWindow).toBe(200_000);
     });
 
+    it("shows discovered Zen free models in the configured OpenCode Go picker", () => {
+      useChatStore.setState({ providerConfigs: {} });
+      useChatStore.getState().configureProvider("opencode-go", { apiKey: "sk-test" });
+      useChatStore.setState((state) => ({
+        discoveredModels: {
+          ...state.discoveredModels,
+          "opencode-go-free": [
+            { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
+          ],
+        },
+      }));
+
+      expect(useChatStore.getState().getModels()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "opencode-go:big-pickle-free", name: "Big Pickle" }),
+      ]));
+    });
+
     it("merges discovered Zen free models into the built-in picker", () => {
       useChatStore.setState({ providerConfigs: {} });
       useChatStore.setState((state) => ({

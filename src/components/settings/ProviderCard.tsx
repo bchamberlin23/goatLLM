@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, Check, EyeOff, Eye, Search, X, RefreshCw, Loader2 } from "lucide-react";
 import { CLOUD_PROVIDER_MODELS, useChatStore } from "../../stores/chat";
 import { mergeDiscoveredModels } from "../../lib/providers";
+import { ZEN_FREE_PROVIDER_ID } from "../../lib/zen-credentials";
 import { useShallow } from "zustand/react/shallow";
 
 export function ProviderCard({
@@ -41,7 +42,13 @@ export function ProviderCard({
   );
   const curated = CLOUD_PROVIDER_MODELS[provider.id] ?? [];
   const discovered = provider.supportsDiscovery ? discoveredModels[provider.id] ?? [] : [];
-  const allModels = mergeDiscoveredModels(curated, discovered);
+  const zenFreeModels = provider.id === "opencode-go"
+    ? discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []
+    : [];
+  const allModels = mergeDiscoveredModels(
+    mergeDiscoveredModels(curated, discovered),
+    zenFreeModels,
+  );
   const enabled = config?.enabledModels;
   const enabledCount = enabled === undefined ? allModels.length : enabled.length;
   const isDiscovering = provider.supportsDiscovery && discoveryStatus[provider.id] === "loading";
@@ -141,7 +148,14 @@ export function ProviderCard({
         {provider.supportsDiscovery && hasKey && (
           <button
             className={`control-pill px-2 py-1 text-[11px] font-medium rounded-md transition-colors flex items-center gap-1 ${canDiscover ? "" : "opacity-45 cursor-not-allowed"}`}
-            onClick={(e) => { e.stopPropagation(); if (canDiscover) void discoverCloudModels(provider.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!canDiscover) return;
+              void Promise.all([
+                discoverCloudModels(provider.id),
+                ...(provider.id === "opencode-go" ? [discoverCloudModels(ZEN_FREE_PROVIDER_ID)] : []),
+              ]);
+            }}
             disabled={!canDiscover}
             aria-label={`Discover ${provider.name} models`}
             title={hasKey ? `Hit ${provider.baseUrl}/models to refresh the catalog` : "Add an API key first"}

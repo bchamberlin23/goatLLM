@@ -4736,8 +4736,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             ? mergeDiscoveredModels(config.models ?? [], discoveredModels[providerId] ?? [])
             : providerSupportsDiscovery(providerId)
               ? mergeDiscoveredModels(
-                  CLOUD_PROVIDER_MODELS[providerId] ?? [],
-                  discoveredModels[providerId] ?? [],
+                  mergeDiscoveredModels(
+                    CLOUD_PROVIDER_MODELS[providerId] ?? [],
+                    discoveredModels[providerId] ?? [],
+                  ),
+                  providerId === "opencode-go" ? discoveredModels[ZEN_FREE_PROVIDER_ID] ?? [] : [],
                 )
               : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
           const allowlist = config.enabledModels;
