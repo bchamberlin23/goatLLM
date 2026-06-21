@@ -62,7 +62,7 @@ interface CodeBlockProps {
   deferHighlight?: boolean;
 }
 
-const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = false }: CodeBlockProps) {
+export const CodeBlock = memo(function CodeBlock({ language, code, deferHighlight = false }: CodeBlockProps) {
   const [html, setHtml] = useState<string>("");
   const [highlightState, setHighlightState] = useState<"loading" | "ready" | "failed" | "deferred">(
     deferHighlight ? "deferred" : "loading",

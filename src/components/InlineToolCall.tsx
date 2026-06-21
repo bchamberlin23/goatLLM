@@ -5,9 +5,9 @@ import { approveExecution, denyExecution } from "../lib/tools";
 import { computeDiff, type DiffResult } from "../lib/diff-utils";
 import { DiffView } from "./DiffView";
 import { Shimmer } from "./ThinkingIndicator";
-import { ChevronDown, AlertTriangle, ArrowUpRight, File, Folder, Globe, CheckCircle2, Copy, Check, Sliders, Terminal, Search, ListChecks, Users, FileCode } from "lucide-react";
+import { ChevronDown, AlertTriangle, ArrowUpRight, File, Folder, Globe, CheckCircle2, Copy, Check, Sliders, Terminal, Search, ListChecks, FileCode } from "lucide-react";
 import { ansiToHtml, hasAnsi } from "../lib/ansi";
-import { MarkdownRenderer } from "./MarkdownRenderer";
+import { MarkdownRenderer, CodeBlock } from "./MarkdownRenderer";
 
 // ── Helpers (extracted from MessageBubble.tsx) ─────────────────────
 
@@ -490,7 +490,7 @@ function renderMassiveContent(obj: Record<string, unknown>) {
     return (
       <div className="col-span-2 mt-1 w-full flex flex-col gap-1.5">
         <span className="text-text-4 font-sans text-[10px] font-semibold uppercase tracking-wider">Code Content</span>
-        <CodeViewer text={String(content)} maxLines={40} maxHeight={220} />
+        <SyntaxCodeViewer text={String(content)} />
       </div>
     );
   }
@@ -1052,66 +1052,40 @@ function SectionLabel({ children, icon }: { children: ReactNode; icon?: ReactEle
   );
 }
 
-// ── Code viewer with line-number gutter ────────────────────────────
-//
-// Renders code/file content with a sticky line-number gutter that scrolls
-// in sync with the content. Uses bg-sunken (the design system's code surface)
-// and text-text-1 for readable content. Long lines scroll horizontally
-// (whitespace-pre) instead of wrapping — this keeps line numbers aligned.
+// ── Language inference from file path ──────────────────────────────
 
-function CodeViewer({
+const EXT_TO_LANG: Record<string, string> = {
+  ts: "typescript", tsx: "tsx", js: "javascript", jsx: "jsx", mjs: "javascript",
+  py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash",
+  json: "json", yml: "yaml", yaml: "yaml", toml: "toml",
+  css: "css", html: "html", md: "markdown", markdown: "markdown",
+  sql: "sql", c: "c", cpp: "cpp", h: "c",
+  java: "java", kt: "kotlin", swift: "swift",
+  dockerfile: "dockerfile",
+};
+
+function inferLanguage(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower === "dockerfile" || lower.endsWith("/dockerfile")) return "dockerfile";
+  const ext = lower.split(".").pop() ?? "";
+  return EXT_TO_LANG[ext] ?? "text";
+}
+
+// ── Syntax-highlighted code viewer ─────────────────────────────────
+//
+// Wraps the existing CodeBlock (Shiki-powered) with language inference
+// from the file path. Gets real syntax highlighting with colors — the
+// same renderer used for code blocks in chat messages.
+
+function SyntaxCodeViewer({
   text,
-  startLine = 1,
-  maxLines = 60,
-  maxHeight = 320,
+  path,
 }: {
   text: string;
-  startLine?: number;
-  maxLines?: number;
-  maxHeight?: number;
+  path?: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const lines = text.split("\n");
-  const overLimit = lines.length > maxLines;
-  const visibleLines = overLimit && !expanded ? lines.slice(0, maxLines) : lines;
-  const lineCount = visibleLines.length;
-
-  // Pad line numbers to a consistent width so the gutter doesn't jitter
-  const maxNum = startLine + lineCount - 1;
-  const width = Math.max(2, String(maxNum).length);
-
-  return (
-    <div className="rounded-lg border border-hairline bg-sunken overflow-hidden">
-      <div className="overflow-auto" style={{ maxHeight }}>
-        <div className="flex min-w-full">
-          <pre
-            className="select-none sticky left-0 z-[1] bg-sunken text-right text-text-4 font-mono text-[11px] leading-[1.65] py-3 pl-3 pr-2.5 border-r border-hairline tabular-nums shrink-0"
-            aria-hidden
-          >
-            {Array.from({ length: lineCount }, (_, i) =>
-              String(startLine + i).padStart(width, " "),
-            ).join("\n")}
-          </pre>
-          <pre
-            className="flex-1 min-w-0 py-3 pl-3 pr-4 font-mono text-[11.5px] leading-[1.65] whitespace-pre select-text text-text-1"
-          >
-            {visibleLines.join("\n")}
-          </pre>
-        </div>
-      </div>
-      {overLimit && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full px-3 py-1.5 border-t border-hairline text-[11px] font-medium text-text-3 hover:text-text-1 hover:bg-white/[0.03] transition-colors"
-        >
-          {expanded
-            ? "Show less"
-            : `Show ${lines.length - maxLines} more lines`}
-        </button>
-      )}
-    </div>
-  );
+  const language = path ? inferLanguage(path) : "text";
+  return <CodeBlock language={language} code={text} />;
 }
 
 // ── Terminal View ──────────────────────────────────────────────────
@@ -1214,7 +1188,7 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
                   <MarkdownRenderer content={outputText} />
                 </div>
               ) : (
-                <CodeViewer text={outputText} startLine={typeof startLine === "number" ? startLine : 1} />
+                <SyntaxCodeViewer text={outputText} path={path} />
               )
             ) : (
               <span className="text-text-4 italic text-[11px]">Empty file</span>
@@ -1231,7 +1205,7 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
               </div>
             ) : (
               renderMassiveContent(obj) ?? (
-                <CodeViewer text={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} />
+                <SyntaxCodeViewer text={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} path={path} />
               )
             )}
           </div>
@@ -1283,7 +1257,7 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
         {isDiff && (
           <div className="flex flex-col gap-1.5">
             <SectionLabel>Diff</SectionLabel>
-            <CodeViewer text={outputText} />
+            <SyntaxCodeViewer text={outputText} path={path} />
           </div>
         )}
       </div>
@@ -1375,7 +1349,7 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
             ))}
           </div>
         ) : !isJsonl && output.trim() ? (
-          <CodeViewer text={output} maxLines={40} maxHeight={200} />
+          <SyntaxCodeViewer text={output} />
         ) : (
           <div className="text-[11px] text-text-4 italic">No matches found.</div>
         )}
@@ -1529,27 +1503,32 @@ function SubagentView({ tc }: { tc: ToolCallEntry }) {
   const output = String(tc.output ?? "");
 
   return (
-    <ToolPanelShell
-      accent="text-accent"
-      icon={<Users size={14} strokeWidth={1.75} />}
-      title="Subagent"
-      badge={{ label: "Agent", color: "text-accent" }}
-    >
-      <div className="px-3.5 py-3 flex flex-col gap-2.5">
-        <div className="border-l-2 border-accent/30 pl-3 py-1">
-          <div className="text-[9.5px] font-semibold uppercase tracking-wider text-text-4 mb-1 select-none">Assigned task</div>
-          <p className="text-[12.5px] font-medium text-text-1 leading-relaxed">{task}</p>
+    <div className="mt-1.5 ml-4 rounded-xl border border-hairline bg-sunken overflow-hidden flex flex-col font-sans text-[11.5px] leading-relaxed shadow-lg">
+      <div className="flex items-center justify-between px-3.5 py-2 border-b border-hairline bg-white/[0.02]">
+        <div className="flex items-center gap-2">
+          <Sliders size={13} className="text-accent" />
+          <span className="font-semibold text-text-1">Agentic Loop</span>
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 rounded bg-white/[0.03] px-2 py-0.5 border border-hairline">
+          Subagent
+        </span>
+      </div>
+
+      <div className="p-3.5 bg-black/[0.15] flex flex-col gap-2">
+        <div className="border border-hairline bg-white/[0.01] rounded-lg p-3">
+          <div className="text-[10px] font-semibold text-text-4 uppercase tracking-wider mb-1">Assigned Task</div>
+          <p className="text-[12px] font-medium text-text-1">{task}</p>
         </div>
         {output.trim() && (
-          <div className="flex flex-col gap-1.5">
-            <SectionLabel icon={<Terminal size={10} strokeWidth={2} />}>Output</SectionLabel>
-            <pre className="p-2.5 bg-bg border border-hairline rounded-lg font-mono text-[11px] leading-relaxed max-h-[140px] overflow-auto text-text-2 select-text">
+          <div className="flex flex-col gap-1.5 mt-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4 select-none">Output / Status</span>
+            <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11px] max-h-[120px] overflow-auto text-text-2">
               {output}
             </pre>
           </div>
         )}
       </div>
-    </ToolPanelShell>
+    </div>
   );
 }
 
