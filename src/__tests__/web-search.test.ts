@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { READ_ONLY_TOOLS } from "../lib/tools/registry";
 import { useChatStore } from "../stores/chat";
+import { browserFetch } from "../lib/browser-fetch";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
+vi.mock("../lib/browser-fetch", () => ({
+  browserFetch: vi.fn(),
+  validateBrowserUrl: vi.fn(() => ({ ok: true, url: new URL("https://example.com/") })),
+}));
 
 describe("web_search tool", () => {
   beforeEach(() => {
@@ -12,17 +17,18 @@ describe("web_search tool", () => {
     store.webSearchCount = 0;
     store.researchMode = false;
     store.resetCitationSources();
+    vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
-  it("handles webSearchCount limit in non-research mode", async () => {
+  it("caps the fourth normal web search without making a network request", async () => {
     const store = useChatStore.getState();
-    store.webSearchCount = 2;
+    store.webSearchCount = 3;
 
     const tool = READ_ONLY_TOOLS.web_search;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
     const result = await tool.execute!({ query: "test query" }, {} as any) as string;
-    expect(result).toContain("Maximum web searches (2) already used this turn");
+    expect(result).toContain("Maximum web searches (3) already used this turn");
   });
 
   it("allows webSearchCount limit to be bypassed in research mode", async () => {
@@ -85,19 +91,25 @@ describe("web_search tool", () => {
 
     const parsed = JSON.parse(result);
     expect(parsed).toHaveLength(2);
-    // Chat-mode searches are annotated with a `cite` marker the model uses for
-    // inline citations; the title/url/content payload is otherwise unchanged.
-    expect(parsed[0]).toEqual({
+    // Chat-mode searches are annotated with a `cite` marker. A failed page
+    // read leaves the original backend snippet as usable evidence.
+    expect(parsed[0]).toMatchObject({
       cite: "[1]",
       title: "Google search",
       url: "https://google.com/foo",
-      content: "Google is a popular search engine..."
+      snippet: "Google is a popular search engine...",
+      content: "Google is a popular search engine...",
+      fetched: false,
+      source: "snippet",
     });
-    expect(parsed[1]).toEqual({
+    expect(parsed[1]).toMatchObject({
       cite: "[2]",
       title: "Direct Link",
       url: "https://example.org",
-      content: "Direct snippet example"
+      snippet: "Direct snippet example",
+      content: "Direct snippet example",
+      fetched: false,
+      source: "snippet",
     });
   });
 
@@ -145,5 +157,32 @@ describe("web_search tool", () => {
     );
     expect(result).toContain("Example Page");
     expect(result).toContain("Clean page body");
+  });
+
+  it("falls back to the built-in reader when Firecrawl fails", async () => {
+    const store = useChatStore.getState();
+    store.firecrawlApiKey = "fc-test";
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "service unavailable",
+    });
+    vi.mocked(browserFetch).mockResolvedValue({
+      url: "https://example.com/page",
+      status: 200,
+      contentType: "text/html",
+      bytes: 12,
+      truncated: false,
+      content: "Browser body",
+    });
+
+    const result = await READ_ONLY_TOOLS.scrape_url.execute!(
+      { url: "https://example.com/page" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
+      {} as any,
+    ) as string;
+
+    expect(browserFetch).toHaveBeenCalledWith(expect.objectContaining({ url: "https://example.com/page" }));
+    expect(result).toContain("Browser body");
   });
 });

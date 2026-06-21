@@ -21,7 +21,13 @@ import {
   searchAttachment as searchAttachmentText,
   snipForResult,
 } from "../../attachment-cache";
+import { scrapeUrl } from "../../firecrawl";
 import { getWorkspace, normalizePath, invoke } from "../_helpers";
+import {
+  collectWebSearchEvidence,
+  MAX_WEB_SEARCH_CALLS_PER_TURN,
+  type WebSearchResult,
+} from "../../web-search";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -302,7 +308,7 @@ export const READ_ONLY_TOOLS = {
 
   web_search: tool({
     description:
-      "Search the web. Returns up to 5 results with title, URL, and content snippet. Use for current information, fact-checking, or researching topics beyond your knowledge cutoff. Uses the configured search backend in Settings.",
+      "Search the web for current or external information. Returns up to three citation-ready sources with title, URL, search snippet, and extracted page evidence. Use whenever fresh facts, a source, or context beyond your knowledge is useful. Uses the configured search backend in Settings.",
     inputSchema: z.object({
       query: z.string().describe("The search query"),
       maxResults: z.number().optional().describe("Max results to return (1-10, default 5)"),
@@ -314,8 +320,8 @@ export const READ_ONLY_TOOLS = {
       // each with the [n] number the model should cite inline. Agent/design
       // turns skip this — they surface sources as tool pills instead.
       const annotateCitations = (
-        results: { title: string; url: string; content: string }[],
-      ): Array<{ cite?: string; title: string; url: string; content: string }> => {
+        results: WebSearchResult[],
+      ): (WebSearchResult & { cite?: string })[] => {
         const chatMode = !state.agentMode && !state.designMode;
         if (!chatMode || results.length === 0) return results;
         const registered = state.addCitationSources(
@@ -335,8 +341,8 @@ export const READ_ONLY_TOOLS = {
         });
       };
 
-      if (!state.researchMode && state.webSearchCount >= 2) {
-        return "Maximum web searches (2) already used this turn. Answer with what you already know.";
+      if (!state.researchMode && state.webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
+        return `Maximum web searches (${String(MAX_WEB_SEARCH_CALLS_PER_TURN)}) already used this turn. Answer with what you already know.`;
       }
       if (!state.researchMode) {
         state.incrementWebSearchCount();
@@ -345,6 +351,16 @@ export const READ_ONLY_TOOLS = {
       const { getFetch } = await import("../../fetch-adapter");
       const customFetch = getFetch() ?? globalThis.fetch.bind(globalThis);
       const limit = maxResults ?? 5;
+
+      const enrichResults = async (results: WebSearchResult[]) => {
+        const evidence = await collectWebSearchEvidence(results, {
+          scrape: (url, options) => scrapeUrl(url, {
+            apiKey: state.firecrawlApiKey,
+            maxChars: options.maxChars,
+          }),
+        });
+        return JSON.stringify(annotateCitations(evidence), null, 2);
+      };
 
       const backend = state.searchBackend || "searxng";
 
@@ -370,7 +386,7 @@ export const READ_ONLY_TOOLS = {
           if (results.length === 0) {
             return `No results found for "${query}" via SearXNG.`;
           }
-          return JSON.stringify(annotateCitations(results), null, 2);
+          return await enrichResults(results);
         } catch (e) {
           return `SearXNG search failed: ${e instanceof Error ? e.message : String(e)}. Check if the SearXNG Docker container is running.`;
         }
@@ -399,23 +415,21 @@ export const READ_ONLY_TOOLS = {
           return `Search error: ${resp.status} — ${err}`;
         }
 
-        const data = await resp.json();
-        const results = data.results ?? [];
+        const data: unknown = await resp.json();
+        const rawResults = isRecord(data) && Array.isArray(data.results) ? data.results : [];
+        const results: WebSearchResult[] = rawResults.map((result) => {
+          const record = isRecord(result) ? result : {};
+          return {
+            title: textField(record, "title"),
+            url: textField(record, "url"),
+            content: textField(record, "content"),
+          };
+        });
         if (results.length === 0) {
           return `No results found for "${query}".`;
         }
 
-        return JSON.stringify(
-          annotateCitations(
-            results.map((r: { title: string; url: string; content: string; score: number }) => ({
-              title: r.title,
-              url: r.url,
-              content: r.content,
-            })),
-          ),
-          null,
-          2
-        );
+        return await enrichResults(results);
       } catch (e) {
         return `Search failed: ${e instanceof Error ? e.message : String(e)}`;
       }
