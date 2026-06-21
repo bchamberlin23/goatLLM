@@ -78,6 +78,7 @@ const BUILTIN_PROVIDERS: ProviderInfo[] = [
     id: "opencode-go-free",
     name: "Free Models",
     baseUrl: "https://opencode.ai/zen/v1",
+    supportsDiscovery: true,
     models: [
       {
         id: "deepseek-v4-flash-free",

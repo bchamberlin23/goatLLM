@@ -65,7 +65,7 @@ describe("model registry", () => {
       expect(ids).toContain("groq");
     });
 
-    it("flags OpenRouter, Groq, and OpenCode Go as supporting /v1/models discovery", () => {
+    it("flags both OpenCode Go catalogs plus OpenRouter and Groq as supporting /v1/models discovery", () => {
       // Mirrors pi-ai's "supports custom /v1/models" pattern: only
       // providers whose catalog we want to merge at runtime opt in.
       // Adding a new discovery-capable provider means flipping this
@@ -73,6 +73,7 @@ describe("model registry", () => {
       expect(providerSupportsDiscovery("openrouter")).toBe(true);
       expect(providerSupportsDiscovery("groq")).toBe(true);
       expect(providerSupportsDiscovery("opencode-go")).toBe(true);
+      expect(providerSupportsDiscovery("opencode-go-free")).toBe(true);
     });
 
     it("does not flag Anthropic or OpenAI for /v1/models discovery", () => {

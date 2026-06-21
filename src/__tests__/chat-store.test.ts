@@ -293,6 +293,25 @@ describe("ChatStore", () => {
       expect(curated.contextWindow).toBe(200_000);
     });
 
+    it("merges discovered Zen free models into the built-in picker", () => {
+      useChatStore.setState({ providerConfigs: {} });
+      useChatStore.setState((state) => ({
+        discoveredModels: {
+          ...state.discoveredModels,
+          "opencode-go-free": [
+            { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
+          ],
+        },
+      }));
+
+      const models = useChatStore.getState().getModels();
+
+      expect(models).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "opencode-go-free:big-pickle-free", name: "Big Pickle" }),
+        expect.objectContaining({ id: "opencode-go-free:deepseek-v4-flash-free" }),
+      ]));
+    });
+
     it("refreshes every configured cloud provider that supports discovery", async () => {
       useChatStore.setState({
         providerConfigs: {
@@ -306,9 +325,10 @@ describe("ChatStore", () => {
 
       await useChatStore.getState().discoverAllCloudModels();
 
-      expect(discoverCloudModels).toHaveBeenCalledTimes(2);
+      expect(discoverCloudModels).toHaveBeenCalledTimes(3);
       expect(discoverCloudModels).toHaveBeenCalledWith("openrouter");
       expect(discoverCloudModels).toHaveBeenCalledWith("groq");
+      expect(discoverCloudModels).toHaveBeenCalledWith("opencode-go-free");
     });
 
     it("does not merge discovery for providers that don't opt in", () => {

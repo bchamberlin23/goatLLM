@@ -4466,7 +4466,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       discoverAllCloudModels: async () => {
         const { providerConfigs, discoverCloudModels } = get();
-        const targets = Object.keys(providerConfigs).filter(providerSupportsDiscovery);
+        const configuredTargets = Object.keys(providerConfigs).filter(providerSupportsDiscovery);
+        const builtInTargets = BUILTIN_PROVIDERS
+          .filter((provider) => providerSupportsDiscovery(provider.id))
+          .map((provider) => provider.id);
+        const targets = [...new Set([...configuredTargets, ...builtInTargets])];
         await Promise.allSettled(targets.map((providerId) => discoverCloudModels(providerId)));
       },
 
@@ -4486,10 +4490,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
        */
       discoverCloudModels: async (providerId: string) => {
         if (!providerSupportsDiscovery(providerId)) return;
-        const baseUrl = CLOUD_PROVIDER_BASE_URLS[providerId];
+        const builtin = BUILTIN_PROVIDERS.find((provider) => provider.id === providerId);
+        const baseUrl = builtin?.baseUrl ?? CLOUD_PROVIDER_BASE_URLS[providerId];
         if (!baseUrl) return;
         const cfg = get().providerConfigs[providerId];
-        const apiKey = cfg?.apiKey?.trim();
+        const apiKey = builtin
+          ? providerId === ZEN_FREE_PROVIDER_ID ? getZenCredential() : null
+          : cfg?.apiKey?.trim();
         if (!apiKey) {
           set((state) => ({
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
@@ -4693,7 +4700,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const health = providerHealth[bp.id];
           // Optimistic: assume online until first check fails
           const providerOnline = health ? health.online : true;
-          for (const m of bp.models) {
+          const sourceModels = providerSupportsDiscovery(bp.id)
+            ? mergeDiscoveredModels(bp.models, discoveredModels[bp.id] ?? [])
+            : bp.models;
+          for (const m of sourceModels) {
             const combinedId = `${bp.id}:${m.id}`;
             models.push({
               id: combinedId,
