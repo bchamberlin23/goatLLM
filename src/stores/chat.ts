@@ -4,7 +4,7 @@ import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import type { ModelConfig, ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "../lib/providers";
-import { getZenCredential, isZenFreeModel, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
+import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
 import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
@@ -4466,11 +4466,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       discoverAllCloudModels: async () => {
         const { providerConfigs, discoverCloudModels } = get();
-        const configuredTargets = Object.keys(providerConfigs).filter(providerSupportsDiscovery);
-        const builtInTargets = BUILTIN_PROVIDERS
-          .filter((provider) => providerSupportsDiscovery(provider.id))
-          .map((provider) => provider.id);
-        const targets = [...new Set([...configuredTargets, ...builtInTargets])];
+        const targets = Object.keys(providerConfigs).filter(providerSupportsDiscovery);
         await Promise.allSettled(targets.map((providerId) => discoverCloudModels(providerId)));
       },
 
@@ -4490,13 +4486,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
        */
       discoverCloudModels: async (providerId: string) => {
         if (!providerSupportsDiscovery(providerId)) return;
-        const builtin = BUILTIN_PROVIDERS.find((provider) => provider.id === providerId);
-        const baseUrl = builtin?.baseUrl ?? CLOUD_PROVIDER_BASE_URLS[providerId];
+        const baseUrl = CLOUD_PROVIDER_BASE_URLS[providerId];
         if (!baseUrl) return;
         const cfg = get().providerConfigs[providerId];
-        const apiKey = builtin
-          ? providerId === ZEN_FREE_PROVIDER_ID ? getZenCredential() : null
-          : cfg?.apiKey?.trim();
+        const apiKey = cfg?.apiKey?.trim();
         if (!apiKey) {
           set((state) => ({
             discoveryStatus: { ...state.discoveryStatus, [providerId]: "error" },
@@ -4700,13 +4693,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const health = providerHealth[bp.id];
           // Optimistic: assume online until first check fails
           const providerOnline = health ? health.online : true;
-          const discoveredForProvider = bp.id === ZEN_FREE_PROVIDER_ID
-            ? (discoveredModels[bp.id] ?? []).filter(isZenFreeModel)
-            : discoveredModels[bp.id] ?? [];
-          const sourceModels = providerSupportsDiscovery(bp.id)
-            ? mergeDiscoveredModels(bp.models, discoveredForProvider)
-            : bp.models;
-          for (const m of sourceModels) {
+          for (const m of bp.models) {
             const combinedId = `${bp.id}:${m.id}`;
             models.push({
               id: combinedId,
@@ -4738,16 +4725,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const sourceModels = isLocal
             ? mergeDiscoveredModels(config.models ?? [], discoveredModels[providerId] ?? [])
             : providerSupportsDiscovery(providerId)
-              ? mergeDiscoveredModels(
-                  mergeDiscoveredModels(
-                    CLOUD_PROVIDER_MODELS[providerId] ?? [],
-                    discoveredModels[providerId] ?? [],
-                  ),
-                  providerId === "opencode-go"
-                    ? (discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []).filter(isZenFreeModel)
-                    : [],
-                )
-              : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
+              ? mergeDiscoveredModels(curatedModels, discoveredModels[providerId] ?? [])
+              : curatedModels;
           const allowlist = config.enabledModels;
           for (const m of sourceModels) {
             if (allowlist && !allowlist.includes(m.id)) continue;
@@ -4822,6 +4801,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const { conversations, activeId } = get();
         return conversations.find((c) => c.id === activeId) ?? null;
       },
+          const curatedModels = providerId === "opencode-go"
+            ? mergeDiscoveredModels(
+                CLOUD_PROVIDER_MODELS[providerId] ?? [],
+                getCuratedModels(ZEN_FREE_PROVIDER_ID),
+              )
+            : CLOUD_PROVIDER_MODELS[providerId] ?? [];
 
       getActiveMessages: () => {
         const { messages, activeId } = get();
@@ -5331,7 +5316,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const config = providerConfigs[providerId];
         if (config) {
           let baseUrl = config.baseUrl || CLOUD_PROVIDER_BASE_URLS[providerId];
-          if (providerId === "opencode-go" && modelId.endsWith("-free")) {
+          if (
+            providerId === "opencode-go" &&
+            getCuratedModels(ZEN_FREE_PROVIDER_ID).some((model) => model.id === modelId)
+          ) {
             baseUrl = baseUrl.replace("/go/v1", "/v1").replace("/go/", "/");
           }
           return {

@@ -169,10 +169,14 @@ describe("ChatStore", () => {
       expect(builtIn.map((p) => p.id)).toEqual(["opencode-go-free"]);
     });
 
-    it("exposes the free DeepSeek model out of the box", () => {
+    it("exposes the curated Zen free models out of the box", () => {
       const models = useChatStore.getState().getModels();
       const ids = models.map((m) => m.id);
+      expect(ids).toContain("opencode-go-free:big-pickle");
       expect(ids).toContain("opencode-go-free:deepseek-v4-flash-free");
+      expect(ids).toContain("opencode-go-free:mimo-v2.5-free");
+      expect(ids).toContain("opencode-go-free:nemotron-3-ultra-free");
+      expect(ids).toContain("opencode-go-free:north-mini-code-free");
     });
 
     it("hides Codex subscription provider when not signed in", () => {
@@ -293,28 +297,19 @@ describe("ChatStore", () => {
       expect(curated.contextWindow).toBe(200_000);
     });
 
-    it("shows discovered Zen free models in the configured OpenCode Go picker", () => {
+    it("shows the curated Zen free models in the configured OpenCode Go picker", () => {
       useChatStore.setState({ providerConfigs: {} });
       useChatStore.getState().configureProvider("opencode-go", { apiKey: "sk-test" });
-      useChatStore.setState((state) => ({
-        discoveredModels: {
-          ...state.discoveredModels,
-          "opencode-go-free": [
-            { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
-            { id: "zen-premium", name: "Zen Premium", contextWindow: 128_000 },
-          ],
-        },
-      }));
 
       const models = useChatStore.getState().getModels();
 
       expect(models).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: "opencode-go:big-pickle-free", name: "Big Pickle" }),
+        expect.objectContaining({ id: "opencode-go:big-pickle", name: "Big Pickle" }),
+        expect.objectContaining({ id: "opencode-go:north-mini-code-free", name: "North Mini Code Free" }),
       ]));
-      expect(models.map((model) => model.id)).not.toContain("opencode-go:zen-premium");
     });
 
-    it("merges discovered Zen free models into the built-in picker", () => {
+    it("ignores discovered Zen models for the built-in free picker", () => {
       useChatStore.setState({ providerConfigs: {} });
       useChatStore.setState((state) => ({
         discoveredModels: {
@@ -329,10 +324,10 @@ describe("ChatStore", () => {
       const models = useChatStore.getState().getModels();
 
       expect(models).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: "opencode-go-free:big-pickle-free", name: "Big Pickle" }),
+        expect.objectContaining({ id: "opencode-go-free:big-pickle", name: "Big Pickle" }),
         expect.objectContaining({ id: "opencode-go-free:deepseek-v4-flash-free" }),
       ]));
-      expect(models.map((model) => model.id)).not.toContain("opencode-go-free:zen-premium");
+      expect(models.map((model) => model.id)).not.toContain("opencode-go-free:big-pickle-free");
     });
 
     it("refreshes every configured cloud provider that supports discovery", async () => {
@@ -348,10 +343,9 @@ describe("ChatStore", () => {
 
       await useChatStore.getState().discoverAllCloudModels();
 
-      expect(discoverCloudModels).toHaveBeenCalledTimes(3);
+      expect(discoverCloudModels).toHaveBeenCalledTimes(2);
       expect(discoverCloudModels).toHaveBeenCalledWith("openrouter");
       expect(discoverCloudModels).toHaveBeenCalledWith("groq");
-      expect(discoverCloudModels).toHaveBeenCalledWith("opencode-go-free");
     });
 
     it("does not merge discovery for providers that don't opt in", () => {
@@ -384,6 +378,18 @@ describe("ChatStore", () => {
       expect(config).toBeTruthy();
       expect(config?.provider).toBe("opencode-go");
       expect(config?.apiKey).toBe("sk-test");
+    });
+
+    it("routes Big Pickle through the Zen free endpoint", () => {
+      useChatStore.getState().configureProvider("opencode-go", {
+        apiKey: "sk-test",
+        baseUrl: "https://opencode.ai/zen/go/v1",
+      });
+      useChatStore.getState().setSelectedModel("opencode-go:big-pickle");
+
+      expect(useChatStore.getState().getActiveLlmConfig()?.baseUrl).toBe(
+        "https://opencode.ai/zen/v1",
+      );
     });
 
     it("builds LlmConfig for Codex subscription without API key or user provider config", () => {

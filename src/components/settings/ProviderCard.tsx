@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, Check, EyeOff, Eye, Search, X, RefreshCw, Loader2 } from "lucide-react";
 import { CLOUD_PROVIDER_MODELS, useChatStore } from "../../stores/chat";
-import { mergeDiscoveredModels } from "../../lib/providers";
-import { isZenFreeModel, ZEN_FREE_PROVIDER_ID } from "../../lib/zen-credentials";
+import { getCuratedModels, mergeDiscoveredModels } from "../../lib/providers";
 import { useShallow } from "zustand/react/shallow";
 
 export function ProviderCard({
@@ -40,15 +39,14 @@ export function ProviderCard({
       discoverCloudModels: s.discoverCloudModels,
     })),
   );
-  const curated = CLOUD_PROVIDER_MODELS[provider.id] ?? [];
+  const curated = provider.id === "opencode-go"
+    ? mergeDiscoveredModels(
+        CLOUD_PROVIDER_MODELS[provider.id] ?? [],
+        getCuratedModels("opencode-go-free"),
+      )
+    : CLOUD_PROVIDER_MODELS[provider.id] ?? [];
   const discovered = provider.supportsDiscovery ? discoveredModels[provider.id] ?? [] : [];
-  const zenFreeModels = provider.id === "opencode-go"
-    ? (discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []).filter(isZenFreeModel)
-    : [];
-  const allModels = mergeDiscoveredModels(
-    mergeDiscoveredModels(curated, discovered),
-    zenFreeModels,
-  );
+  const allModels = mergeDiscoveredModels(curated, discovered);
   const enabled = config?.enabledModels;
   const enabledCount = enabled === undefined ? allModels.length : enabled.length;
   const isDiscovering = provider.supportsDiscovery && discoveryStatus[provider.id] === "loading";
@@ -151,10 +149,7 @@ export function ProviderCard({
             onClick={(e) => {
               e.stopPropagation();
               if (!canDiscover) return;
-              void Promise.all([
-                discoverCloudModels(provider.id),
-                ...(provider.id === "opencode-go" ? [discoverCloudModels(ZEN_FREE_PROVIDER_ID)] : []),
-              ]);
+              void discoverCloudModels(provider.id);
             }}
             disabled={!canDiscover}
             aria-label={`Discover ${provider.name} models`}

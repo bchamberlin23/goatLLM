@@ -48,6 +48,18 @@ describe("model registry", () => {
       const flash = free?.models.find((m) => m.id === "deepseek-v4-flash-free");
       expect(flash?.contextWindow).toBe(200_000);
     });
+
+    it("curates the five supported Zen free models", () => {
+      const free = getBuiltInProviders().find((p) => p.id === "opencode-go-free");
+
+      expect(free?.models.map((model) => model.id)).toEqual([
+        "big-pickle",
+        "deepseek-v4-flash-free",
+        "mimo-v2.5-free",
+        "nemotron-3-ultra-free",
+        "north-mini-code-free",
+      ]);
+    });
   });
 
   describe("getCloudProviders", () => {
@@ -65,7 +77,7 @@ describe("model registry", () => {
       expect(ids).toContain("groq");
     });
 
-    it("flags both OpenCode Go catalogs plus OpenRouter and Groq as supporting /v1/models discovery", () => {
+    it("flags OpenCode Go, OpenRouter, and Groq as supporting /v1/models discovery", () => {
       // Mirrors pi-ai's "supports custom /v1/models" pattern: only
       // providers whose catalog we want to merge at runtime opt in.
       // Adding a new discovery-capable provider means flipping this
@@ -73,7 +85,7 @@ describe("model registry", () => {
       expect(providerSupportsDiscovery("openrouter")).toBe(true);
       expect(providerSupportsDiscovery("groq")).toBe(true);
       expect(providerSupportsDiscovery("opencode-go")).toBe(true);
-      expect(providerSupportsDiscovery("opencode-go-free")).toBe(true);
+      expect(providerSupportsDiscovery("opencode-go-free")).toBe(false);
     });
 
     it("does not flag Anthropic or OpenAI for /v1/models discovery", () => {

@@ -78,24 +78,21 @@ const BUILTIN_PROVIDERS: ProviderInfo[] = [
     id: "opencode-go-free",
     name: "Free Models",
     baseUrl: "https://opencode.ai/zen/v1",
-    supportsDiscovery: true,
     models: [
+      { id: "big-pickle", name: "Big Pickle", contextWindow: 0 },
       {
         id: "deepseek-v4-flash-free",
-        name: "DeepSeek V4 Flash (Free)",
+        name: "DeepSeek V4 Flash Free",
         contextWindow: 200_000,
         reasoning: true,
       },
       {
         id: "mimo-v2.5-free",
-        name: "MiMo V2.5 (Free)",
+        name: "MiMo V2.5 Free",
         contextWindow: 1_048_576,
       },
-      {
-        id: "nemotron-3-super-free",
-        name: "Nemotron 3 Super (Free)",
-        contextWindow: 204_800,
-      },
+      { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra Free", contextWindow: 0 },
+      { id: "north-mini-code-free", name: "North Mini Code Free", contextWindow: 0 },
     ],
   },
   {

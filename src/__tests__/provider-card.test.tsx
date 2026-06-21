@@ -14,7 +14,7 @@ describe("ProviderCard", () => {
     });
   });
 
-  it("refreshes both OpenCode Go and Zen free catalogs from Discover", () => {
+  it("refreshes only the OpenCode Go catalog from Discover", () => {
     const discoverCloudModels = vi.fn().mockResolvedValue(undefined);
     useChatStore.setState({ discoverCloudModels });
 
@@ -36,19 +36,10 @@ describe("ProviderCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discover OpenCode Go models" }));
 
     expect(discoverCloudModels).toHaveBeenCalledWith("opencode-go");
-    expect(discoverCloudModels).toHaveBeenCalledWith("opencode-go-free");
+    expect(discoverCloudModels).toHaveBeenCalledTimes(1);
   });
 
-  it("lists discovered Zen free models in the OpenCode Go card", () => {
-    useChatStore.setState({
-      discoveredModels: {
-        "opencode-go-free": [
-          { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
-          { id: "zen-premium", name: "Zen Premium", contextWindow: 128_000 },
-        ],
-      },
-    });
-
+  it("lists curated Zen free models in the OpenCode Go card", () => {
     render(
       <ProviderCard
         provider={{
@@ -67,6 +58,6 @@ describe("ProviderCard", () => {
     fireEvent.click(screen.getByText("OpenCode Go"));
 
     expect(screen.getByText("Big Pickle")).toBeInTheDocument();
-    expect(screen.queryByText("Zen Premium")).not.toBeInTheDocument();
+    expect(screen.getByText("North Mini Code Free")).toBeInTheDocument();
   });
 });
