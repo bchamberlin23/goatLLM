@@ -488,11 +488,9 @@ function renderMassiveContent(obj: Record<string, unknown>) {
 
   if (content !== undefined) {
     return (
-      <div className="col-span-2 mt-1 w-full">
-        <span className="text-text-4 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Code Content</span>
-        <pre className="p-2.5 bg-black/25 border border-hairline rounded-lg font-mono text-[11.5px] max-h-[220px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1">
-          {String(content)}
-        </pre>
+      <div className="col-span-2 mt-1 w-full flex flex-col gap-1.5">
+        <span className="text-text-4 font-sans text-[10px] font-semibold uppercase tracking-wider">Code Content</span>
+        <CodeViewer text={String(content)} maxLines={40} maxHeight={220} />
       </div>
     );
   }
@@ -501,17 +499,17 @@ function renderMassiveContent(obj: Record<string, unknown>) {
     return (
       <div className="col-span-2 mt-1.5 w-full flex flex-col gap-2">
         {target !== undefined && (
-          <div>
-            <span className="text-error/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Target Content (To Replace)</span>
-            <pre className="p-2.5 bg-red-950/15 border border-red-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-error">
+          <div className="flex flex-col gap-1">
+            <span className="text-error font-sans text-[9.5px] font-semibold uppercase tracking-wider">− Target (to replace)</span>
+            <pre className="p-2.5 bg-sunken border border-error/15 rounded-md font-mono text-[11px] leading-[1.6] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-error/90">
               {String(target)}
             </pre>
           </div>
         )}
         {replacement !== undefined && (
-          <div>
-            <span className="text-success/70 font-sans text-[10.5px] font-semibold uppercase tracking-wider block mb-1">Replacement Content</span>
-            <pre className="p-2.5 bg-emerald-950/15 border border-emerald-500/10 rounded-lg font-mono text-[11px] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-success">
+          <div className="flex flex-col gap-1">
+            <span className="text-success font-sans text-[9.5px] font-semibold uppercase tracking-wider">+ Replacement</span>
+            <pre className="p-2.5 bg-sunken border border-success/15 rounded-md font-mono text-[11px] leading-[1.6] max-h-[140px] overflow-auto whitespace-pre-wrap break-all select-text text-success/90">
               {String(replacement)}
             </pre>
           </div>
@@ -573,11 +571,6 @@ function FileListOutput({ output }: { output: string }) {
     return result;
   }, [output]);
 
-  const summary = useMemo(() => {
-    const match = output.match(/Summary:\s*(.+)/);
-    return match ? match[1] : null;
-  }, [output]);
-
   if (entries.length === 0) {
     return <PlainOutput text={output} />;
   }
@@ -591,39 +584,53 @@ function FileListOutput({ output }: { output: string }) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const totalSize = files.reduce((n, f) => n + (f.sizeBytes ?? 0), 0);
+
   return (
-    <div className="rounded-lg border border-hairline overflow-hidden bg-black/15">
+    <div className="rounded-lg border border-hairline overflow-hidden bg-bg">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-hairline bg-white/[0.01]">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-4">
-          Directory Contents
+      <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-white/[0.03]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-text-3">
+          {dirs.length > 0 && `${dirs.length} folder${dirs.length === 1 ? "" : "s"}`}
+          {dirs.length > 0 && files.length > 0 && " · "}
+          {files.length > 0 && `${files.length} file${files.length === 1 ? "" : "s"}`}
         </span>
-        {summary && (
-          <span className="text-[10px] text-text-4 tabular-nums">{summary}</span>
+        {totalSize > 0 && (
+          <span className="text-[10px] text-text-4 tabular-nums font-mono">{formatSize(totalSize)}</span>
         )}
       </div>
-      <div className="max-h-[240px] overflow-auto">
+
+      {/* Column headers */}
+      <div className="flex items-center gap-2 px-3 py-1 border-b border-hairline text-[9.5px] font-semibold uppercase tracking-wider text-text-4 select-none">
+        <span className="w-4 shrink-0" />
+        <span className="flex-1">Name</span>
+        <span className="w-16 text-right tabular-nums">Size</span>
+      </div>
+
+      <div className="max-h-[280px] overflow-auto">
         {dirs.map((entry, i) => (
           <div
-            key={i}
-            className="motion-row flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0 hover:bg-white/[0.02] transition-colors"
+            key={`d-${i}`}
+            className="motion-row flex items-center gap-2 px-3 py-[5px] border-b border-hairline last:border-0 hover:bg-white/[0.04] transition-colors group/row"
           >
-            <Folder size={12} className="shrink-0 text-accent" strokeWidth={1.6} />
-            <span className="font-mono text-[11.5px] text-text-2 truncate flex-1">{entry.name}</span>
+            <Folder size={13} className="shrink-0 text-accent" strokeWidth={1.75} />
+            <span className="font-mono text-[12px] text-text-1 font-medium truncate flex-1 group-hover/row:text-text-1">{entry.name}</span>
             {entry.children !== undefined && (
-              <span className="text-[10px] text-text-4 tabular-nums shrink-0">{entry.children} items</span>
+              <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-16 text-right font-mono">
+                {entry.children} {entry.children === 1 ? "item" : "items"}
+              </span>
             )}
           </div>
         ))}
         {files.map((entry, i) => (
           <div
-            key={i}
-            className="motion-row flex items-center gap-2 px-3 py-1.5 border-b border-hairline last:border-0 hover:bg-white/[0.02] transition-colors"
+            key={`f-${i}`}
+            className="motion-row flex items-center gap-2 px-3 py-[5px] border-b border-hairline last:border-0 hover:bg-white/[0.04] transition-colors group/row"
           >
-            <File size={12} className="shrink-0 text-text-4" strokeWidth={1.6} />
-            <span className="font-mono text-[11.5px] text-text-4 truncate flex-1">{entry.name}</span>
+            <File size={13} className="shrink-0 text-text-4 group-hover/row:text-text-3 transition-colors" strokeWidth={1.6} />
+            <span className="font-mono text-[12px] text-text-2 truncate flex-1 group-hover/row:text-text-1 transition-colors">{entry.name}</span>
             {entry.sizeBytes !== undefined && (
-              <span className="text-[10px] text-text-4 tabular-nums shrink-0">{formatSize(entry.sizeBytes)}</span>
+              <span className="text-[10px] text-text-4 tabular-nums shrink-0 w-16 text-right font-mono">{formatSize(entry.sizeBytes)}</span>
             )}
           </div>
         ))}
@@ -819,7 +826,7 @@ function GrepOutput({ text }: { text: string }) {
 
 // ── Plain / Terminal Output ────────────────────────────────────────
 
-const PLAIN_LINE_LIMIT = 20;
+const PLAIN_LINE_LIMIT = 30;
 
 function PlainOutput({ text, toolName }: { text: string; toolName?: string }) {
   const [showAll, setShowAll] = useState(false);
@@ -828,24 +835,38 @@ function PlainOutput({ text, toolName }: { text: string; toolName?: string }) {
   const lines = text.split("\n");
   const overLimit = lines.length > PLAIN_LINE_LIMIT;
   const visibleText = overLimit && !showAll ? lines.slice(0, PLAIN_LINE_LIMIT).join("\n") : text;
+  const visibleLineCount = overLimit && !showAll ? PLAIN_LINE_LIMIT : lines.length;
   const html = useAnsi ? ansiToHtml(visibleText) : null;
 
   return (
-    <div className="flex flex-col gap-1 w-full">
-      {html ? (
-        <pre
-          className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      ) : (
-        <pre className="p-2.5 bg-black/20 border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed text-text-2 max-h-[280px] overflow-auto whitespace-pre-wrap break-all select-text">
-          {visibleText}
-        </pre>
-      )}
+    <div className="rounded-lg border border-hairline bg-sunken overflow-hidden flex flex-col">
+      <div className="overflow-auto max-h-[320px]">
+        <div className="flex min-w-full">
+          {visibleLineCount > 1 && (
+            <pre
+              className="select-none sticky left-0 z-[1] bg-sunken text-right text-text-4 font-mono text-[11px] leading-[1.65] py-3 pl-3 pr-2.5 border-r border-hairline tabular-nums shrink-0"
+              aria-hidden
+            >
+              {Array.from({ length: visibleLineCount }, (_, i) => String(i + 1).padStart(2, " ")).join("\n")}
+            </pre>
+          )}
+          {html ? (
+            <pre
+              className="flex-1 min-w-0 py-3 pl-3 pr-4 font-mono text-[11.5px] leading-[1.65] whitespace-pre-wrap break-all select-text text-text-1"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
+          ) : (
+            <pre className="flex-1 min-w-0 py-3 pl-3 pr-4 font-mono text-[11.5px] leading-[1.65] whitespace-pre-wrap break-all select-text text-text-1">
+              {visibleText}
+            </pre>
+          )}
+        </div>
+      </div>
       {overLimit && (
         <button
+          type="button"
           onClick={() => setShowAll(v => !v)}
-          className="self-start text-[10.5px] text-text-4 hover:text-text-4 transition-colors mt-0.5 ml-0.5"
+          className="w-full px-3 py-1.5 border-t border-hairline text-[11px] font-medium text-text-3 hover:text-text-1 hover:bg-white/[0.03] transition-colors"
         >
           {showAll ? "Show less" : `Show ${lines.length - PLAIN_LINE_LIMIT} more lines`}
         </button>
@@ -858,8 +879,12 @@ function PlainOutput({ text, toolName }: { text: string; toolName?: string }) {
 
 function ErrorOutput({ text }: { text: string }) {
   return (
-    <div className="rounded-lg border border-red-500/20 bg-red-500/5 overflow-hidden">
-      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-error max-h-[200px] overflow-auto whitespace-pre-wrap break-all select-text">
+    <div className="rounded-lg border border-error/20 bg-sunken overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-error/15 bg-error/[0.06]">
+        <AlertTriangle size={11} className="text-error shrink-0" strokeWidth={2} />
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-error">Error</span>
+      </div>
+      <pre className="p-3 font-mono text-[11.5px] leading-[1.65] text-error max-h-[200px] overflow-auto whitespace-pre-wrap break-all select-text">
         {text}
       </pre>
     </div>
@@ -870,10 +895,9 @@ function ErrorOutput({ text }: { text: string }) {
 
 function SuccessOutput({ text }: { text: string }) {
   return (
-    <div className="rounded-lg border border-success/15 bg-success/5 overflow-hidden">
-      <pre className="p-2.5 font-mono text-[11.5px] leading-relaxed text-text-3 max-h-[120px] overflow-auto whitespace-pre-wrap break-all select-text">
-        {text}
-      </pre>
+    <div className="rounded-lg border border-success/15 bg-sunken overflow-hidden flex items-center gap-2 px-3 py-2">
+      <CheckCircle2 size={13} className="text-success shrink-0" strokeWidth={2} />
+      <span className="font-mono text-[11.5px] leading-relaxed text-text-2 select-text">{text}</span>
     </div>
   );
 }
@@ -1028,15 +1052,65 @@ function SectionLabel({ children, icon }: { children: ReactNode; icon?: ReactEle
   );
 }
 
-// ── Code surface (unified pre styling for file/terminal content) ───
+// ── Code viewer with line-number gutter ────────────────────────────
+//
+// Renders code/file content with a sticky line-number gutter that scrolls
+// in sync with the content. Uses bg-sunken (the design system's code surface)
+// and text-text-1 for readable content. Long lines scroll horizontally
+// (whitespace-pre) instead of wrapping — this keeps line numbers aligned.
 
-function CodeSurface({ children, className = "" }: { children: ReactNode; className?: string }) {
+function CodeViewer({
+  text,
+  startLine = 1,
+  maxLines = 60,
+  maxHeight = 320,
+}: {
+  text: string;
+  startLine?: number;
+  maxLines?: number;
+  maxHeight?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = text.split("\n");
+  const overLimit = lines.length > maxLines;
+  const visibleLines = overLimit && !expanded ? lines.slice(0, maxLines) : lines;
+  const lineCount = visibleLines.length;
+
+  // Pad line numbers to a consistent width so the gutter doesn't jitter
+  const maxNum = startLine + lineCount - 1;
+  const width = Math.max(2, String(maxNum).length);
+
   return (
-    <pre
-      className={`p-3 bg-bg border border-hairline rounded-lg font-mono text-[11.5px] leading-relaxed max-h-[240px] overflow-auto whitespace-pre-wrap break-all select-text text-text-1 ${className}`}
-    >
-      {children}
-    </pre>
+    <div className="rounded-lg border border-hairline bg-sunken overflow-hidden">
+      <div className="overflow-auto" style={{ maxHeight }}>
+        <div className="flex min-w-full">
+          <pre
+            className="select-none sticky left-0 z-[1] bg-sunken text-right text-text-4 font-mono text-[11px] leading-[1.65] py-3 pl-3 pr-2.5 border-r border-hairline tabular-nums shrink-0"
+            aria-hidden
+          >
+            {Array.from({ length: lineCount }, (_, i) =>
+              String(startLine + i).padStart(width, " "),
+            ).join("\n")}
+          </pre>
+          <pre
+            className="flex-1 min-w-0 py-3 pl-3 pr-4 font-mono text-[11.5px] leading-[1.65] whitespace-pre select-text text-text-1"
+          >
+            {visibleLines.join("\n")}
+          </pre>
+        </div>
+      </div>
+      {overLimit && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full px-3 py-1.5 border-t border-hairline text-[11px] font-medium text-text-3 hover:text-text-1 hover:bg-white/[0.03] transition-colors"
+        >
+          {expanded
+            ? "Show less"
+            : `Show ${lines.length - maxLines} more lines`}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1133,14 +1207,14 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
 
         {isRead && (
           <div className="flex flex-col gap-1.5">
-            <SectionLabel>Contents</SectionLabel>
+            <SectionLabel>Contents{outputText.trim() && <span className="text-text-4 normal-case font-normal ml-1.5 tabular-nums">{outputText.split("\n").length} lines</span>}</SectionLabel>
             {outputText.trim() ? (
               isMarkdown ? (
-                <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
+                <div className="p-3.5 bg-sunken border border-hairline rounded-lg max-h-[280px] overflow-auto select-text text-text-1">
                   <MarkdownRenderer content={outputText} />
                 </div>
               ) : (
-                <CodeSurface>{outputText}</CodeSurface>
+                <CodeViewer text={outputText} startLine={typeof startLine === "number" ? startLine : 1} />
               )
             ) : (
               <span className="text-text-4 italic text-[11px]">Empty file</span>
@@ -1152,12 +1226,12 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
           <div className="flex flex-col gap-1.5">
             <SectionLabel>Written</SectionLabel>
             {isMarkdown ? (
-              <div className="p-3.5 bg-bg border border-hairline rounded-lg max-h-[250px] overflow-auto select-text text-text-1">
+              <div className="p-3.5 bg-sunken border border-hairline rounded-lg max-h-[280px] overflow-auto select-text text-text-1">
                 <MarkdownRenderer content={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} />
               </div>
             ) : (
               renderMassiveContent(obj) ?? (
-                <CodeSurface>{String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")}</CodeSurface>
+                <CodeViewer text={String(obj.content ?? obj.CodeContent ?? obj.codeContent ?? "")} />
               )
             )}
           </div>
@@ -1180,13 +1254,13 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
                     <div className="p-2.5 flex flex-col gap-2">
                       <div className="flex flex-col gap-1">
                         <span className="text-[9.5px] text-error font-semibold uppercase tracking-wider select-none">− Target</span>
-                        <pre className="p-2 bg-error/[0.06] border border-error/15 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-error/90">
+                        <pre className="p-2.5 bg-sunken border border-error/15 rounded-md font-mono text-[11px] leading-[1.6] max-h-[120px] overflow-auto whitespace-pre-wrap break-all select-text text-error/90">
                           {chunk.TargetContent}
                         </pre>
                       </div>
                       <div className="flex flex-col gap-1">
                         <span className="text-[9.5px] text-success font-semibold uppercase tracking-wider select-none">+ Replacement</span>
-                        <pre className="p-2 bg-success/[0.06] border border-success/15 rounded font-mono text-[11px] leading-relaxed max-h-[100px] overflow-auto whitespace-pre-wrap text-success/90">
+                        <pre className="p-2.5 bg-sunken border border-success/15 rounded-md font-mono text-[11px] leading-[1.6] max-h-[120px] overflow-auto whitespace-pre-wrap break-all select-text text-success/90">
                           {chunk.ReplacementContent}
                         </pre>
                       </div>
@@ -1209,7 +1283,7 @@ function FileOperationView({ tc }: { tc: ToolCallEntry }) {
         {isDiff && (
           <div className="flex flex-col gap-1.5">
             <SectionLabel>Diff</SectionLabel>
-            <CodeSurface>{outputText}</CodeSurface>
+            <CodeViewer text={outputText} />
           </div>
         )}
       </div>
@@ -1301,7 +1375,7 @@ function GrepResultsView({ tc }: { tc: ToolCallEntry }) {
             ))}
           </div>
         ) : !isJsonl && output.trim() ? (
-          <CodeSurface className="max-h-[180px] text-text-2">{output}</CodeSurface>
+          <CodeViewer text={output} maxLines={40} maxHeight={200} />
         ) : (
           <div className="text-[11px] text-text-4 italic">No matches found.</div>
         )}
