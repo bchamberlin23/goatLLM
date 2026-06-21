@@ -11,7 +11,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { LanguageModel } from "ai";
+import { extractReasoningMiddleware, wrapLanguageModel, type LanguageModel } from "ai";
 import { getFetch, initFetch } from "./fetch-adapter";
 import type { LlmConfig } from "./llm-types";
 import { isOpenAICodexSubscriptionProvider } from "./openai-codex-subscription";
@@ -53,7 +53,18 @@ export async function createModel(config: LlmConfig): Promise<LanguageModel> {
       apiKey: config.apiKey ?? "not-needed",
       fetch: customFetch,
     });
-    return compat.languageModel(config.modelId);
+    const model = compat.languageModel(config.modelId);
+    // MiniMax's OpenAI-compatible API embeds its reasoning in literal
+    // <think> tags in the text stream. Convert those tags into the AI SDK's
+    // native reasoning events so they reach goatLLM's thinking UI instead of
+    // rendering as answer text (and so title generation receives only text).
+    if (isMiniMaxMSeries(config.modelId)) {
+      return wrapLanguageModel({
+        model,
+        middleware: extractReasoningMiddleware({ tagName: "think", startWithReasoning: false }),
+      });
+    }
+    return model;
   }
 
   const openai = createOpenAI({
@@ -61,4 +72,8 @@ export async function createModel(config: LlmConfig): Promise<LanguageModel> {
     fetch: customFetch,
   });
   return openai.languageModel(config.modelId);
+}
+
+function isMiniMaxMSeries(modelId: string): boolean {
+  return /(?:^|[/:._-])minimax[-_]?m\d/i.test(modelId);
 }
