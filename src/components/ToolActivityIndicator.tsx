@@ -48,7 +48,7 @@ export function ToolActivityIndicator() {
           const label = pres.target
             ? `${pres.runningVerb} ${pres.target}`
             : pres.runningVerb;
-          return { label, icon: pres.icon, isRunning: true };
+          return { label, icon: pres.icon, iconColor: pres.iconColor, isRunning: true };
         }
       }
     }
@@ -63,11 +63,11 @@ export function ToolActivityIndicator() {
   return (
     <div className="motion-status-in flex w-full max-w-[720px] items-center justify-center px-1 py-1.5">
       <div className="liquid-surface flex items-center gap-2 px-3 py-1.5 rounded-lg">
-        <span className="relative flex h-2 w-2">
+        <span className="relative flex h-2 w-2" aria-hidden>
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
         </span>
-        <span className="shrink-0 text-text-3">{activity.icon}</span>
+        <span className={`shrink-0 ${activity.iconColor}`}>{activity.icon}</span>
         <Shimmer text={activity.label} className="text-[12.5px] font-medium text-text-2" />
       </div>
     </div>

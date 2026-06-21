@@ -40,6 +40,7 @@ interface ToolPresentation {
   target?: string;
   detail?: string;
   icon: ReactElement;
+  iconColor: string;
 }
 
 export function presentTool(tc: ToolCallEntry): ToolPresentation {
@@ -57,42 +58,42 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
   );
 
   if (name === "read_file" || name === "view_file") {
-    return { runningVerb: "Reading", doneVerb: "Read", target: path, icon: baseIcon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>) };
+    return { runningVerb: "Reading", doneVerb: "Read", target: path, icon: baseIcon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></>), iconColor: "text-info" };
   }
   if (name === "list_dir") {
-    return { runningVerb: "Listing", doneVerb: "Listed", target: path || ".", icon: baseIcon(<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />) };
+    return { runningVerb: "Listing", doneVerb: "Listed", target: path || ".", icon: baseIcon(<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />), iconColor: "text-accent" };
   }
   if (name === "search_content" || name === "grep_search") {
-    return { runningVerb: "Searching", doneVerb: "Searched", target: pattern || query, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>) };
+    return { runningVerb: "Searching", doneVerb: "Searched", target: pattern || query, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>), iconColor: "text-text-2" };
   }
   if (name === "file_search") {
-    return { runningVerb: "Searching files", doneVerb: "Found", target: query, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>) };
+    return { runningVerb: "Searching files", doneVerb: "Found", target: query, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>), iconColor: "text-text-2" };
   }
   if (name === "write_file") {
-    return { runningVerb: "Writing", doneVerb: "Wrote", target: path, icon: baseIcon(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>) };
+    return { runningVerb: "Writing", doneVerb: "Wrote", target: path, icon: baseIcon(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>), iconColor: "text-success" };
   }
   if (name === "edit_file" || name === "str_replace") {
-    return { runningVerb: "Editing", doneVerb: "Edited", target: path, icon: baseIcon(<><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></>) };
+    return { runningVerb: "Editing", doneVerb: "Edited", target: path, icon: baseIcon(<><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></>), iconColor: "text-accent" };
   }
   if (name === "bash" || name === "exec_command") {
     const cmd = command ? truncate(command, 90) : "command";
-    return { runningVerb: "Running", doneVerb: "Ran", target: cmd, icon: baseIcon(<><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></>) };
+    return { runningVerb: "Running", doneVerb: "Ran", target: cmd, icon: baseIcon(<><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></>), iconColor: "text-text-2" };
   }
   if (name === "diff_file") {
-    return { runningVerb: "Diffing", doneVerb: "Diffed", target: path, icon: baseIcon(<><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></>) };
+    return { runningVerb: "Diffing", doneVerb: "Diffed", target: path, icon: baseIcon(<><line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></>), iconColor: "text-accent" };
   }
   if (name === "read_lints") {
-    return { runningVerb: "Linting", doneVerb: "Linted", target: path, icon: baseIcon(<polyline points="20 6 9 17 4 12" />) };
+    return { runningVerb: "Linting", doneVerb: "Linted", target: path, icon: baseIcon(<polyline points="20 6 9 17 4 12" />), iconColor: "text-success" };
   }
   if (name.startsWith("git_")) {
     const sub = name.replace("git_", "");
-    return { runningVerb: `Running git ${sub}`, doneVerb: `Ran git ${sub}`, icon: baseIcon(<><circle cx="12" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M12 8v3a3 3 0 0 1-3 3H8" /><path d="M12 8v3a3 3 0 0 0 3 3h1" /><path d="M6 16v-2" /></>) };
+    return { runningVerb: `Running git ${sub}`, doneVerb: `Ran git ${sub}`, icon: baseIcon(<><circle cx="12" cy="6" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M12 8v3a3 3 0 0 1-3 3H8" /><path d="M12 8v3a3 3 0 0 0 3 3h1" /><path d="M6 16v-2" /></>), iconColor: "text-text-2" };
   }
   if (name === "web_search" || name === "remote_web_search") {
-    return { runningVerb: "Searching the web", doneVerb: "Searched the web", target: query, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>) };
+    return { runningVerb: "Searching the web", doneVerb: "Searched the web", target: query, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>), iconColor: "text-info" };
   }
   if (name === "web_fetch" || name === "scrape_url") {
-    return { runningVerb: name === "scrape_url" ? "Scraping" : "Fetching", doneVerb: name === "scrape_url" ? "Scraped" : "Fetched", target: url, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /></>) };
+    return { runningVerb: name === "scrape_url" ? "Scraping" : "Fetching", doneVerb: name === "scrape_url" ? "Scraped" : "Fetched", target: url, icon: baseIcon(<><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /></>), iconColor: "text-info" };
   }
   if (name === "spawn_subagent") {
     const task = getInputField(tc.input, "task") || "task";
@@ -101,6 +102,7 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
       doneVerb: "Ran subagent",
       target: truncate(task, 80),
       icon: baseIcon(<><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>),
+      iconColor: "text-accent",
     };
   }
   if (name === "todo_create") {
@@ -108,25 +110,25 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
     const target = Array.isArray(tasks)
       ? `${tasks.length} tasks`
       : `task: ${getInputField(tc.input, "title") || "task"}`;
-    return { runningVerb: "Creating", doneVerb: "Created", target, icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
+    return { runningVerb: "Creating", doneVerb: "Created", target, icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>), iconColor: "text-success" };
   }
   if (name === "todo_update") {
     const id = getInputField(tc.input, "id") || "task";
-    return { runningVerb: "Updating", doneVerb: "Updated", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>) };
+    return { runningVerb: "Updating", doneVerb: "Updated", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>), iconColor: "text-accent" };
   }
   if (name === "todo_list") {
-    return { runningVerb: "Listing", doneVerb: "Listed", target: "tasks", icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>) };
+    return { runningVerb: "Listing", doneVerb: "Listed", target: "tasks", icon: baseIcon(<><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></>), iconColor: "text-info" };
   }
   if (name === "todo_get") {
     const id = getInputField(tc.input, "id") || "task";
-    return { runningVerb: "Getting", doneVerb: "Got", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>) };
+    return { runningVerb: "Getting", doneVerb: "Got", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>), iconColor: "text-info" };
   }
   if (name === "todo_delete") {
     const id = getInputField(tc.input, "id") || "task";
-    return { runningVerb: "Deleting", doneVerb: "Deleted", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>) };
+    return { runningVerb: "Deleting", doneVerb: "Deleted", target: `task #${String(id).slice(-8)}`, icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>), iconColor: "text-error" };
   }
   if (name === "todo_clear") {
-    return { runningVerb: "Clearing", doneVerb: "Cleared", target: "all tasks", icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>) };
+    return { runningVerb: "Clearing", doneVerb: "Cleared", target: "all tasks", icon: baseIcon(<><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>), iconColor: "text-error" };
   }
   if (name === "load_skill") {
     const skillName = getInputField(tc.input, "name") || "skill";
@@ -135,6 +137,7 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
       doneVerb: "Loaded skill",
       target: skillName,
       icon: baseIcon(<><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></>),
+      iconColor: "text-accent",
     };
   }
 
@@ -155,7 +158,8 @@ export function presentTool(tc: ToolCallEntry): ToolPresentation {
     runningVerb: "Running",
     doneVerb: "Ran",
     target,
-    icon: baseIcon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>)
+    icon: baseIcon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>),
+    iconColor: "text-text-2",
   };
 }
 
@@ -1571,46 +1575,64 @@ export function InlineToolCall({
   if (isPending) return <ApprovalGate tc={tc} />;
 
   const label = pres.target ? `${verb} ${pres.target}` : verb;
+  const iconColor = isError
+    ? "text-error"
+    : isRunning
+      ? "text-accent"
+      : pres.iconColor;
 
   return (
-    <div className="py-1 group/tool">
-      <div className="flex items-baseline gap-1.5">
+    <div className="py-0.5 group/tool">
+      <div className="flex items-center gap-1">
         <button
           type="button"
           disabled={!canExpand}
           onClick={() => canExpand && setExpanded((v) => !v)}
-          className={`flex items-center gap-1.5 text-[13px] leading-relaxed text-left max-w-full min-w-0 ${
-            canExpand ? "cursor-pointer" : "cursor-default"
+          className={`group/row flex items-center gap-1.5 text-[12.5px] leading-relaxed text-left max-w-full min-w-0 rounded-md -mx-1 px-1 py-0.5 transition-colors ${
+            canExpand
+              ? "cursor-pointer hover:bg-white/[0.035] focus-visible:bg-white/[0.035]"
+              : "cursor-default"
           }`}
           aria-expanded={canExpand ? expanded : undefined}
         >
-          <span className="shrink-0 self-center text-text-4 group-hover/tool:text-text-3 transition-colors">
+          <span className={`shrink-0 self-center transition-colors ${iconColor}`}>
             {pres.icon}
           </span>
           {isRunning ? (
-            <Shimmer text={label} className="text-[13px] font-normal" />
+            <Shimmer text={label} className="text-[12.5px] font-normal" />
           ) : (
             <span
-              className={`truncate ${isError ? "text-error/70" : "text-text-3"} ${
-                canExpand
-                  ? "group-hover/tool:text-text-2 transition-colors"
-                  : ""
-              }`}
+              className={`truncate ${
+                isError ? "text-error/80" : "text-text-2"
+              } ${canExpand ? "group-hover/row:text-text-1 transition-colors" : ""}`}
             >
               {label}
-              {isError && <span className="text-error/60 ml-1">— failed</span>}
             </span>
           )}
           {pres.detail && !isRunning && (
-            <span className="text-[12px] text-text-4 font-mono break-all line-clamp-1 shrink-0">
+            <span className="text-[11px] text-text-4 font-mono break-all line-clamp-1 shrink-0">
               {pres.detail}
             </span>
+          )}
+          {isError && (
+            <span className="shrink-0 ml-0.5 inline-flex items-center gap-0.5 rounded border border-error/20 bg-error/10 px-1 py-0 text-[9.5px] font-semibold uppercase tracking-wider text-error">
+              <AlertTriangle size={9} strokeWidth={2} className="text-error" aria-hidden />
+              Failed
+            </span>
+          )}
+          {isDone && !isError && !canExpand && (
+            <CheckCircle2
+              size={11}
+              strokeWidth={2}
+              className="shrink-0 self-center text-success/60"
+              aria-hidden
+            />
           )}
           {canExpand && (
             <ChevronDown
               size={11}
               strokeWidth={1.6}
-              className={`shrink-0 self-center text-text-4 group-hover/tool:text-text-3 transition-all duration-200 ${
+              className={`shrink-0 self-center text-text-4 group-hover/row:text-text-3 transition-all duration-200 ${
                 expanded ? "rotate-180" : ""
               }`}
               aria-hidden="true"

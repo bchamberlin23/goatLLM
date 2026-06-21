@@ -223,6 +223,41 @@ button:not(:disabled):active {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+/* ─── Motion utility classes ───
+   Subtle entrance / expansion animations wired to DESIGN.md motion tokens.
+   Used by InlineToolCall, ReviewChanges, modals, dropdowns, status bar, etc. */
+.motion-surface-in {
+  animation: motion-surface-in var(--d-medium) var(--ease-out) both;
+}
+@keyframes motion-surface-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.992); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.motion-status-in {
+  animation: motion-status-in var(--d-short) var(--ease-out) both;
+}
+@keyframes motion-status-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.motion-expand-content {
+  animation: motion-expand-content var(--d-short) var(--ease-out) both;
+}
+@keyframes motion-expand-content {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.motion-row {
+  animation: motion-row var(--d-micro) var(--ease-out) both;
+}
+@keyframes motion-row {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes cursorBlink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
