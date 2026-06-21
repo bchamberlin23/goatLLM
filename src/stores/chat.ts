@@ -4,7 +4,7 @@ import { heuristicTitle } from "../lib/llm";
 import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import type { ModelConfig, ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "../lib/providers";
-import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
+import { getZenCredential, isZenFreeModel, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
 import type { Skill } from "../lib/skills";
 import type { ProjectCheckMemory, VerificationPolicy } from "../lib/agent-session";
 import type { AgentBudgetControls, PathPermissionRule } from "../lib/agent-session";
@@ -4700,8 +4700,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const health = providerHealth[bp.id];
           // Optimistic: assume online until first check fails
           const providerOnline = health ? health.online : true;
+          const discoveredForProvider = bp.id === ZEN_FREE_PROVIDER_ID
+            ? (discoveredModels[bp.id] ?? []).filter(isZenFreeModel)
+            : discoveredModels[bp.id] ?? [];
           const sourceModels = providerSupportsDiscovery(bp.id)
-            ? mergeDiscoveredModels(bp.models, discoveredModels[bp.id] ?? [])
+            ? mergeDiscoveredModels(bp.models, discoveredForProvider)
             : bp.models;
           for (const m of sourceModels) {
             const combinedId = `${bp.id}:${m.id}`;
@@ -4740,7 +4743,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
                     CLOUD_PROVIDER_MODELS[providerId] ?? [],
                     discoveredModels[providerId] ?? [],
                   ),
-                  providerId === "opencode-go" ? discoveredModels[ZEN_FREE_PROVIDER_ID] ?? [] : [],
+                  providerId === "opencode-go"
+                    ? (discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []).filter(isZenFreeModel)
+                    : [],
                 )
               : (CLOUD_PROVIDER_MODELS[providerId] ?? []);
           const allowlist = config.enabledModels;

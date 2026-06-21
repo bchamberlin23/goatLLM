@@ -301,13 +301,17 @@ describe("ChatStore", () => {
           ...state.discoveredModels,
           "opencode-go-free": [
             { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
+            { id: "zen-premium", name: "Zen Premium", contextWindow: 128_000 },
           ],
         },
       }));
 
-      expect(useChatStore.getState().getModels()).toEqual(expect.arrayContaining([
+      const models = useChatStore.getState().getModels();
+
+      expect(models).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: "opencode-go:big-pickle-free", name: "Big Pickle" }),
       ]));
+      expect(models.map((model) => model.id)).not.toContain("opencode-go:zen-premium");
     });
 
     it("merges discovered Zen free models into the built-in picker", () => {
@@ -317,6 +321,7 @@ describe("ChatStore", () => {
           ...state.discoveredModels,
           "opencode-go-free": [
             { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
+            { id: "zen-premium", name: "Zen Premium", contextWindow: 128_000 },
           ],
         },
       }));
@@ -327,6 +332,7 @@ describe("ChatStore", () => {
         expect.objectContaining({ id: "opencode-go-free:big-pickle-free", name: "Big Pickle" }),
         expect.objectContaining({ id: "opencode-go-free:deepseek-v4-flash-free" }),
       ]));
+      expect(models.map((model) => model.id)).not.toContain("opencode-go-free:zen-premium");
     });
 
     it("refreshes every configured cloud provider that supports discovery", async () => {

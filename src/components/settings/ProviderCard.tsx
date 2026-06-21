@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, Check, EyeOff, Eye, Search, X, RefreshCw, Loader2 } from "lucide-react";
 import { CLOUD_PROVIDER_MODELS, useChatStore } from "../../stores/chat";
 import { mergeDiscoveredModels } from "../../lib/providers";
-import { ZEN_FREE_PROVIDER_ID } from "../../lib/zen-credentials";
+import { isZenFreeModel, ZEN_FREE_PROVIDER_ID } from "../../lib/zen-credentials";
 import { useShallow } from "zustand/react/shallow";
 
 export function ProviderCard({
@@ -43,7 +43,7 @@ export function ProviderCard({
   const curated = CLOUD_PROVIDER_MODELS[provider.id] ?? [];
   const discovered = provider.supportsDiscovery ? discoveredModels[provider.id] ?? [] : [];
   const zenFreeModels = provider.id === "opencode-go"
-    ? discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []
+    ? (discoveredModels[ZEN_FREE_PROVIDER_ID] ?? []).filter(isZenFreeModel)
     : [];
   const allModels = mergeDiscoveredModels(
     mergeDiscoveredModels(curated, discovered),

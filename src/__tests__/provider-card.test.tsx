@@ -44,6 +44,7 @@ describe("ProviderCard", () => {
       discoveredModels: {
         "opencode-go-free": [
           { id: "big-pickle-free", name: "Big Pickle", contextWindow: 128_000 },
+          { id: "zen-premium", name: "Zen Premium", contextWindow: 128_000 },
         ],
       },
     });
@@ -66,5 +67,6 @@ describe("ProviderCard", () => {
     fireEvent.click(screen.getByText("OpenCode Go"));
 
     expect(screen.getByText("Big Pickle")).toBeInTheDocument();
+    expect(screen.queryByText("Zen Premium")).not.toBeInTheDocument();
   });
 });

@@ -44,3 +44,9 @@ export function getZenCredential(): string {
 
 /** Built-in provider id that uses the bundled free credential. */
 export const ZEN_FREE_PROVIDER_ID = "opencode-go-free";
+
+/** Zen's catalog also contains paid models. Only entries explicitly marked
+ * free belong in the bundled free-tier catalog shown alongside OpenCode Go. */
+export function isZenFreeModel(model: { id: string; name: string }): boolean {
+  return `${model.id} ${model.name}`.toLowerCase().includes("free");
+}
