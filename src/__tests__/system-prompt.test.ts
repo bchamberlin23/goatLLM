@@ -127,6 +127,12 @@ describe("buildAgentSystemPrompt", () => {
     expect(out).not.toMatch(/Use bash for shell operations like ls, grep, find/);
   });
 
+  it("routes broad codebase orientation to workspace_map", () => {
+    const out = buildAgentSystemPrompt({ tools: [] });
+    expect(out).toMatch(/workspace_map/);
+    expect(out).toMatch(/architecture overview/i);
+  });
+
   it("does not include research preamble by default", () => {
     const out = buildAgentSystemPrompt({ tools: [] });
     expect(out).not.toMatch(/RESEARCH MODE/);

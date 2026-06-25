@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCompactedLlmMessages, compactMessages, estimateTotalTokens } from "../lib/context-manager";
+import { buildCompactedLlmMessages, compactMessages, compactToolOutputForContext, estimateTotalTokens } from "../lib/context-manager";
 import { applyCompactionReplay } from "../lib/compaction/replay";
 import type { CompactionEntry } from "../lib/compaction/types";
 import type { Message } from "../stores/chat";
@@ -145,6 +145,44 @@ describe("compactMessages", () => {
   it("returns pinnedDroppedCount=0 when no pins are set", () => {
     const r = compactMessages([msg("user", "hi"), msg("assistant", "yo")], 10000);
     expect(r.pinnedDroppedCount).toBe(0);
+  });
+});
+
+describe("compactToolOutputForContext", () => {
+  it("keeps later structured search results instead of only the first chunk", () => {
+    const output = JSON.stringify(
+      [
+        { file: "src/noise.ts", line: 1, content: "x".repeat(2600) },
+        { file: "src/answer.ts", line: 42, content: "target match lives here" },
+      ],
+      null,
+      2,
+    );
+
+    const compacted = compactToolOutputForContext(output, "search_content");
+
+    expect(compacted).toContain("[Compacted tool output: search_content]");
+    expect(compacted).toContain("src/noise.ts");
+    expect(compacted).toContain("src/answer.ts:42");
+    expect(compacted).toContain("target match lives here");
+    expect(compacted.length).toBeLessThan(output.length);
+  });
+
+  it("preserves failing log tails for test and shell output", () => {
+    const output = [
+      "running 212 tests",
+      ...Array.from({ length: 220 }, (_, i) => `ok ${String(i)} filler ${"x".repeat(16)}`),
+      "FAIL src/lib/workspace-map.test.ts",
+      "Expected entry point to include src/App.tsx",
+    ].join("\n");
+
+    const compacted = compactToolOutputForContext(output, "bash");
+
+    expect(compacted).toContain("[Compacted tool output: bash]");
+    expect(compacted).toContain("running 212 tests");
+    expect(compacted).toContain("FAIL src/lib/workspace-map.test.ts");
+    expect(compacted).toContain("Expected entry point");
+    expect(compacted.length).toBeLessThan(output.length);
   });
 });
 

@@ -59,11 +59,18 @@ const BUILTIN_SKILLS: SeedManifest[] = [
   { name: "concise", files: ["SKILL.md"] },
   { name: "socratic", files: ["SKILL.md"] },
   { name: "devil-advocate", files: ["SKILL.md"] },
+  { name: "internet-research-router", files: ["SKILL.md"] },
+  { name: "stop-slop", files: ["SKILL.md"] },
+  { name: "taste-check", files: ["SKILL.md"] },
   // Agent-mode discipline skill. Engineering rigor as a prompt: TDD,
   // root-cause thinking, no fake fixes, no swallowed errors.
   { name: "superpowers", files: ["SKILL.md"] },
   // Ralph loop — iterative agent-driven development methodology.
   { name: "ralph-loop", files: ["SKILL.md"] },
+  // User-invoked scoping/grilling flow inspired by small composable
+  // engineering skills. Disabled for model invocation to avoid ceremony on
+  // straightforward implementation requests.
+  { name: "engineering-grill", files: ["SKILL.md"] },
 ];
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

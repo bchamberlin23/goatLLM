@@ -28,6 +28,12 @@ import {
   MAX_WEB_SEARCH_CALLS_PER_TURN,
   type WebSearchResult,
 } from "../../web-search";
+import {
+  buildWorkspaceMap,
+  formatWorkspaceMapForPrompt,
+  shouldSkipWorkspaceMapPath,
+  type WorkspaceMapFile,
+} from "../../workspace-map";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -36,6 +42,54 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function textField(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === "string" ? value : "";
+}
+
+const WORKSPACE_MAP_MAX_FILES = 240;
+const WORKSPACE_MAP_MAX_DEPTH = 5;
+
+async function collectWorkspaceMapFiles(
+  workspace: string,
+  startPath = "",
+): Promise<WorkspaceMapFile[]> {
+  const files: WorkspaceMapFile[] = [];
+
+  async function walk(path: string, depth: number): Promise<void> {
+    if (files.length >= WORKSPACE_MAP_MAX_FILES || depth > WORKSPACE_MAP_MAX_DEPTH) return;
+    let entries: { name: string; is_dir: boolean; size: number }[];
+    try {
+      entries = await invoke("list_dir", { workspace, path });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      if (files.length >= WORKSPACE_MAP_MAX_FILES) break;
+      const child = path ? `${path}/${entry.name}` : entry.name;
+      if (shouldSkipWorkspaceMapPath(child, entry.size)) continue;
+      if (entry.is_dir) {
+        await walk(child, depth + 1);
+        continue;
+      }
+
+      let content: string | undefined;
+      if (entry.size <= 160_000) {
+        try {
+          content = await invoke("read_file", {
+            workspace,
+            path: child,
+            offset: 0,
+            limit: 260,
+          });
+        } catch {
+          content = undefined;
+        }
+      }
+      files.push({ path: child, size: entry.size, content });
+    }
+  }
+
+  await walk(startPath, 0);
+  return files;
 }
 
 export const READ_ONLY_TOOLS = {
@@ -176,6 +230,24 @@ export const READ_ONLY_TOOLS = {
       } catch (e) {
         return `search_semantic failed: ${e instanceof Error ? e.message : String(e)}`;
       }
+    },
+  }),
+
+  workspace_map: tool({
+    description:
+      "Build a compact, deterministic map of the current workspace: project type, important files, top directories, likely entry points, package scripts, and cheap import hints. Use this before broad architecture/onboarding questions like 'understand this repo', 'where should I start?', or 'what are the main components?'",
+    inputSchema: z.object({
+      path: z
+        .string()
+        .optional()
+        .describe("Optional subdirectory path relative to workspace root. Defaults to the workspace root."),
+    }),
+    execute: async ({ path }) => {
+      const workspace = getWorkspace();
+      const startPath = path ? normalizePath(path) : "";
+      const files = await collectWorkspaceMapFiles(workspace, startPath);
+      const map = buildWorkspaceMap(files);
+      return formatWorkspaceMapForPrompt(map);
     },
   }),
 

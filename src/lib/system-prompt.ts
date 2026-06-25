@@ -191,6 +191,7 @@ Do not invent command output, file contents, URLs, APIs, or test results. If you
 
 - Use \`read_file\` to examine files instead of \`bash cat\` or \`sed\`.
 - Use \`list_dir\` instead of \`bash ls\` for directory listings.
+- Use \`workspace_map\` before broad codebase orientation, architecture overview, onboarding, or "where should I start?" requests. It gives a compact map of entry points, important files, scripts, directories, and import hints before you drill into specific files.
 - Use \`search_content\` (not bash grep) for finding code patterns. It supports \`context_lines\` for surrounding lines and \`case_insensitive\` for case-insensitive matching. Reach for it whenever the question is "where is X" or "show me lines matching Y".
 - Use \`search_semantic\` when exact-match search misses conceptual code, such as "auth flow" matching "login handler".
 - Use \`git_status\`, \`git_log\`, and \`git_blame\` instead of shelling out to git for read-only inspection.

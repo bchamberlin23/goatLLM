@@ -140,16 +140,118 @@ export function shouldCompact(
 // ── Tool Output Truncation ──
 
 const MAX_TOOL_OUTPUT_CHARS = 800;
+const MAX_JSON_FIELD_CHARS = 180;
+
+function truncateField(value: string, max = MAX_JSON_FIELD_CHARS): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}... [${String(value.length - max)} more chars]`;
+}
+
+function compactJsonValue(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return truncateField(value);
+  if (typeof value !== "object" || value === null) return value;
+  if (depth >= 3) return Array.isArray(value) ? `[array:${String(value.length)}]` : "[object]";
+  if (Array.isArray(value)) {
+    const items = value as unknown[];
+    const keep: unknown[] = items.length <= 8
+      ? items
+      : [...items.slice(0, 4), { omittedItems: items.length - 8 }, ...items.slice(-4)];
+    return keep.map((item) => compactJsonValue(item, depth + 1));
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    out[key] = compactJsonValue(item, depth + 1);
+  }
+  return out;
+}
+
+function collectJsonSignalLines(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const lines: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue;
+    const record = item as Record<string, unknown>;
+    const file = typeof record.file === "string" ? record.file : undefined;
+    const line = typeof record.line === "number" ? record.line : undefined;
+    const content = typeof record.content === "string" ? truncateField(record.content, 140) : undefined;
+    if (file && line !== undefined) {
+      lines.push(`- ${file}:${String(line)}${content ? ` ${content}` : ""}`);
+    } else if (file) {
+      lines.push(`- ${file}${content ? ` ${content}` : ""}`);
+    }
+  }
+  return lines.slice(0, 12);
+}
+
+function tryCompactJsonOutput(output: string, toolName: string): string | null {
+  const trimmed = output.trim();
+  if (!trimmed.startsWith("[") && !trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    const compacted = compactJsonValue(parsed);
+    const json = JSON.stringify(compacted, null, 2);
+    const signals = collectJsonSignalLines(parsed);
+    const shape = Array.isArray(parsed)
+      ? `${String(parsed.length)} top-level item${parsed.length === 1 ? "" : "s"}`
+      : "object";
+    const parts = [
+      `[Compacted tool output: ${toolName}]`,
+      `Original ${String(output.length)} chars; preserved JSON shape and high-signal fields (${shape}).`,
+    ];
+    if (signals.length > 0) {
+      parts.push("", "Key results:", ...signals);
+    }
+    parts.push("", json, "", "[Full output remains stored in the conversation history.]");
+    return parts.join("\n");
+  } catch {
+    return null;
+  }
+}
+
+function compactTextOutput(output: string, toolName: string): string {
+  const lines = output.split(/\r?\n/);
+  const signalPattern = /\b(error|fail(?:ed|ure)?|exception|panic|traceback|expected|received|assert|warning|denied|not found)\b/i;
+  const head = lines.slice(0, 12);
+  const tail = lines.slice(-18);
+  const signalLines = lines
+    .map((line, index) => ({ line, index: index + 1 }))
+    .filter(({ line }) => signalPattern.test(line))
+    .slice(0, 18)
+    .map(({ line, index }) => `${String(index)}: ${line}`);
+
+  const sections = [
+    `[Compacted tool output: ${toolName}]`,
+    `Original ${String(output.length)} chars / ${String(lines.length)} lines; preserved head, failure/error lines, and tail.`,
+    "",
+    "Head:",
+    head.join("\n"),
+  ];
+
+  if (signalLines.length > 0) {
+    sections.push("", "Signal lines:", signalLines.join("\n"));
+  }
+
+  sections.push("", "Tail:", tail.join("\n"), "", "[Full output remains stored in the conversation history.]");
+  const compacted = sections.join("\n");
+  if (compacted.length < output.length) return compacted;
+  const headChars = output.slice(0, Math.floor(MAX_TOOL_OUTPUT_CHARS * 0.55));
+  const tailChars = output.slice(-Math.floor(MAX_TOOL_OUTPUT_CHARS * 0.35));
+  return [
+    `[Compacted tool output: ${toolName}]`,
+    `Original ${String(output.length)} chars; preserved beginning and end.`,
+    headChars,
+    "...",
+    tailChars,
+  ].join("\n");
+}
 
 /**
- * Truncate a tool output string, keeping the first N chars
- * and adding a summary of what was removed.
+ * Compact a tool output string for the model context while keeping the
+ * original persisted tool output untouched in conversation history.
  */
-function truncateToolOutput(output: string): string {
+export function compactToolOutputForContext(output: string, toolName = "tool"): string {
   if (output.length <= MAX_TOOL_OUTPUT_CHARS) return output;
-  const truncated = output.slice(0, MAX_TOOL_OUTPUT_CHARS);
-  const removed = output.length - MAX_TOOL_OUTPUT_CHARS;
-  return `${truncated}\n\n… [${removed} more characters truncated]`;
+  return tryCompactJsonOutput(output, toolName) ?? compactTextOutput(output, toolName);
 }
 
 // ── Compaction ──
@@ -258,7 +360,7 @@ export function compactMessages(
       ) {
         truncatedCount++;
         changed = true;
-        return { ...tc, output: truncateToolOutput(tc.output) };
+        return { ...tc, output: compactToolOutputForContext(tc.output, tc.toolName) };
       }
       return tc;
     });
