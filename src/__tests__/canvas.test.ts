@@ -4,10 +4,14 @@ import {
   applyEdits,
   applyReplace,
   applyRewrite,
+  buildNotebookContext,
+  buildNotebookSystemPrompt,
   createBoard,
   createCanvasMessage,
   createNotebookTools,
   createNotebook,
+  createNotebookNote,
+  createNotebookSource,
   createPanel,
   deriveCanvasAction,
   migrateLegacyBoard,
@@ -151,8 +155,8 @@ describe("canvas — hydration sanitizers", () => {
 });
 
 describe("canvas — notebook agent tools", () => {
-  function harness(initial: CanvasPanel[] = []) {
-    const board: CanvasBoard = { panels: [...initial], chat: [] };
+  function harness(initial: CanvasPanel[] = [], boardOverrides: Partial<CanvasBoard> = {}) {
+    const board: CanvasBoard = { panels: [...initial], chat: [], ...boardOverrides };
     let seq = board.panels.length;
     const deps: NotebookToolDeps = {
       getBoard: () => board,
@@ -168,6 +172,22 @@ describe("canvas — notebook agent tools", () => {
       setPanelTitle: (id, title) => {
         const p = board.panels.find((x) => x.id === id);
         if (p) p.title = title;
+      },
+      createNote: (title, content, sourceIds) => {
+        const notebook = board as ReturnType<typeof createNotebook>;
+        const note = createNotebookNote({ title, content, sourceIds });
+        notebook.notes.push(note);
+        return note.id;
+      },
+      setNoteContent: (id, content) => {
+        const notebook = board as ReturnType<typeof createNotebook>;
+        const note = notebook.notes.find((x) => x.id === id);
+        if (note) note.content = content;
+      },
+      setNoteTitle: (id, title) => {
+        const notebook = board as ReturnType<typeof createNotebook>;
+        const note = notebook.notes.find((x) => x.id === id);
+        if (note) note.title = title;
       },
     };
     return { board, tools: createNotebookTools(deps) };
@@ -244,6 +264,56 @@ describe("canvas — notebook agent tools", () => {
     expect(await tools.rename_panel.execute!({ panel_id: "p1", title: "  " }, {} as never)).toMatch(/No change/);
     expect(await tools.rename_panel.execute!({ panel_id: "p1", title: "Final" }, {} as never)).toMatch(/No change/);
     expect(board.panels[0].title).toBe("Final");
+  });
+
+  it("exposes notebook sources for listing, reading, and search", async () => {
+    const notebook = createNotebook("Research", 1);
+    notebook.sources = [
+      createNotebookSource({
+        title: "Amber market memo",
+        kind: "text",
+        content: "Amber demand is rising in city fleets.",
+        seed: 2,
+      }),
+      createNotebookSource({
+        title: "Muted source",
+        kind: "text",
+        content: "This should not match.",
+        contextMode: "off",
+        seed: 3,
+      }),
+    ];
+    const { tools } = harness([], notebook);
+
+    const list = (await tools.list_sources.execute!({}, {} as never)) as string;
+    expect(list).toContain("Amber market memo");
+    expect(list).toContain(notebook.sources[0].id);
+
+    const read = (await tools.read_source.execute!({ source_id: notebook.sources[0].id }, {} as never)) as string;
+    expect(read).toContain("Amber demand");
+
+    const search = (await tools.search_sources.execute!({ query: "city fleets" }, {} as never)) as string;
+    expect(search).toContain("Amber market memo");
+    expect(search).not.toContain("Muted source");
+  });
+
+  it("creates and edits notebook notes", async () => {
+    const notebook = createNotebook("Research", 1);
+    const { tools } = harness([], notebook);
+
+    const created = (await tools.create_note.execute!(
+      { title: "Key takeaways", content: "Use concise bullets." },
+      {} as never,
+    )) as string;
+    expect(created).toMatch(/Created note/);
+    expect(notebook.notes[0].title).toBe("Key takeaways");
+
+    await tools.write_note.execute!(
+      { note_id: notebook.notes[0].id, title: "Decision notes", content: "Ship the notebook workflow." },
+      {} as never,
+    );
+    expect(notebook.notes[0].title).toBe("Decision notes");
+    expect(notebook.notes[0].content).toBe("Ship the notebook workflow.");
   });
 });
 
@@ -336,6 +406,9 @@ describe("canvas — notebook collection", () => {
   it("createNotebook starts empty with a default name, honoring a custom one", () => {
     const blank = createNotebook(undefined, 100);
     expect(blank.name).toBe(DEFAULT_NOTEBOOK_NAME);
+    expect(blank.description).toBe("");
+    expect(blank.sources).toEqual([]);
+    expect(blank.notes).toEqual([]);
     expect(blank.panels).toEqual([]);
     expect(blank.chat).toEqual([]);
     expect(blank.id).toContain("nb-100-");
@@ -349,12 +422,148 @@ describe("canvas — notebook collection", () => {
     expect(createNotebook("   ", 100).name).toBe(DEFAULT_NOTEBOOK_NAME);
   });
 
+  it("creates notebook sources and notes with context-ready defaults", () => {
+    const source = createNotebookSource({
+      title: "  Charter.pdf  ",
+      kind: "file",
+      content: "Alpha\n\nBeta\n\nGamma",
+      filename: "charter.pdf",
+      mimeType: "application/pdf",
+      seed: 42,
+    });
+    expect(source).toMatchObject({
+      id: expect.stringMatching(/^src-42-/),
+      title: "Charter.pdf",
+      kind: "file",
+      filename: "charter.pdf",
+      mimeType: "application/pdf",
+      content: "Alpha\n\nBeta\n\nGamma",
+      contextMode: "full",
+      status: "ready",
+    });
+    expect(source.summary).toContain("Alpha");
+
+    const note = createNotebookNote({
+      title: "  Key Takeaways  ",
+      content: "Remember this",
+      kind: "ai",
+      sourceIds: [source.id],
+      seed: 50,
+    });
+    expect(note).toMatchObject({
+      id: expect.stringMatching(/^note-50-/),
+      title: "Key Takeaways",
+      content: "Remember this",
+      kind: "ai",
+      sourceIds: [source.id],
+      contextMode: "full",
+    });
+  });
+
+  it("builds selected notebook context from full sources, summaries, and notes", () => {
+    const full = createNotebookSource({
+      title: "Full paper",
+      kind: "text",
+      content: "Full content body",
+      seed: 1,
+    });
+    const summary = {
+      ...createNotebookSource({
+        title: "Long transcript",
+        kind: "web",
+        content: "Long transcript body",
+        url: "https://example.com/transcript",
+        seed: 2,
+      }),
+      contextMode: "summary" as const,
+      summary: "Condensed transcript",
+    };
+    const off = {
+      ...createNotebookSource({
+        title: "Excluded",
+        kind: "text",
+        content: "Do not include",
+        seed: 3,
+      }),
+      contextMode: "off" as const,
+    };
+    const note = createNotebookNote({
+      title: "Research note",
+      content: "My synthesis",
+      kind: "manual",
+      seed: 4,
+    });
+    const skippedNote = {
+      ...createNotebookNote({ title: "Private", content: "Hidden", seed: 5 }),
+      contextMode: "off" as const,
+    };
+
+    const context = buildNotebookContext({
+      ...createNotebook("Research", 9),
+      description: "Scope statement",
+      sources: [full, summary, off],
+      notes: [note, skippedNote],
+    });
+
+    expect(context.sourceCount).toBe(2);
+    expect(context.noteCount).toBe(1);
+    expect(context.context).toContain("# Notebook: Research");
+    expect(context.context).toContain("Scope statement");
+    expect(context.context).toContain("## Source 1: Full paper");
+    expect(context.context).toContain("Full content body");
+    expect(context.context).toContain("## Source 2: Long transcript");
+    expect(context.context).toContain("Condensed transcript");
+    expect(context.context).toContain("## Note 1: Research note");
+    expect(context.context).not.toContain("Do not include");
+    expect(context.context).not.toContain("Hidden");
+    expect(context.tokenCount).toBeGreaterThan(0);
+  });
+
+  it("buildNotebookSystemPrompt includes selected notebook context", () => {
+    const notebook = createNotebook("Launch research", 1);
+    notebook.sources = [
+      createNotebookSource({
+        title: "Customer calls",
+        kind: "text",
+        content: "Buyers want citations beside every answer.",
+        seed: 2,
+      }),
+    ];
+    notebook.notes = [
+      createNotebookNote({
+        title: "Synthesis",
+        content: "Trust depends on traceable claims.",
+        seed: 3,
+      }),
+    ];
+
+    const prompt = buildNotebookSystemPrompt(notebook);
+    expect(prompt).toContain("NOTEBOOK CONTEXT");
+    expect(prompt).toContain("Customer calls");
+    expect(prompt).toContain("Trust depends on traceable claims.");
+  });
+
   it("sanitizeNotebook backfills missing fields and settles inner state", () => {
     expect(sanitizeNotebook(null)).toBeNull();
     expect(sanitizeNotebook("nope")).toBeNull();
 
     const cleaned = sanitizeNotebook({
       // id/name/timestamps intentionally missing
+      description: 42,
+      sources: [
+        {
+          id: "src-processing",
+          title: "Uploading",
+          kind: "file",
+          content: "half done",
+          summary: "",
+          status: "processing",
+          contextMode: "full",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      notes: [{ id: "note-ok", title: "N", content: "C", kind: "manual", contextMode: "full", createdAt: 1, updatedAt: 1 }],
       panels: [
         null,
         { id: "p", kind: "code", title: "p.py", content: "x", layout: { x: 0, y: 0, w: 1, h: 1 }, status: "running", output: "ok", z: 1, updatedAt: 1 },
@@ -364,8 +573,16 @@ describe("canvas — notebook collection", () => {
     expect(cleaned).not.toBeNull();
     expect(cleaned!.id).toMatch(/^nb-/);
     expect(cleaned!.name).toBe(DEFAULT_NOTEBOOK_NAME);
+    expect(cleaned!.description).toBe("");
     expect(typeof cleaned!.createdAt).toBe("number");
     expect(cleaned!.updatedAt).toBe(cleaned!.createdAt); // backfilled from createdAt
+    expect(cleaned!.sources).toHaveLength(1);
+    expect(cleaned!.sources[0]).toMatchObject({
+      id: "src-processing",
+      status: "error",
+      error: "Processing was interrupted.",
+    });
+    expect(cleaned!.notes).toHaveLength(1);
     // Inner sanitizers ran: running panel with output → done, streaming flag cleared.
     expect(cleaned!.panels).toHaveLength(1);
     expect(cleaned!.panels[0].status).toBe("done");

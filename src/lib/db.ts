@@ -22,6 +22,7 @@
 
 import type { Conversation, Message } from "../stores/chat";
 import { compareMessages } from "../stores/chat";
+import { sanitizeNotebooks, type Notebook } from "./canvas";
 import type { CompactionEntry } from "./compaction/types";
 import { log, withError } from "./logger";
 
@@ -41,6 +42,7 @@ const JOURNAL_MSG_PREFIX = "goatllm-journal-msg:";
 const JOURNAL_COMPACTION_PREFIX = "goatllm-journal-compaction:";
 const JOURNAL_DEL_CONV_PREFIX = "goatllm-journal-del-conv:";
 const JOURNAL_DEL_MSG_PREFIX = "goatllm-journal-del-msg:";
+const NOTEBOOKS_KEY = "goatllm-notebooks";
 
 function safeSet(key: string, value: string) {
   try {
@@ -296,6 +298,63 @@ export interface HydratedData {
   conversations: Conversation[];
   messages: Record<string, Message[]>;
   compactionEntries: Record<string, CompactionEntry[]>;
+}
+
+function readNotebookJournal(): Notebook[] {
+  try {
+    const raw = localStorage.getItem(NOTEBOOKS_KEY);
+    return sanitizeNotebooks(raw ? JSON.parse(raw) : []);
+  } catch {
+    safeRemove(NOTEBOOKS_KEY);
+    return [];
+  }
+}
+
+function mergeNotebookCollections(journal: Notebook[], sqlite: Notebook[]): Notebook[] {
+  const byId = new Map<string, Notebook>();
+  for (const notebook of sqlite) byId.set(notebook.id, notebook);
+  for (const notebook of journal) {
+    const existing = byId.get(notebook.id);
+    if (!existing || notebook.updatedAt >= existing.updatedAt) {
+      byId.set(notebook.id, notebook);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id));
+}
+
+async function invokeSaveNotebooks(notebooks: Notebook[]): Promise<void> {
+  const invoke = await getInvoke();
+  await invoke("notebooks_save", { payload: JSON.stringify(notebooks) });
+}
+
+/**
+ * Load the notebook collection from the crash-safe journal plus SQLite mirror.
+ * The journal wins when both layers have the same notebook and its updatedAt is
+ * newer, matching message close-race behavior.
+ */
+export async function loadNotebooksFromDb(): Promise<Notebook[]> {
+  const journal = readNotebookJournal();
+  let sqlite: Notebook[] = [];
+  try {
+    const invoke = await getInvoke();
+    const raw = await invoke<string | null>("notebooks_load");
+    if (raw) sqlite = sanitizeNotebooks(JSON.parse(raw));
+  } catch (e) {
+    log.warn("Notebook SQLite load failed, using journal only", withError("db", undefined, e));
+  }
+
+  const merged = mergeNotebookCollections(journal, sqlite);
+  safeSet(NOTEBOOKS_KEY, JSON.stringify(merged));
+
+  const sqliteById = new Map(sqlite.map((notebook) => [notebook.id, notebook]));
+  const needsReplay =
+    journal.some((notebook) => {
+      const mirrored = sqliteById.get(notebook.id);
+      return !mirrored || notebook.updatedAt >= mirrored.updatedAt;
+    }) || sqlite.length !== merged.length;
+  if (needsReplay) enqueueWrite(() => invokeSaveNotebooks(merged));
+
+  return merged;
 }
 
 /**
@@ -560,6 +619,17 @@ export function persistCompactionEntry(entry: CompactionEntry): void {
     JSON.stringify(entry),
   );
   enqueueWrite(() => invokeSaveCompactionEntry(entry));
+}
+
+/**
+ * Persist notebooks to the local journal synchronously, then mirror the full
+ * collection into SQLite. The collection is intentionally saved as one JSON
+ * blob for now: notebook mode needs crash safety, not cross-notebook SQL joins.
+ */
+export function persistNotebooks(notebooks: Notebook[]): void {
+  const safe = sanitizeNotebooks(notebooks);
+  safeSet(NOTEBOOKS_KEY, JSON.stringify(safe));
+  enqueueWrite(() => invokeSaveNotebooks(safe));
 }
 
 export async function loadCompactionEntries(conversationId: string): Promise<CompactionEntry[]> {

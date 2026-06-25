@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { compactMessages, estimateTotalTokens } from "../lib/context-manager";
+import { buildCompactedLlmMessages, compactMessages, estimateTotalTokens } from "../lib/context-manager";
+import { applyCompactionReplay } from "../lib/compaction/replay";
+import type { CompactionEntry } from "../lib/compaction/types";
 import type { Message } from "../stores/chat";
 
 function msg(
@@ -173,5 +175,51 @@ describe("estimateTotalTokens", () => {
       }),
     ]);
     expect(withTools).toBeGreaterThan(noTools);
+  });
+});
+
+describe("buildCompactedLlmMessages", () => {
+  it("repackages existing compacted history for a model without tool support", () => {
+    const messages: Message[] = [
+      msg("user", "old request", { id: "m1", createdAt: 1 }),
+      msg("assistant", "old answer", { id: "m2", createdAt: 2 }),
+      msg("user", "check files", { id: "m3", createdAt: 3 }),
+      msg("assistant", "read it", {
+        id: "m4",
+        createdAt: 4,
+        toolCalls: [
+          {
+            toolCallId: "tc-1",
+            toolName: "read_file",
+            input: { path: "src/App.tsx" },
+            output: "export function App() {}",
+            state: "done",
+          },
+        ],
+      }),
+    ];
+    const entry: CompactionEntry = {
+      id: "cmp-1",
+      conversationId: "test",
+      firstKeptId: "m3",
+      summary: "## Goal\nOld compacted context.",
+      readFiles: [],
+      modifiedFiles: [],
+      tokensBefore: 10_000,
+      source: "auto",
+      isSplitTurn: false,
+      promptVersion: "initial",
+      createdAt: 5,
+      mode: "agent",
+      modelId: "openai:gpt-4.1",
+    };
+
+    const replayed = applyCompactionReplay(messages, entry);
+    const packaged = buildCompactedLlmMessages(replayed.llmMessages, { stripTools: true });
+
+    expect(packaged.map((m) => m.role)).toEqual(["system", "user", "assistant"]);
+    expect(packaged[0].content).toContain("Old compacted context");
+    expect(packaged[2].content).toContain("[Tool: read_file]");
+    expect(packaged[2].content).toContain("export function App");
   });
 });

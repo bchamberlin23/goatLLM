@@ -390,4 +390,98 @@ describe("OpenAI Codex subscription provider helpers", () => {
     expect(callbacks.onDone).toHaveBeenCalledWith("All set.");
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
+
+  it("executes many spawn_subagent calls concurrently in one tool round", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const subagentCount = 12;
+    const tools = {
+      spawn_subagent: tool({
+        description: "Spawn a subagent.",
+        inputSchema: z.object({
+          task: z.string(),
+        }),
+        execute: vi.fn(async ({ task }) => {
+          active += 1;
+          maxActive = Math.max(maxActive, active);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          active -= 1;
+          return `done: ${String(task)}`;
+        }),
+      }),
+    };
+
+    invokeMock.mockImplementation(async (_command: string, args: Record<string, unknown>) => {
+      await Promise.resolve();
+      const callIndex = invokeMock.mock.calls.length;
+      queueMicrotask(() => {
+        const listener = eventListeners.get(`openai-codex-stream:${String(args.runId)}`);
+        expect(listener).toBeDefined();
+        if (callIndex === 1) {
+          for (let i = 0; i < subagentCount; i++) {
+            const index = String(i);
+            listener?.({
+              payload: {
+                kind: "event",
+                event: {
+                  type: "response.output_item.done",
+                  item: {
+                    type: "function_call",
+                    id: `fc_${index}`,
+                    call_id: `call_${index}`,
+                    name: "spawn_subagent",
+                    arguments: JSON.stringify({ task: `task ${index}` }),
+                  },
+                },
+              },
+            });
+          }
+          listener?.({ payload: { kind: "done", cancelled: false } });
+          return;
+        }
+
+        expect(args.body).toMatchObject({
+          input: expect.arrayContaining([
+            {
+              type: "function_call_output",
+              call_id: "call_11",
+              output: "done: task 11",
+            },
+          ]),
+        });
+        listener?.({
+          payload: {
+            kind: "event",
+            event: { type: "response.output_text.delta", delta: "Merged." },
+          },
+        });
+        listener?.({ payload: { kind: "done", cancelled: false } });
+      });
+    });
+
+    const callbacks = {
+      onToken: vi.fn(),
+      onThinking: vi.fn(),
+      onUsage: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onToolError: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+
+    await streamCodexSubscription(
+      [{ role: "user", content: "Spawn many subagents." }],
+      "System rules",
+      config,
+      callbacks,
+      { tools, subagentsEnabled: false },
+    );
+
+    expect(tools.spawn_subagent.execute).toHaveBeenCalledTimes(subagentCount);
+    expect(maxActive).toBe(subagentCount);
+    expect(callbacks.onToolResult).toHaveBeenCalledTimes(subagentCount);
+    expect(callbacks.onDone).toHaveBeenCalledWith("Merged.");
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
 });

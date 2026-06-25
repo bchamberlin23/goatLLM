@@ -22,6 +22,8 @@ import {
   migrateLegacyBoard,
   type CanvasBoard,
   type Notebook,
+  type NotebookNote,
+  type NotebookSource,
 } from "../lib/canvas";
 import {
   loadAllFromDb,
@@ -29,6 +31,8 @@ import {
   persistConversation,
   persistMessage,
   persistCompactionEntry,
+  loadNotebooksFromDb,
+  persistNotebooks,
   deleteConversationFromDb,
   deleteMessageFromDb,
   searchMessages,
@@ -85,6 +89,11 @@ import {
   type CompactionSettings,
   type CompactionSummaryMetadata,
 } from "../lib/compaction/types";
+import {
+  DEFAULT_SUBAGENT_SETTINGS,
+  sanitizeSubagentSettings,
+  type SubagentSettings,
+} from "../lib/subagent-runtime";
 
 const PROVIDER_CONFIGS_KEY = "goatllm-provider-configs";
 const MODEL_OVERRIDES_KEY = "goatllm-model-overrides";
@@ -114,6 +123,7 @@ const ACTIVE_DOCUMENT_WORKSPACE_KEY = "goatllm-active-document-workspace";
 const BRANCH_TIPS_KEY = "goatllm-active-branch-tips";
 const MESSAGE_QUEUE_KEY = "goatllm-message-queue";
 const CODEX_AUTH_STATUS_KEY = "goatllm-codex-auth-status";
+const SUBAGENT_SETTINGS_KEY = "goatllm-subagent-settings";
 
 const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
   requireBuildForWeb: true,
@@ -129,7 +139,7 @@ const DEFAULT_PROJECT_CHECK_MEMORY: ProjectCheckMemory = {
 
 const DEFAULT_AGENT_BUDGET_CONTROLS: AgentBudgetControls = {
   maxToolCalls: 24,
-  maxSubagents: 3,
+  maxSubagents: 0,
   maxMinutes: 20,
 };
 
@@ -174,8 +184,7 @@ const DEFAULT_FEATURE_FLAGS: ProductFeatureFlags = {
   costDashboard: true,
   modelComparison: true,
   browserMirror: true,
-  // Notebook is a work in progress — off by default; enable in Advanced settings.
-  notebookMode: false,
+  notebookMode: true,
   imageGeneration: true,
   cloudSync: true,
   promptLibrary: true,
@@ -335,6 +344,10 @@ function loadUsageSettings(): UsageSettings {
       ...(loaded.compactionSettings ?? {}),
     },
   };
+}
+
+function loadSubagentSettings(): SubagentSettings {
+  return sanitizeSubagentSettings(loadJsonValue<unknown>(SUBAGENT_SETTINGS_KEY, DEFAULT_SUBAGENT_SETTINGS));
 }
 
 /**
@@ -587,6 +600,36 @@ export interface Conversation {
    *  filter chips above the sidebar list and per-conversation context-menu
    *  manager. Lowercase, free-form. */
   tags?: string[];
+}
+
+function normalizeConversationScope(conversation: Conversation): Conversation {
+  if (conversation.mode === "design") return conversation;
+  if (conversation.workspacePath) {
+    return conversation.mode === "agent"
+      ? conversation
+      : { ...conversation, mode: "agent" };
+  }
+  return conversation.mode === "agent"
+    ? { ...conversation, mode: "chat", workspacePath: null }
+    : { ...conversation, workspacePath: null };
+}
+
+function conversationMatchesCurrentScope(
+  conversation: Conversation,
+  scope: {
+    agentMode: boolean;
+    designMode: boolean;
+    workspacePath: string | null;
+    designWorkspacePath: string | null;
+  },
+): boolean {
+  if (scope.designMode) {
+    return conversation.mode === "design" && conversation.workspacePath === scope.designWorkspacePath;
+  }
+  if (scope.agentMode) {
+    return conversation.mode === "agent" && conversation.workspacePath === scope.workspacePath;
+  }
+  return !conversation.workspacePath && conversation.mode !== "design";
 }
 
 export interface Provider {
@@ -1362,6 +1405,12 @@ export interface ChatStore {
   setActiveNotebook: (id: string) => void;
   getActiveNotebook: () => Notebook | null;
   setActiveNotebookContents: (board: CanvasBoard, persist?: boolean) => void;
+  addNotebookSource: (source: NotebookSource) => void;
+  updateNotebookSource: (id: string, updates: Partial<NotebookSource>) => void;
+  deleteNotebookSource: (id: string) => void;
+  addNotebookNote: (note: NotebookNote) => void;
+  updateNotebookNote: (id: string, updates: Partial<NotebookNote>) => void;
+  deleteNotebookNote: (id: string) => void;
   imageJobs: ImageGenerationJob[];
   addImageJob: (job: ImageGenerationJob) => void;
   updateImageJob: (jobId: string, updates: Partial<ImageGenerationJob>) => void;
@@ -1541,6 +1590,8 @@ export interface ChatStore {
    *  available in plain chat mode regardless of this setting. */
   subagentsEnabled: boolean;
   setSubagentsEnabled: (enabled: boolean) => void;
+  subagentSettings: SubagentSettings;
+  setSubagentSettings: (settings: SubagentSettings) => void;
 
   // ── Skills ──
   /** Extra skill directories configured by the user. Persisted. */
@@ -1846,6 +1897,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       themeColor: "amber",
       completionSound: true,
       subagentsEnabled: true,
+      subagentSettings: loadSubagentSettings(),
       // ── Skills ──
       skillPaths: [] as string[],
       disabledSkills: new Set<string>(),
@@ -1994,7 +2046,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       moveConversationToWorkspace: (id: string, workspacePath: string | null) => {
         set((state) => {
           const updated = state.conversations.map((c) =>
-            c.id === id ? { ...c, workspacePath } : c,
+            c.id === id
+              ? normalizeConversationScope({
+                  ...c,
+                  workspacePath,
+                  mode: workspacePath ? (state.designMode ? "design" : "agent") : "chat",
+                })
+              : c,
           );
           const changed = updated.find((c) => c.id === id);
           if (changed) persistConversation(changed);
@@ -3747,7 +3805,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const nb = createNotebook();
         const next = [...get().notebooks, nb];
         set({ notebooks: next, activeNotebookId: nb.id });
-        saveJsonSetting(NOTEBOOKS_KEY, next);
+        persistNotebooks(next);
         saveJsonSetting(ACTIVE_NOTEBOOK_KEY, nb.id);
         return nb.id;
       },
@@ -3758,7 +3816,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           nb.id === id ? { ...nb, name: clean || nb.name, updatedAt: Date.now() } : nb,
         );
         set({ notebooks: next });
-        saveJsonSetting(NOTEBOOKS_KEY, next);
+        persistNotebooks(next);
       },
 
       deleteNotebook: (id) => {
@@ -3772,7 +3830,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
               : null;
         }
         set({ notebooks: next, activeNotebookId: activeId });
-        saveJsonSetting(NOTEBOOKS_KEY, next);
+        persistNotebooks(next);
         saveJsonSetting(ACTIVE_NOTEBOOK_KEY, activeId);
       },
 
@@ -3798,7 +3856,105 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // Mid-stream updates pass persist=false to avoid writing the whole
         // collection on every token; sanitizeNotebooks settles partial state on
         // reload anyway.
-        if (persist) saveJsonSetting(NOTEBOOKS_KEY, next);
+        if (persist) persistNotebooks(next);
+      },
+
+      addNotebookSource: (source) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? { ...nb, sources: [...(nb.sources ?? []), { ...source, updatedAt: source.updatedAt ?? now }], updatedAt: now }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
+      },
+
+      updateNotebookSource: (id, updates) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? {
+                ...nb,
+                sources: (nb.sources ?? []).map((source) =>
+                  source.id === id ? { ...source, ...updates, id: source.id, updatedAt: now } : source,
+                ),
+                updatedAt: now,
+              }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
+      },
+
+      deleteNotebookSource: (id) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? {
+                ...nb,
+                sources: (nb.sources ?? []).filter((source) => source.id !== id),
+                notes: (nb.notes ?? []).map((note) => ({
+                  ...note,
+                  sourceIds: note.sourceIds.filter((sourceId) => sourceId !== id),
+                })),
+                updatedAt: now,
+              }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
+      },
+
+      addNotebookNote: (note) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? { ...nb, notes: [...(nb.notes ?? []), { ...note, updatedAt: note.updatedAt ?? now }], updatedAt: now }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
+      },
+
+      updateNotebookNote: (id, updates) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? {
+                ...nb,
+                notes: (nb.notes ?? []).map((note) =>
+                  note.id === id ? { ...note, ...updates, id: note.id, updatedAt: now } : note,
+                ),
+                updatedAt: now,
+              }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
+      },
+
+      deleteNotebookNote: (id) => {
+        const { notebooks, activeNotebookId } = get();
+        if (!activeNotebookId) return;
+        const now = Date.now();
+        const next = notebooks.map((nb) =>
+          nb.id === activeNotebookId
+            ? { ...nb, notes: (nb.notes ?? []).filter((note) => note.id !== id), updatedAt: now }
+            : nb,
+        );
+        set({ notebooks: next });
+        persistNotebooks(next);
       },
 
       updateNotebookCell: (cellId, updates, persist = true) => {
@@ -4204,7 +4360,16 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         set({ messageSearchLoading: true });
         try {
           const results = await searchMessages(query);
-          set({ messageSearchResults: results, messageSearchLoading: false });
+          const state = get();
+          const visibleConversationIds = new Set(
+            state.conversations
+              .filter((conversation) => conversationMatchesCurrentScope(conversation, state))
+              .map((conversation) => conversation.id),
+          );
+          set({
+            messageSearchResults: results.filter((result) => visibleConversationIds.has(result.conversation_id)),
+            messageSearchLoading: false,
+          });
         } catch {
           set({ messageSearchResults: [], messageSearchLoading: false });
         }
@@ -4377,6 +4542,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       setSubagentsEnabled: (enabled) => {
         set({ subagentsEnabled: enabled });
         try { localStorage.setItem("goatllm-subagents-enabled", enabled ? "true" : "false"); } catch {}
+      },
+
+      setSubagentSettings: (settings) => {
+        const next = sanitizeSubagentSettings(settings);
+        set({ subagentSettings: next });
+        saveJsonSetting(SUBAGENT_SETTINGS_KEY, next);
       },
 
       // ── Skills ──
@@ -4925,6 +5096,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         const validThemes = ["amber", "blue", "emerald", "rose", "violet"];
         const safeThemeColor = validThemes.includes(themeColor) ? themeColor : "amber";
         const subagentsEnabled = localStorage.getItem("goatllm-subagents-enabled") !== "false";
+        const subagentSettings = loadSubagentSettings();
         const completionSound = localStorage.getItem("goatllm-completion-sound") !== "false";
         try {
           const data = await loadAllFromDb();
@@ -5091,10 +5263,20 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           localStorage.removeItem("goatllm-plan-mode");
           const researchMode = false;
           const planMode = false;
+          const normalizedConversations = data.conversations.map(normalizeConversationScope);
+          for (const conversation of normalizedConversations) {
+            const original = data.conversations.find((item) => item.id === conversation.id);
+            if (
+              original &&
+              (original.mode !== conversation.mode || (original.workspacePath ?? null) !== (conversation.workspacePath ?? null))
+            ) {
+              persistConversation(conversation);
+            }
+          }
           const activeId = localStorage.getItem("goatllm-active-conversation") || null;
           // Only restore activeId if that conversation actually exists in loaded data
-          const validActiveId = activeId && data.conversations.some((c) => c.id === activeId) ? activeId : null;
-          const conversationIds = new Set(data.conversations.map((c) => c.id));
+          const validActiveId = activeId && normalizedConversations.some((c) => c.id === activeId) ? activeId : null;
+          const conversationIds = new Set(normalizedConversations.map((c) => c.id));
           const savedMessageQueue = normalizeMessageQueue(loadJsonValue<unknown>(MESSAGE_QUEUE_KEY, {}));
           const messageQueue = Object.fromEntries(
             Object.entries(savedMessageQueue)
@@ -5107,6 +5289,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const scheduledAgentState = await loadScheduledAgentState(sanitizeScheduledAgents);
           const memoryExtractionSettings = await loadMemoryExtractionSettings();
           const meetingState = await loadMeetingState();
+          const notebooks = await loadNotebooksFromDb();
+          const activeNotebookId = resolveActiveNotebookId(notebooks);
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -5127,7 +5311,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           } catch { /* ignore malformed JSON */ }
 
           set({
-            conversations: data.conversations,
+            conversations: normalizedConversations,
             messages: data.messages,
             compactionEntries: data.compactionEntries,
             providerConfigs,
@@ -5157,6 +5341,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             themeColor: safeThemeColor,
             completionSound,
             subagentsEnabled,
+            subagentSettings,
             permissionMode: savedMode,
             permissionProfile: savedProfile,
             verificationPolicy: loadVerificationPolicy(),
@@ -5195,8 +5380,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: sanitizeModelComparisonRuns(loadJsonValue<unknown>(MODEL_COMPARISON_RUNS_KEY, [])),
             notebookCells: loadNotebookCells(),
-            notebooks: loadNotebooks(),
-            activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
+            notebooks,
+            activeNotebookId,
             imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
             scheduledAgents: scheduledAgentState.agents,
             scheduledAgentRuns: scheduledAgentState.runs,
@@ -5249,6 +5434,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const memoryEnabled = localStorage.getItem("goatllm-memory-enabled") !== "false";
           const workspaceHealthEnabled = localStorage.getItem("goatllm-workspace-health-enabled") === "true";
           const manualTasksEnabled = localStorage.getItem("goatllm-manual-tasks-enabled") === "true";
+          const subagentSettings = loadSubagentSettings();
           if (!freeWebSearchToken) {
             try {
               freeWebSearchToken = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -5277,6 +5463,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             ...DEFAULT_MEMORY_EXTRACTION_SETTINGS,
           }));
           const meetingState = await loadMeetingState().catch(() => loadMeetingStateFromJournal());
+          const notebooks = await loadNotebooksFromDb().catch(() => loadNotebooks());
+          const activeNotebookId = resolveActiveNotebookId(notebooks);
           const savedDocumentWorkspaceId = localStorage.getItem(ACTIVE_DOCUMENT_WORKSPACE_KEY);
           const activeDocumentWorkspaceId =
             savedDocumentWorkspaceId && documentWorkspaces.some((workspace) => workspace.id === savedDocumentWorkspaceId)
@@ -5310,6 +5498,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             animatedBorderEnabled,
             completionSound,
             subagentsEnabled,
+            subagentSettings,
             permissionMode: savedMode,
             permissionProfile: savedProfile,
             verificationPolicy: loadVerificationPolicy(),
@@ -5340,8 +5529,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
             plusMenuVisibility: loadJsonSetting(PLUS_MENU_VISIBILITY_KEY, DEFAULT_PLUS_MENU_VISIBILITY),
             modelComparisonRuns: sanitizeModelComparisonRuns(loadJsonValue<unknown>(MODEL_COMPARISON_RUNS_KEY, [])),
             notebookCells: loadNotebookCells(),
-            notebooks: loadNotebooks(),
-            activeNotebookId: resolveActiveNotebookId(loadNotebooks()),
+            notebooks,
+            activeNotebookId,
             imageJobs: sanitizeImageJobs(loadJsonValue<unknown>(IMAGE_JOBS_KEY, [])),
             scheduledAgents: scheduledAgentState.agents,
             scheduledAgentRuns: scheduledAgentState.runs,

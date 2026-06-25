@@ -8,15 +8,63 @@
  * model — these tests document the contract before that field exists,
  * so PR2 can't silently regress it.
  */
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { z } from "zod";
 import type { LlmMessage } from "../lib/llm-types";
+
+const mocks = vi.hoisted(() => ({
+  streamText: vi.fn(),
+  createModel: vi.fn(),
+}));
+
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    streamText: mocks.streamText,
+    stepCountIs: (count: number) => ({ type: "step-count", count }),
+  };
+});
+
+vi.mock("../lib/model-factory", () => ({
+  createModel: mocks.createModel,
+}));
 
 // We intentionally re-export mapMessagesForProvider from agentLoop for
 // testing. Keeping it as an internal-but-exported helper preserves the
 // "one source of truth" contract while letting the test suite assert it.
-import { mapMessagesForProvider } from "../lib/agentLoop";
+import { TOOL_STEP_BATCH_SIZE, agentLoop, mapMessagesForProvider } from "../lib/agentLoop";
+
+function fakeStream({
+  chunks,
+  steps,
+  messages = [],
+}: {
+  chunks: unknown[];
+  steps: unknown[];
+  messages?: unknown[];
+}) {
+  return {
+    fullStream: (async function* () {
+      for (const chunk of chunks) yield chunk;
+    })(),
+    response: Promise.resolve({ messages }),
+    steps: Promise.resolve(steps),
+    usage: Promise.resolve({ inputTokens: 100, outputTokens: 10, totalTokens: 110, inputTokenDetails: {} }),
+  };
+}
 
 describe("agentLoop — provider serialization", () => {
+  beforeEach(() => {
+    mocks.streamText.mockReset();
+    mocks.createModel.mockReset();
+    mocks.createModel.mockResolvedValue({});
+  });
+
+  it("uses a subagent-friendly tool step batch above the old ten-step ceiling", () => {
+    expect(TOOL_STEP_BATCH_SIZE).toBeGreaterThan(10);
+  });
+
   it("passes through string-content messages unchanged", () => {
     const messages: LlmMessage[] = [
       { role: "user", content: "hello" },
@@ -93,5 +141,81 @@ describe("agentLoop — provider serialization", () => {
     expect(out[0].contentAtInvocation).toBeUndefined();
     // Whitelist check: role + content are the only allowed keys.
     expect(Object.keys(out[0]).sort()).toEqual(["content", "role"]);
+  });
+});
+
+describe("agentLoop — tool continuation", () => {
+  beforeEach(() => {
+    mocks.streamText.mockReset();
+    mocks.createModel.mockReset();
+    mocks.createModel.mockResolvedValue({});
+  });
+
+  it("continues after a textual action preamble instead of ending the turn before tool use", async () => {
+    mocks.streamText
+      .mockReturnValueOnce(fakeStream({
+        chunks: [
+          { type: "text-delta", text: "I'll inspect the project files now." },
+          { type: "finish" },
+        ],
+        steps: [{ finishReason: "stop", toolCalls: [] }],
+        messages: [{ role: "assistant", content: "I'll inspect the project files now." }],
+      }))
+      .mockReturnValueOnce(fakeStream({
+        chunks: [
+          { type: "tool-call", toolCallId: "tc-1", toolName: "read_file", input: { path: "package.json" } },
+          { type: "tool-result", toolCallId: "tc-1", toolName: "read_file", input: { path: "package.json" }, output: "{}" },
+          { type: "tool-call", toolCallId: "done-1", toolName: "done", input: { summary: "Inspected package.json." } },
+          { type: "tool-result", toolCallId: "done-1", toolName: "done", input: { summary: "Inspected package.json." }, output: { done: true } },
+          { type: "finish" },
+        ],
+        steps: [
+          {
+            finishReason: "tool-calls",
+            toolCalls: [
+              { toolCallId: "tc-1", toolName: "read_file", input: { path: "package.json" } },
+              { toolCallId: "done-1", toolName: "done", input: { summary: "Inspected package.json." } },
+            ],
+            toolResults: [
+              { toolCallId: "tc-1", output: "{}" },
+              { toolCallId: "done-1", output: { done: true } },
+            ],
+          },
+        ],
+        messages: [],
+      }));
+
+    const tokens: string[] = [];
+    const toolCalls: string[] = [];
+    const done = vi.fn();
+
+    await agentLoop(
+      [{ role: "user", content: "Check the project files." }],
+      "Use tools when inspecting files.",
+      { provider: "openai", modelId: "gpt-4.1", apiKey: "test" },
+      {
+        onToken: (token) => tokens.push(token),
+        onToolCall: (toolCall) => toolCalls.push(toolCall.toolName),
+        onDone: done,
+        onError: (error) => {
+          throw error;
+        },
+      },
+      {
+        tools: {
+          read_file: {
+            description: "Read a file",
+            inputSchema: z.object({ path: z.string() }),
+            execute: vi.fn(),
+          },
+        },
+        subagentsEnabled: false,
+      },
+    );
+
+    expect(mocks.streamText).toHaveBeenCalledTimes(2);
+    expect(tokens.join("")).toBe("I'll inspect the project files now.");
+    expect(toolCalls).toContain("read_file");
+    expect(done).toHaveBeenCalledWith("I'll inspect the project files now.", "Inspected package.json.");
   });
 });

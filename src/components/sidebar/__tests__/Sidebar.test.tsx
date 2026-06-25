@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, beforeEach } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { invoke } from "@tauri-apps/api/core";
 import { Sidebar } from "../Sidebar";
 import { useChatStore, type Conversation } from "../../../stores/chat";
 import { useContextMenuStore } from "../stores/ui-store";
@@ -77,6 +78,10 @@ describe("Sidebar decomposition", () => {
 
 describe("Sidebar", () => {
   beforeEach(() => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "list_workspaces") return ["/tmp/project"];
+      return undefined;
+    });
     resetSidebarState([
       conversation({ id: "chat-1", title: "Personal chat" }),
       conversation({ id: "agent-1", title: "Agent project chat", mode: "agent", workspacePath: "/tmp/project" }),
@@ -89,6 +94,47 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Personal chat")).toBeInTheDocument();
     expect(screen.queryByText("Agent project chat")).not.toBeInTheDocument();
+    expect(screen.queryByText("Design folder chat")).not.toBeInTheDocument();
+  });
+
+  it("does not retag the active conversation when selecting a project", async () => {
+    resetSidebarState([
+      conversation({ id: "chat-1", title: "Personal chat" }),
+      conversation({ id: "agent-1", title: "Agent project chat", mode: "agent", workspacePath: "/tmp/project" }),
+    ]);
+    useChatStore.setState({
+      agentMode: true,
+      activeId: "chat-1",
+      workspacePath: null,
+    });
+
+    render(<Sidebar onOpenSettings={() => {}} />);
+    fireEvent.click(await screen.findByTitle("/tmp/project"));
+
+    expect(useChatStore.getState().conversations.find((c) => c.id === "chat-1")).toEqual(
+      expect.objectContaining({
+        mode: "chat",
+        workspacePath: null,
+      }),
+    );
+  });
+
+  it("shows only agent conversations in project sections", async () => {
+    resetSidebarState([
+      conversation({ id: "agent-1", title: "Agent project chat", mode: "agent", workspacePath: "/tmp/project" }),
+      conversation({ id: "chat-legacy", title: "Legacy workspace chat", mode: "chat", workspacePath: "/tmp/project" }),
+      conversation({ id: "design-1", title: "Design folder chat", mode: "design", workspacePath: "/tmp/project" }),
+    ]);
+    useChatStore.setState({
+      agentMode: true,
+      activeId: "agent-1",
+      workspacePath: "/tmp/project",
+    });
+
+    render(<Sidebar onOpenSettings={() => {}} />);
+
+    expect(await screen.findByText("Agent project chat")).toBeInTheDocument();
+    expect(screen.queryByText("Legacy workspace chat")).not.toBeInTheDocument();
     expect(screen.queryByText("Design folder chat")).not.toBeInTheDocument();
   });
 });

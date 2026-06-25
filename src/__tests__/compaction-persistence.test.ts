@@ -69,7 +69,7 @@ describe("compaction persistence", () => {
     invoke.mockReset();
   });
 
-  it("hydrates compaction entries from SQLite and replays a synthetic summary before the first kept message", async () => {
+  it("hydrates compaction entries from SQLite, preserves visible history, and sends only summary plus recent context to the model", async () => {
     const sqliteEntry = entry();
     invoke.mockImplementation((cmd: string) => {
       if (cmd === "load_all_data") {
@@ -152,7 +152,13 @@ describe("compaction persistence", () => {
       expect.stringContaining("Persist compaction summaries"),
       "kept",
     ]);
-    expect(replayed.timelineMessages[0].role).toBe("compactionSummary");
+    expect(replayed.timelineMessages.map((m) => m.content)).toEqual([
+      "old",
+      "older",
+      "------------------ conversation compacted ------------------",
+      "kept",
+    ]);
+    expect(replayed.timelineMessages[2].role).toBe("compactionSummary");
     expect(hydrated.messages["conv-1"].map((m) => m.id)).toEqual(["m1", "m2", "m3"]);
   });
 
@@ -219,7 +225,7 @@ describe("compaction persistence", () => {
     expect(replayed.hiddenCount).toBe(0);
   });
 
-  it("keeps pinned messages visible even when they are older than firstKeptId", () => {
+  it("keeps the full visible timeline even when pinned messages are older than firstKeptId", () => {
     const messages = [
       message("m1", "user", "old", 10),
       pinnedMessage("pin", "IMPORTANT_CONSTRAINT", 20),
@@ -230,6 +236,13 @@ describe("compaction persistence", () => {
     const replayed = applyCompactionReplay(messages, entry({ firstKeptId: "m3" }));
 
     expect(replayed.timelineMessages.map((m) => m.content)).toEqual([
+      "old",
+      "IMPORTANT_CONSTRAINT",
+      "older",
+      "------------------ conversation compacted ------------------",
+      "kept",
+    ]);
+    expect(replayed.llmMessages.map((m) => m.content)).toEqual([
       "IMPORTANT_CONSTRAINT",
       expect.stringContaining("Persist compaction summaries"),
       "kept",

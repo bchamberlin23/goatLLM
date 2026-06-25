@@ -197,7 +197,7 @@ export function ContextMenu({
       {menu.type === "workspace" && (() => {
         const copy = labels(menu.scope);
         const total = conversations.filter((conv) =>
-          conv.workspacePath === menu.workspacePath && (menu.scope === "design" ? conv.mode === "design" : conv.mode !== "design")
+          conv.workspacePath === menu.workspacePath && (menu.scope === "design" ? conv.mode === "design" : conv.mode === "agent")
         ).length;
 
         return (

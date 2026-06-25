@@ -187,6 +187,34 @@ export interface CompactionResult {
   compactionEntry?: CompactionEntry;
 }
 
+function inlineToolCallsForTextOnly(messages: Message[]): { messages: Message[]; count: number } {
+  let count = 0;
+  const inlined = messages.map((msg) => {
+    if (!msg.toolCalls || msg.toolCalls.length === 0) return msg;
+    count++;
+    const parts: string[] = [msg.content];
+    for (const tc of msg.toolCalls) {
+      const outputStr =
+        tc.output && typeof tc.output === "string"
+          ? tc.output.slice(0, 500)
+          : tc.output !== undefined
+            ? JSON.stringify(tc.output).slice(0, 500)
+            : "(no output)";
+      parts.push(`\n[Tool: ${tc.toolName}]\nInput: ${JSON.stringify(tc.input).slice(0, 200)}\nResult: ${outputStr}`);
+    }
+    return { ...msg, content: parts.join("\n") };
+  });
+  return { messages: inlined, count };
+}
+
+export function buildCompactedLlmMessages(
+  messages: Message[],
+  options: { stripTools?: boolean } = {},
+): LlmMessage[] {
+  const prepared = options.stripTools ? inlineToolCallsForTextOnly(messages).messages : messages;
+  return messagesToLlm(prepared);
+}
+
 /**
  * Compact a conversation for the LLM context window.
  *
@@ -210,24 +238,12 @@ export function compactMessages(
   let pinnedDroppedCount = 0;
 
   // Step 0: If stripping tools, inline tool-call results into message content
-  const inlined = options.stripTools
-    ? messages.map((msg) => {
-        if (!msg.toolCalls || msg.toolCalls.length === 0) return msg;
-        toolsInlinedCount++;
-        compacted = true;
-        const parts: string[] = [msg.content];
-        for (const tc of msg.toolCalls) {
-          const outputStr =
-            tc.output && typeof tc.output === "string"
-              ? tc.output.slice(0, 500)
-              : tc.output !== undefined
-                ? JSON.stringify(tc.output).slice(0, 500)
-                : "(no output)";
-          parts.push(`\n[Tool: ${tc.toolName}]\nInput: ${JSON.stringify(tc.input).slice(0, 200)}\nResult: ${outputStr}`);
-        }
-        return { ...msg, content: parts.join("\n") };
-      })
-    : messages;
+  const inlineResult = options.stripTools ? inlineToolCallsForTextOnly(messages) : { messages, count: 0 };
+  const inlined = inlineResult.messages;
+  if (inlineResult.count > 0) {
+    toolsInlinedCount = inlineResult.count;
+    compacted = true;
+  }
 
   // Step 1: Truncate oversized tool outputs (applies to pinned messages too —
   // pinning preserves intent, not the 50KB stack trace).

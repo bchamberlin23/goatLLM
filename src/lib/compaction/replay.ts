@@ -3,6 +3,8 @@ import { compareMessages } from "../../stores/chat";
 import type { CompactionEntry, CompactionSummaryMessage } from "./types";
 import type { Message } from "../../stores/chat";
 
+export const COMPACTION_SEPARATOR_TEXT = "------------------ conversation compacted ------------------";
+
 export interface CompactionReplay {
   timelineMessages: Message[];
   llmMessages: Message[];
@@ -48,7 +50,7 @@ export function applyCompactionReplay(
     id: `compaction-${entry.id}`,
     conversationId: entry.conversationId,
     role: "compactionSummary",
-    content: entry.summary,
+    content: COMPACTION_SEPARATOR_TEXT,
     createdAt,
     compaction: {
       entryId: entry.id,
@@ -63,10 +65,11 @@ export function applyCompactionReplay(
   const llmSummary: Message = {
     ...summaryMessage,
     role: "system",
+    content: entry.summary,
   };
 
   return {
-    timelineMessages: [...pinnedBeforeCut, summaryMessage, ...kept],
+    timelineMessages: [...beforeCut, summaryMessage, ...kept],
     llmMessages: [...pinnedBeforeCut, llmSummary, ...kept],
     hiddenCount: hidden.length,
     summaryMessage,

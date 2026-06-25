@@ -24,6 +24,7 @@ import { loadProjectContext } from "../../../lib/project-context";
 import { logMessage, logToolCall, logToolResult, logError } from "../../../lib/event-log";
 import {
   compactMessages,
+  buildCompactedLlmMessages,
   estimateContextTokens,
   estimateRequestContextTokens,
   shouldCompact,
@@ -687,12 +688,9 @@ export function useComposer({ getStore, activeId, selectedModelId, isStreaming, 
 
     const latestCompactionEntry = getStore().compactionEntries[convId!]?.[0] ?? null;
     const replayed = applyCompactionReplay(history, latestCompactionEntry);
-    let compactedMessages: LlmMessage[] = replayed.llmMessages
-      .filter((message) => message.role === "user" || message.role === "assistant" || message.role === "system")
-      .map((message) => ({
-        role: message.role as "user" | "assistant" | "system",
-        content: message.content,
-      }));
+    let compactedMessages: LlmMessage[] = buildCompactedLlmMessages(replayed.llmMessages, {
+      stripTools: !activeTools,
+    });
 
     const compactionSettings = getStore().usageSettings.compactionSettings;
     const contextEstimate = estimateContextTokens(history);

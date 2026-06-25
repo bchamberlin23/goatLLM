@@ -1,34 +1,35 @@
 import { useMemo } from "react";
-import { useChatStore, type ToolCallEntry } from "../stores/chat";
+import { useChatStore, type Message, type ToolCallEntry } from "../stores/chat";
 import { InlineToolCall } from "./InlineToolCall";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ArrowLeft, Bot } from "lucide-react";
 
+const EMPTY_MESSAGES: Message[] = [];
+const EMPTY_TOOL_CALLS: ToolCallEntry[] = [];
+
 export function SubagentPanel() {
   const closeSubagentPanel = useChatStore((s) => s.closeSubagentPanel);
   const activeSubagentToolCallId = useChatStore((s) => s.activeSubagentToolCallId);
-  const messages = useChatStore((s) => s.messages);
+  const activeMessages = useChatStore((s) => (s.activeId ? s.messages[s.activeId] ?? EMPTY_MESSAGES : EMPTY_MESSAGES));
 
-  // Find the transcript across all conversations
   const { transcript, toolCall } = useMemo(() => {
-    let foundTc: ToolCallEntry | undefined;
-    for (const msgs of Object.values(messages)) {
-      for (const m of msgs) {
-        const tc = m.toolCalls?.find(
-          (t) => t.toolCallId === activeSubagentToolCallId,
-        );
-        if (tc) {
-          foundTc = tc;
-          break;
-        }
-      }
-      if (foundTc) break;
+    if (!activeSubagentToolCallId) {
+      return { transcript: [], toolCall: undefined };
     }
+    let foundTc: ToolCallEntry | undefined;
+    for (const message of activeMessages) {
+      const toolCalls = message.toolCalls ?? EMPTY_TOOL_CALLS;
+      const tc = toolCalls.find((t) => t.toolCallId === activeSubagentToolCallId);
+      if (!tc) continue;
+      foundTc = tc;
+      break;
+    }
+
     return {
       transcript: foundTc?.subagentTranscript ?? [],
       toolCall: foundTc,
     };
-  }, [messages, activeSubagentToolCallId]);
+  }, [activeMessages, activeSubagentToolCallId]);
 
   const isRunning = toolCall?.state === "running";
   const taskText = transcript.find((e) => e.role === "user")?.content ?? "Task details not available";

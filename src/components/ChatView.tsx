@@ -312,64 +312,64 @@ export function ChatView({ onOpenSettings }: { onOpenSettings: () => void }) {
       {notebookMode ? (
         <NotebookView onOpenSettings={onOpenSettings} />
       ) : !showHero ? (
-        <div className="flex-1 min-h-0 flex overflow-hidden">
-          {/* Subagent panel replaces chat when active */}
-          {subagentPanelOpen ? (
-            <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-              <SubagentPanel />
-            </div>
-          ) : (
-            <>
+        <div className="flex-1 min-h-0 flex overflow-hidden relative">
+          {/* Keep the parent timeline mounted behind subagent detail so Back
+              doesn't rebuild a large virtualized conversation. */}
+          <div className="flex-1 min-h-0 flex overflow-hidden">
+            <div
+              className={`min-w-0 min-h-0 overflow-hidden relative ${
+                sidePanelOpen
+                  ? "basis-[34%] grow-0 shrink-0 flex flex-col"
+                  : "flex-1 w-full grid min-h-0"
+              }`}
+              style={
+                sidePanelOpen
+                  ? undefined
+                  : {
+                      gridTemplateColumns: "1fr min(860px, 100%) 1fr",
+                      gridTemplateRows: "1fr auto",
+                    }
+              }
+            >
+              {!sidePanelOpen && (
+                <div className="col-start-1 row-span-full min-w-0" aria-hidden="true" />
+              )}
               <div
-                className={`min-w-0 min-h-0 overflow-hidden relative ${
+                className={
                   sidePanelOpen
-                    ? "basis-[34%] grow-0 shrink-0 flex flex-col"
-                    : "flex-1 w-full grid min-h-0"
-                }`}
-                style={
-                  sidePanelOpen
-                    ? undefined
-                    : {
-                        gridTemplateColumns: "1fr min(860px, 100%) 1fr",
-                        gridTemplateRows: "1fr auto",
-                      }
+                    ? "flex flex-1 min-h-0 flex-col overflow-hidden relative"
+                    : "col-start-2 col-end-4 row-start-1 min-h-0 flex flex-col overflow-hidden relative"
                 }
               >
-                {!sidePanelOpen && (
-                  <div className="col-start-1 row-span-full min-w-0" aria-hidden="true" />
-                )}
-                <div
-                  className={
-                    sidePanelOpen
-                      ? "flex flex-1 min-h-0 flex-col overflow-hidden relative"
-                      : "col-start-2 col-end-4 row-start-1 min-h-0 flex flex-col overflow-hidden relative"
-                  }
-                >
-                  <TodoWidget />
-                  <MessageList edgeScroll={!sidePanelOpen} />
-                </div>
-                <div
-                  className={
-                    sidePanelOpen
-                      ? "shrink-0 mt-auto flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
-                      : "col-start-2 row-start-2 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
-                  }
-                >
-                  <ActiveSkillsBar />
-                  {agentMode && <ApprovalQueue />}
-                  {agentMode && workspaceHealthEnabled && <WorkspaceHealthPanel />}
-                  <ToolActivityIndicator />
-                  <InputBar onOpenSettings={onOpenSettings} />
-                </div>
+                <TodoWidget />
+                <MessageList edgeScroll={!sidePanelOpen} />
               </div>
-              {sidePanelOpen && (
-                <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
-                  {canvasPanel === "attachment" ? <AttachmentPanel /> : (
-                    <SafeArtifactPanel resetKey={`${activeId ?? ""}:${activeArtifactId ?? ""}:${workspaceFile?.path ?? ""}`} />
-                  )}
-                </div>
-              )}
-            </>
+              <div
+                className={
+                  sidePanelOpen
+                    ? "shrink-0 mt-auto flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
+                    : "col-start-2 row-start-2 flex flex-col items-center w-[calc(100%_-_32px)] sm:w-full mx-auto pt-2 px-0 sm:px-6 pb-6 gap-3"
+                }
+              >
+                <ActiveSkillsBar />
+                {agentMode && <ApprovalQueue />}
+                {agentMode && workspaceHealthEnabled && <WorkspaceHealthPanel />}
+                <ToolActivityIndicator />
+                <InputBar onOpenSettings={onOpenSettings} />
+              </div>
+            </div>
+            {sidePanelOpen && (
+              <div className="flex-1 min-h-0 p-2 pl-0 flex flex-col overflow-hidden">
+                {canvasPanel === "attachment" ? <AttachmentPanel /> : (
+                  <SafeArtifactPanel resetKey={`${activeId ?? ""}:${activeArtifactId ?? ""}:${workspaceFile?.path ?? ""}`} />
+                )}
+              </div>
+            )}
+          </div>
+          {subagentPanelOpen && (
+            <div className="absolute inset-0 z-30 flex min-h-0 min-w-0 flex-col overflow-hidden bg-bg">
+              <SubagentPanel />
+            </div>
           )}
         </div>
       ) : null}

@@ -30,14 +30,14 @@ export function AdvancedTab() {
   return (
     <>
       <SettingsGroup
-        title="Experimental"
-        description="In-progress features that aren't ready for everyday use yet."
+        title="Interface"
+        description="Choose which workspace modes appear in the main mode switcher."
       >
         <ToggleRow
           enabled={notebookEnabled}
           onToggle={(enabled) => setFeatureFlag("notebookMode", enabled)}
-          title="Notebook (WIP)"
-          description="Adds a Notebook mode: a freeform board of documents and runnable Python with an agent that edits panels for you. Work in progress — rough edges expected. Off by default."
+          title="Notebook mode"
+          description="Show Notebook: sources, saved notes, chat, and a canvas with runnable Python panels."
         />
       </SettingsGroup>
 

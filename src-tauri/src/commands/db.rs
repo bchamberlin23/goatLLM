@@ -318,6 +318,39 @@ pub(crate) fn save_compaction_entry(
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) fn notebooks_load(state: tauri::State<'_, DbState>) -> Result<Option<String>, String> {
+    let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
+    match db.query_row(
+        "SELECT payload FROM notebook_state WHERE key = 'notebooks'",
+        [],
+        |row| row.get::<_, String>(0),
+    ) {
+        Ok(payload) => Ok(Some(payload)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub(crate) fn notebooks_save(
+    payload: String,
+    state: tauri::State<'_, DbState>,
+) -> Result<(), String> {
+    let db = state.db.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+    db.execute(
+        "INSERT INTO notebook_state (key, payload, updated_at) VALUES ('notebooks', ?1, ?2) \
+         ON CONFLICT(key) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+        rusqlite::params![payload, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Load all messages for a single conversation. Used as a safety net when the
 /// in-memory store has an empty list for a conversation that does have rows on
 /// disk (e.g. after a restart or when the renderer was reloaded mid-stream).

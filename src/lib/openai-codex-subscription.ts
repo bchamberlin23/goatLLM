@@ -684,80 +684,144 @@ async function executeCodexToolCalls({
   const inputItems: CodexResponsesInputItem[] = [];
   const providerMessages = mapMessagesForToolExecution(messages);
 
-  for (const toolCall of toolCalls) {
-    const toolCallId = codexToolCallId(toolCall);
-    const rawInput = parseToolArguments(toolCall);
-    const toolDefinition = tools[toolCall.toolName];
-    const input = toolDefinition
-      ? await validateToolInput(toolDefinition, rawInput)
-      : rawInput;
-
-    callbacks.onToolCall?.({
-      toolCallId,
-      toolName: toolCall.toolName,
-      input,
-    });
-
-    const callItem: CodexResponsesFunctionCallItem = {
-      type: "function_call",
-      ...(toolCall.itemId ? { id: toolCall.itemId } : {}),
-      call_id: toolCall.callId,
-      name: toolCall.toolName,
-      arguments: JSON.stringify(input),
-    };
-
-    let output: unknown;
-    let outputText: string;
-
-    if (!toolDefinition || typeof toolDefinition.execute !== "function") {
-      const error = new Error(`Tool "${toolCall.toolName}" is not available in goatLLM.`);
-      callbacks.onToolError?.({ toolCallId, toolName: toolCall.toolName, error });
-      output = { error: error.message };
-      outputText = serializeToolOutput(output);
-    } else {
-      try {
-        const rawOutput = await toolDefinition.execute(input, {
-          toolCallId,
-          messages: providerMessages,
-          abortSignal,
-        });
-        output = await collectToolOutput(rawOutput);
-        callbacks.onToolResult?.({
-          toolCallId,
-          toolName: toolCall.toolName,
-          input,
-          output,
-        });
-        outputText = await serializeToolOutputForModel(toolDefinition, {
-          toolCallId,
-          input,
-          output,
-        });
-      } catch (error) {
-        callbacks.onToolError?.({ toolCallId, toolName: toolCall.toolName, error });
-        output = {
-          error: error instanceof Error ? error.message : String(error),
-        };
-        outputText = serializeToolOutput(output);
+  for (let i = 0; i < toolCalls.length; i++) {
+    const toolCall = toolCalls[i];
+    if (toolCall.toolName === "spawn_subagent") {
+      const batch: CapturedCodexToolCall[] = [];
+      while (i < toolCalls.length && toolCalls[i].toolName === "spawn_subagent") {
+        batch.push(toolCalls[i]);
+        i += 1;
       }
+      i -= 1;
+
+      const results = await Promise.all(
+        batch.map((subagentCall) =>
+          executeOneCodexToolCall({
+            toolCall: subagentCall,
+            tools,
+            callbacks,
+            providerMessages,
+            abortSignal,
+          }),
+        ),
+      );
+      for (const result of results) {
+        inputItems.push(...result.inputItems);
+      }
+      continue;
     }
 
-    if (toolCall.toolName === "done" && isDoneResultAllowed(output)) {
+    const result = await executeOneCodexToolCall({
+      toolCall,
+      tools,
+      callbacks,
+      providerMessages,
+      abortSignal,
+    });
+
+    if (result.done) {
       return {
         inputItems,
         done: true,
-        summary: doneSummaryFromInput(input),
+        summary: result.summary,
       };
     }
 
-    inputItems.push(callItem, {
-      type: "function_call_output",
-      call_id: toolCall.callId,
-      output: outputText,
-    });
+    inputItems.push(...result.inputItems);
   }
 
   return { inputItems, done: false };
+}
+
+async function executeOneCodexToolCall({
+  toolCall,
+  tools,
+  callbacks,
+  providerMessages,
+  abortSignal,
+}: {
+  toolCall: CapturedCodexToolCall;
+  tools: ToolSet;
+  callbacks: StreamCallbacks;
+  providerMessages: ModelMessage[];
+  abortSignal?: AbortSignal;
+}): Promise<ExecuteCodexToolCallsResult> {
+  const toolCallId = codexToolCallId(toolCall);
+  const rawInput = parseToolArguments(toolCall);
+  const toolDefinition = tools[toolCall.toolName];
+  const input = toolDefinition
+    ? await validateToolInput(toolDefinition, rawInput)
+    : rawInput;
+
+  callbacks.onToolCall?.({
+    toolCallId,
+    toolName: toolCall.toolName,
+    input,
+  });
+
+  const callItem: CodexResponsesFunctionCallItem = {
+    type: "function_call",
+    ...(toolCall.itemId ? { id: toolCall.itemId } : {}),
+    call_id: toolCall.callId,
+    name: toolCall.toolName,
+    arguments: JSON.stringify(input),
+  };
+
+  let output: unknown;
+  let outputText: string;
+
+  if (!toolDefinition || typeof toolDefinition.execute !== "function") {
+    const error = new Error(`Tool "${toolCall.toolName}" is not available in goatLLM.`);
+    callbacks.onToolError?.({ toolCallId, toolName: toolCall.toolName, error });
+    output = { error: error.message };
+    outputText = serializeToolOutput(output);
+  } else {
+    try {
+      const rawOutput = await toolDefinition.execute(input, {
+        toolCallId,
+        messages: providerMessages,
+        abortSignal,
+      });
+      output = await collectToolOutput(rawOutput);
+      callbacks.onToolResult?.({
+        toolCallId,
+        toolName: toolCall.toolName,
+        input,
+        output,
+      });
+      outputText = await serializeToolOutputForModel(toolDefinition, {
+        toolCallId,
+        input,
+        output,
+      });
+    } catch (error) {
+      callbacks.onToolError?.({ toolCallId, toolName: toolCall.toolName, error });
+      output = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+      outputText = serializeToolOutput(output);
+    }
+  }
+
+  if (toolCall.toolName === "done" && isDoneResultAllowed(output)) {
+    return {
+      inputItems: [],
+      done: true,
+      summary: doneSummaryFromInput(input),
+    };
+  }
+
+  return {
+    inputItems: [
+      callItem,
+      {
+        type: "function_call_output",
+        call_id: toolCall.callId,
+        output: outputText,
+      },
+    ],
+    done: false,
+  };
 }
 
 async function buildEffectiveTools(

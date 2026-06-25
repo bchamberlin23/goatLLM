@@ -9,7 +9,7 @@ import type { ContentSegment, InlineWidgetKind } from "../lib/artifact-segments"
 import { stripLeakedToolJson } from "../lib/sanitize";
 import { Shimmer, useElapsedLabel, WorkingHeader, formatDurationMs } from "./ThinkingIndicator";
 import { ReviewChanges } from "./ReviewChanges";
-import { Archive, Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, ChevronLeft, GitFork, Navigation, Volume2, VolumeX, Sparkles } from "lucide-react";
+import { Copy, Check, Pin, PinOff, Hammer, ListChecks, ChevronRight, ChevronLeft, GitFork, Navigation, Volume2, VolumeX, Sparkles } from "lucide-react";
 import { formatMessageTime, formatLongDateTime } from "../lib/datetime";
 import { splitByQuestionForm } from "../lib/design/parser";
 import { QuestionFormRenderer } from "./design/QuestionFormRenderer";
@@ -61,25 +61,13 @@ function stripMarkdown(md: string): string {
 interface MessageBubbleProps { message: Message; }
 
 function CompactionSummaryBubble({ message }: { message: Message }) {
-  const hidden = message.compaction?.summarizedCount ?? 0;
-  const tokens = message.compaction?.tokensBefore ?? 0;
   return (
-    <div className="group relative w-full flex justify-start my-3">
-      <div className="max-w-[720px] w-full rounded-lg border border-accent/20 bg-accent/[0.08] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Archive size={14} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden="true" />
-            <span className="text-[12.5px] font-semibold text-text-1">Context summary</span>
-          </div>
-          <div className="flex items-center gap-2 text-[10.5px] font-mono tabular-nums text-text-3 shrink-0">
-            {hidden > 0 && <span>{hidden.toLocaleString()} msgs</span>}
-            {tokens > 0 && <span>{tokens.toLocaleString()} tok</span>}
-          </div>
-        </div>
-        <div className="mt-2 text-[12.5px] leading-relaxed text-text-2 compaction-summary-prose">
-          <MarkdownRenderer content={message.content} />
-        </div>
+    <div className="w-full my-4 flex items-center gap-3 text-text-3" aria-label="Conversation compacted">
+      <div className="h-px flex-1 bg-hairline" aria-hidden="true" />
+      <div className="shrink-0 font-mono text-[10.5px] tabular-nums">
+        {message.content}
       </div>
+      <div className="h-px flex-1 bg-hairline" aria-hidden="true" />
     </div>
   );
 }

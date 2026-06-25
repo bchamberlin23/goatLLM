@@ -88,7 +88,7 @@ export function WorkspaceSection({
   const visibleConversations = useMemo(
     () =>
       conversations.filter((conversation) =>
-        conversation.workspacePath && (scope === "design" ? conversation.mode === "design" : conversation.mode !== "design")
+        conversation.workspacePath && (scope === "design" ? conversation.mode === "design" : conversation.mode === "agent")
       ),
     [conversations, scope],
   );

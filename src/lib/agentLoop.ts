@@ -18,7 +18,7 @@
  *
  * Context compaction:
  * - When tools are active and no explicit maxToolRounds cap is set, the
- *   loop runs in batches (BATCH_SIZE steps per API call).
+ *   loop runs in batches (TOOL_STEP_BATCH_SIZE steps per API call).
  * - After each batch, actual token usage is checked against the model's
  *   context window. If usage exceeds CONTEXT_PRESSURE_THRESHOLD (80%),
  *   the oldest non-pinned messages are dropped and a summary is inserted.
@@ -74,11 +74,22 @@ export interface AgentLoopOptions {
 
 // ── Context compaction constants ──
 
-/** Steps per API call when running the unbounded agent loop. */
-const BATCH_SIZE = 10;
+/** Steps per API call when running the unbounded agent loop.
+ * Large enough for broad subagent fan-out without making compaction checks rare. */
+export const TOOL_STEP_BATCH_SIZE = 50;
 
 /** Target token budget after compaction — aim for 50% of context window. */
 const COMPACTION_TARGET = 0.5;
+
+/** Avoid infinite loops if a provider repeatedly emits only action preambles. */
+const MAX_TEXT_PREAMBLE_CONTINUATIONS = 2;
+
+function looksLikeToolActionPreamble(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  if (normalized.length > 500) return false;
+  return /\b(?:i(?:'|’)?ll|i will|let me|i(?:'|’)?m going to|i am going to|i need to|i(?:'|’)?ll now|now i(?:'|’)?ll)\b[\s\S]{0,240}\b(?:check|inspect|look(?:\s+at)?|read|open|search|run|execute|edit|write|update|create|test|verify|investigate|review|analy[sz]e|fetch|list)\b/i.test(normalized);
+}
 
 /** Pull the summary arg from a `done` tool call, if present. */
 function extractDoneSummary(
@@ -350,7 +361,7 @@ export async function agentLoop(
 
     if (needsCompactionLoop) {
       // ── Batched loop with mid-loop compaction ──
-      // Run in batches of BATCH_SIZE steps. After each batch, check token
+      // Run in batches of TOOL_STEP_BATCH_SIZE steps. After each batch, check token
       // usage and compact if approaching the context window limit.
       let workingMessages = mapMessagesForProvider(messages);
       let totalSteps = 0;
@@ -363,6 +374,7 @@ export async function agentLoop(
       let totalGenerationMs = 0;
       let doneCalled = false;
       let doneSummary: string | undefined;
+      let textPreambleContinuations = 0;
 
       // ── Prompt caching for batched loop ──
       const isAnthropic = config.provider === "anthropic";
@@ -458,7 +470,7 @@ export async function agentLoop(
           messages: workingMessages,
           tools: effectiveTools,
           toolChoice: "auto" as const,
-          stopWhen: stepCountIs(BATCH_SIZE),
+          stopWhen: stepCountIs(TOOL_STEP_BATCH_SIZE),
           abortSignal: effectiveSignal,
           ...(config.maxResponseTokens ? { maxOutputTokens: config.maxResponseTokens } : {}),
           ...(batchedProviderOptions ? { providerOptions: batchedProviderOptions } : {}),
@@ -553,11 +565,26 @@ export async function agentLoop(
         }
 
         // If no tool calls at all and finishReason is 'stop', the model
-        // emitted text without calling done. This shouldn't happen (the
-        // system prompt instructs it to call done), but handle gracefully
-        // by exiting so the loop doesn't spin forever.
+        // emitted text without calling done. Usually this is a final text
+        // answer. Some providers occasionally stop right after an action
+        // preamble ("I'll inspect the files now.") before emitting the tool
+        // call; give those a bounded continuation chance.
         const lastStep = stepResults[stepResults.length - 1];
         if (!lastStep?.toolCalls?.length && lastStep?.finishReason === "stop") {
+          if (
+            textPreambleContinuations < MAX_TEXT_PREAMBLE_CONTINUATIONS &&
+            looksLikeToolActionPreamble(batchText)
+          ) {
+            textPreambleContinuations++;
+            workingMessages = [
+              ...workingMessages,
+              {
+                role: "system",
+                content: "Continue the turn now. If you said you would inspect, read, run, edit, search, or verify something, use the available tool call instead of ending with a progress preamble.",
+              } as ModelMessage,
+            ];
+            continue;
+          }
           emitUsage();
           callbacks.onDone(fullText);
           return;

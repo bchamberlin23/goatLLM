@@ -22,16 +22,28 @@ import {
   ListPlus,
   Type,
   AlertCircle,
+  Upload,
+  Link2,
+  StickyNote,
+  MessageSquare,
+  Globe2,
+  X,
+  Save,
+  BookOpen,
+  LayoutDashboard,
 } from "lucide-react";
-import { useChatStore } from "../stores/chat";
+import { useChatStore, type Attachment } from "../stores/chat";
 import {
   createBoard,
   createPanel,
   createCanvasMessage,
   nextPanelPosition,
   nextZ,
+  buildNotebookContext,
   buildNotebookSystemPrompt,
   createNotebookTools,
+  createNotebookNote,
+  createNotebookSource,
   deriveCanvasAction,
   resolveActionResult,
   type CanvasAction,
@@ -39,11 +51,19 @@ import {
   type CanvasPanel,
   type CanvasPanelKind,
   type CanvasChatMessage,
+  type Notebook,
+  type NotebookContextBuild,
+  type NotebookNote,
+  type NotebookNoteContextMode,
+  type NotebookSource,
+  type NotebookSourceContextMode,
   type NotebookToolDeps,
   type PanelLayout,
 } from "../lib/canvas";
 import type { LlmMessage } from "../lib/llm-types";
 import { agentLoop } from "../lib/agentLoop";
+import { extractAttachment } from "../lib/attachment-extract";
+import { browserFetch, validateBrowserUrl } from "../lib/browser-fetch";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ModeToggle } from "./ModeToggle";
 import { ModelPicker } from "./ModelPicker";
@@ -53,6 +73,7 @@ const MIN_H = 168;
 const RAIL_W = 320;
 /** Max tool/step rounds for one notebook turn (single-call agent-loop path). */
 const MAX_NOTEBOOK_ROUNDS = 16;
+type NotebookTab = "research" | "canvas";
 
 /**
  * NotebookView — a freeform board of draggable/resizable panels (prose docs +
@@ -70,6 +91,7 @@ const MAX_NOTEBOOK_ROUNDS = 16;
 export function NotebookView({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const activeNotebook = useChatStore((s) => s.getActiveNotebook());
   const createNotebook = useChatStore((s) => s.createNotebook);
+  const [activeTab, setActiveTab] = useState<NotebookTab>("research");
 
   // ── Board mutation helpers ────────────────────────────────────────────────
   // Each helper reads the freshest active notebook so concurrent assistant tool
@@ -143,6 +165,8 @@ export function NotebookView({ onOpenSettings }: { onOpenSettings?: () => void }
 
   const panels = activeNotebook?.panels ?? [];
   const panelCount = panels.length;
+  const sourceCount = activeNotebook?.sources.length ?? 0;
+  const noteCount = activeNotebook?.notes.length ?? 0;
   const boardBounds = useMemo(() => {
     let w = 0;
     let h = 0;
@@ -193,14 +217,40 @@ export function NotebookView({ onOpenSettings }: { onOpenSettings?: () => void }
               <p className="text-[11.5px] text-text-3 tabular-nums">
                 {!activeNotebook
                   ? "No notebook selected"
-                  : panelCount === 0
-                    ? "A board for documents and code, with an assistant"
-                    : `${panelCount} panel${panelCount === 1 ? "" : "s"}`}
+                  : `${sourceCount} source${sourceCount === 1 ? "" : "s"} · ${noteCount} note${noteCount === 1 ? "" : "s"} · ${panelCount} panel${panelCount === 1 ? "" : "s"}`}
               </p>
             </div>
           </div>
+          {activeNotebook && (
+            <div className="segmented-shell flex items-center rounded-lg p-0.5">
+              <button
+                onClick={() => setActiveTab("research")}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                  activeTab === "research"
+                    ? "bg-accent text-bg"
+                    : "text-text-3 hover:text-text-1 hover:bg-white/5"
+                }`}
+                title="Research workspace"
+              >
+                <BookOpen size={13} aria-hidden="true" />
+                Research
+              </button>
+              <button
+                onClick={() => setActiveTab("canvas")}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                  activeTab === "canvas"
+                    ? "bg-accent text-bg"
+                    : "text-text-3 hover:text-text-1 hover:bg-white/5"
+                }`}
+                title="Canvas workspace"
+              >
+                <LayoutDashboard size={13} aria-hidden="true" />
+                Canvas
+              </button>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 shrink-0">
-            {activeNotebook && (
+            {activeNotebook && activeTab === "canvas" && (
               <>
                 <button
                   onClick={() => addPanel("doc")}
@@ -228,46 +278,628 @@ export function NotebookView({ onOpenSettings }: { onOpenSettings?: () => void }
 
       <div className="flex-1 flex min-h-0">
         {activeNotebook ? (
-          <>
-            {/* Freeform board */}
-            <div className="notebook-board relative flex-1 min-w-0 overflow-auto">
-              {panelCount === 0 ? (
-                <BoardEmptyState onAdd={addPanel} />
-              ) : (
-                <div
-                  className="relative"
-                  style={{
-                    width: boardBounds.w,
-                    height: boardBounds.h,
-                    minWidth: "100%",
-                    minHeight: "100%",
-                  }}
-                >
-                  {panels.map((panel) => (
-                    <PanelCard
-                      key={panel.id}
-                      panel={panel}
-                      onFocus={() => focusPanel(panel.id)}
-                      onLayoutChange={(layout, persist) => setPanelLayout(panel.id, layout, persist)}
-                      onChange={(content) => updatePanel(panel.id, { content })}
-                      onTitleChange={(title) => updatePanel(panel.id, { title })}
-                      onRun={() => runPanel(panel)}
-                      onDelete={() => removePanel(panel.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+          activeTab === "research" ? (
+            <ResearchWorkspace
+              notebook={activeNotebook}
+              addPanel={addPanel}
+              onOpenSettings={onOpenSettings}
+            />
+          ) : (
+            <>
+              {/* Freeform board */}
+              <div className="notebook-board relative flex-1 min-w-0 overflow-auto">
+                {panelCount === 0 ? (
+                  <BoardEmptyState onAdd={addPanel} />
+                ) : (
+                  <div
+                    className="relative"
+                    style={{
+                      width: boardBounds.w,
+                      height: boardBounds.h,
+                      minWidth: "100%",
+                      minHeight: "100%",
+                    }}
+                  >
+                    {panels.map((panel) => (
+                      <PanelCard
+                        key={panel.id}
+                        panel={panel}
+                        onFocus={() => focusPanel(panel.id)}
+                        onLayoutChange={(layout, persist) => setPanelLayout(panel.id, layout, persist)}
+                        onChange={(content) => updatePanel(panel.id, { content })}
+                        onTitleChange={(title) => updatePanel(panel.id, { title })}
+                        onRun={() => runPanel(panel)}
+                        onDelete={() => removePanel(panel.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            {/* Assistant rail */}
-            <AssistantRail addPanel={addPanel} onOpenSettings={onOpenSettings} />
-          </>
+              {/* Assistant rail */}
+              <AssistantRail addPanel={addPanel} onOpenSettings={onOpenSettings} />
+            </>
+          )
         ) : (
           <NoNotebooksEmptyState onCreate={() => createNotebook()} />
         )}
       </div>
     </div>
   );
+}
+
+function ResearchWorkspace({
+  notebook,
+  addPanel,
+  onOpenSettings,
+}: {
+  notebook: Notebook;
+  addPanel: (kind: CanvasPanelKind, title?: string, content?: string) => string;
+  onOpenSettings?: () => void;
+}) {
+  const context = useMemo(() => buildNotebookContext(notebook), [notebook]);
+
+  return (
+    <div className="flex-1 flex min-h-0 bg-bg">
+      <SourcesPane notebook={notebook} context={context} />
+      <NotesPane notebook={notebook} />
+      <AssistantRail addPanel={addPanel} onOpenSettings={onOpenSettings} />
+    </div>
+  );
+}
+
+function SourcesPane({ notebook, context }: { notebook: Notebook; context: NotebookContextBuild }) {
+  const addNotebookSource = useChatStore((s) => s.addNotebookSource);
+  const updateNotebookSource = useChatStore((s) => s.updateNotebookSource);
+  const deleteNotebookSource = useChatStore((s) => s.deleteNotebookSource);
+  const sourceTokenCount = useMemo(() => {
+    const chars = notebook.sources.reduce((sum, source) => {
+      if (source.status !== "ready" || source.contextMode === "off") return sum;
+      const body = source.contextMode === "summary" ? source.summary : source.content;
+      return sum + body.trim().length;
+    }, 0);
+    return Math.ceil(chars / 4);
+  }, [notebook.sources]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [textOpen, setTextOpen] = useState(false);
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [textTitle, setTextTitle] = useState("");
+  const [textBody, setTextBody] = useState("");
+  const [urlTitle, setUrlTitle] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const addTextSource = useCallback(() => {
+    const content = textBody.trim();
+    if (!content) {
+      setError("Paste or write source text before adding it.");
+      return;
+    }
+    addNotebookSource(
+      createNotebookSource({
+        title: textTitle || "Pasted text",
+        kind: "text",
+        content,
+      }),
+    );
+    setTextTitle("");
+    setTextBody("");
+    setTextOpen(false);
+    setError(null);
+  }, [addNotebookSource, textBody, textTitle]);
+
+  const importFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (!list.length) return;
+      setError(null);
+      setBusyLabel(list.length === 1 ? `Importing ${list[0].name}` : `Importing ${list.length} files`);
+      for (const file of list) {
+        const source = createNotebookSource({
+          title: file.name,
+          kind: "file",
+          content: "",
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          status: "processing",
+        });
+        addNotebookSource(source);
+        try {
+          const attachment = await fileToAttachment(file);
+          const extracted = await extractAttachment(attachment);
+          const body = (extracted.rawBody ?? extracted.inlinedText).trim();
+          if (!body) throw new Error(extracted.note || "No extractable text found.");
+          const finalSource = createNotebookSource({
+            title: file.name,
+            kind: "file",
+            content: body,
+            filename: file.name,
+            mimeType: file.type || "application/octet-stream",
+          });
+          updateNotebookSource(source.id, {
+            content: finalSource.content,
+            summary: finalSource.summary,
+            status: "ready",
+            error: undefined,
+          });
+        } catch (err) {
+          updateNotebookSource(source.id, {
+            status: "error",
+            error: toErrorMessage(err),
+          });
+        }
+      }
+      setBusyLabel(null);
+    },
+    [addNotebookSource, updateNotebookSource],
+  );
+
+  const importUrl = useCallback(async () => {
+    const raw = urlInput.trim();
+    const validation = validateBrowserUrl(raw);
+    if (!validation.ok) {
+      setError(validation.error);
+      return;
+    }
+    const displayTitle = urlTitle || titleFromUrl(validation.url.toString());
+    const source = createNotebookSource({
+      title: displayTitle,
+      kind: "web",
+      content: "",
+      url: validation.url.toString(),
+      status: "processing",
+    });
+    addNotebookSource(source);
+    setBusyLabel(`Fetching ${validation.url.hostname}`);
+    setError(null);
+    try {
+      const fetched = await browserFetch({ url: validation.url.toString(), mode: "text", timeoutMs: 15_000 });
+      const body = fetched.content.trim();
+      if (!body) throw new Error("The page loaded, but no readable text was extracted.");
+      const finalSource = createNotebookSource({
+        title: urlTitle || titleFromUrl(fetched.url),
+        kind: "web",
+        content: body,
+        url: fetched.url,
+      });
+      updateNotebookSource(source.id, {
+        title: finalSource.title,
+        content: finalSource.content,
+        summary: finalSource.summary,
+        url: fetched.url,
+        status: "ready",
+        error: undefined,
+      });
+      setUrlInput("");
+      setUrlTitle("");
+      setUrlOpen(false);
+    } catch (err) {
+      updateNotebookSource(source.id, {
+        status: "error",
+        error: toErrorMessage(err),
+      });
+      setError(toErrorMessage(err));
+    } finally {
+      setBusyLabel(null);
+    }
+  }, [addNotebookSource, updateNotebookSource, urlInput, urlTitle]);
+
+  return (
+    <section className="w-[300px] shrink-0 border-r border-hairline bg-surface-1/30 flex flex-col min-h-0">
+      <div className="shrink-0 border-b border-hairline px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[13px] font-semibold text-text-1">Sources</h2>
+            <p className="text-[11px] text-text-3 tabular-nums">
+              {context.sourceCount} included · {formatCount(sourceTokenCount)} tokens
+            </p>
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="primary-action flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold"
+            title="Upload files"
+          >
+            <Upload size={13} aria-hidden="true" />
+            Add
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              if (event.currentTarget.files) void importFiles(event.currentTarget.files);
+              event.currentTarget.value = "";
+            }}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              setTextOpen((open) => !open);
+              setUrlOpen(false);
+            }}
+            className={`control-pill flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium ${
+              textOpen ? "text-accent border-accent/30 bg-accent-soft" : ""
+            }`}
+          >
+            <FileText size={13} aria-hidden="true" />
+            Text
+          </button>
+          <button
+            onClick={() => {
+              setUrlOpen((open) => !open);
+              setTextOpen(false);
+            }}
+            className={`control-pill flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium ${
+              urlOpen ? "text-accent border-accent/30 bg-accent-soft" : ""
+            }`}
+          >
+            <Link2 size={13} aria-hidden="true" />
+            URL
+          </button>
+        </div>
+
+        {textOpen && (
+          <div className="mt-3 flex flex-col gap-2 animate-[fadeIn_200ms_var(--ease-out)]">
+            <input
+              value={textTitle}
+              onChange={(e) => setTextTitle(e.target.value)}
+              placeholder="Source title"
+              className="bg-surface-1 border border-hairline rounded-md px-2.5 py-1.5 text-[12px] text-text-1 placeholder:text-text-4 focus:outline-none focus:border-hairline-strong"
+            />
+            <textarea
+              value={textBody}
+              onChange={(e) => setTextBody(e.target.value)}
+              placeholder="Paste source text"
+              rows={5}
+              className="selectable bg-surface-1 border border-hairline rounded-md px-2.5 py-2 text-[12px] leading-relaxed text-text-1 placeholder:text-text-4 resize-none focus:outline-none focus:border-hairline-strong"
+            />
+            <button
+              onClick={addTextSource}
+              className="primary-action inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-[12px] font-semibold"
+            >
+              <Save size={13} aria-hidden="true" />
+              Save source
+            </button>
+          </div>
+        )}
+
+        {urlOpen && (
+          <div className="mt-3 flex flex-col gap-2 animate-[fadeIn_200ms_var(--ease-out)]">
+            <input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://example.com/article"
+              className="bg-surface-1 border border-hairline rounded-md px-2.5 py-1.5 text-[12px] text-text-1 placeholder:text-text-4 focus:outline-none focus:border-hairline-strong"
+            />
+            <input
+              value={urlTitle}
+              onChange={(e) => setUrlTitle(e.target.value)}
+              placeholder="Optional title"
+              className="bg-surface-1 border border-hairline rounded-md px-2.5 py-1.5 text-[12px] text-text-1 placeholder:text-text-4 focus:outline-none focus:border-hairline-strong"
+            />
+            <button
+              onClick={importUrl}
+              disabled={!urlInput.trim() || !!busyLabel}
+              className="primary-action inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {busyLabel ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Globe2 size={13} aria-hidden="true" />}
+              Fetch page
+            </button>
+          </div>
+        )}
+
+        {(busyLabel || error) && (
+          <div
+            className={`mt-3 rounded-md border px-2.5 py-2 text-[11.5px] ${
+              error ? "border-error/25 bg-error/[0.06] text-error" : "border-hairline bg-white/[0.025] text-text-3"
+            }`}
+          >
+            {busyLabel || error}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {notebook.sources.length === 0 ? (
+          <PaneEmpty icon={FileText} title="No sources" body="Add files, pasted text, or a web page to give this notebook evidence." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {notebook.sources.map((source) => (
+              <SourceItem
+                key={source.id}
+                source={source}
+                onMode={(contextMode) => updateNotebookSource(source.id, { contextMode })}
+                onDelete={() => deleteNotebookSource(source.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SourceItem({
+  source,
+  onMode,
+  onDelete,
+}: {
+  source: NotebookSource;
+  onMode: (mode: NotebookSourceContextMode) => void;
+  onDelete: () => void;
+}) {
+  const Icon = source.kind === "web" ? Globe2 : source.kind === "file" ? FileText : MessageSquare;
+  const modes: NotebookSourceContextMode[] = ["full", "summary", "off"];
+  const preview = source.status === "error"
+    ? source.error || "Source failed to import."
+    : source.status === "processing"
+      ? "Extracting text..."
+      : source.summary || source.content;
+
+  return (
+    <article className="rounded-lg border border-hairline bg-surface-3 px-3 py-2.5 hover:border-hairline-strong transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex items-start gap-2">
+          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/5 text-text-3">
+            {source.status === "processing" ? (
+              <Loader2 size={13} className="animate-spin text-accent" aria-hidden="true" />
+            ) : (
+              <Icon size={13} aria-hidden="true" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <h3 className="truncate text-[12.5px] font-medium text-text-1" title={source.title}>
+              {source.title}
+            </h3>
+            <p className="mt-0.5 text-[10.5px] uppercase tracking-wide text-text-3 tabular-nums">
+              {source.kind} · {formatCount(source.content.length)} chars
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onDelete}
+          className="shrink-0 rounded-md p-1 text-text-4 hover:bg-white/5 hover:text-error transition-colors"
+          title="Remove source"
+          aria-label="Remove source"
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+      </div>
+
+      <p className={`mt-2 text-[11.5px] leading-relaxed ${source.status === "error" ? "text-error" : "text-text-3"}`}>
+        {clipText(preview, 220)}
+      </p>
+
+      <div className="mt-2 flex items-center gap-1 rounded-md bg-sunken/70 p-0.5">
+        {modes.map((mode) => (
+          <button
+            key={mode}
+            onClick={() => onMode(mode)}
+            className={`flex-1 rounded px-1.5 py-1 text-[10.5px] font-medium capitalize transition-colors ${
+              source.contextMode === mode
+                ? "bg-accent text-bg"
+                : "text-text-3 hover:bg-white/5 hover:text-text-1"
+            }`}
+            title={`Use ${mode} context`}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function NotesPane({ notebook }: { notebook: Notebook }) {
+  const addNotebookNote = useChatStore((s) => s.addNotebookNote);
+  const updateNotebookNote = useChatStore((s) => s.updateNotebookNote);
+  const deleteNotebookNote = useChatStore((s) => s.deleteNotebookNote);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+
+  const addNote = useCallback(() => {
+    const content = body.trim();
+    if (!content && !title.trim()) return;
+    addNotebookNote(
+      createNotebookNote({
+        title: title || "Untitled note",
+        content,
+        kind: "manual",
+      }),
+    );
+    setTitle("");
+    setBody("");
+  }, [addNotebookNote, body, title]);
+
+  return (
+    <section className="flex-1 min-w-[320px] border-r border-hairline bg-bg flex flex-col min-h-0">
+      <div className="shrink-0 border-b border-hairline px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[13px] font-semibold text-text-1">Notes</h2>
+            <p className="text-[11px] text-text-3 tabular-nums">
+              {notebook.notes.length} saved · included notes become chat context
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Note title"
+            className="bg-surface-1 border border-hairline rounded-md px-2.5 py-1.5 text-[12px] text-text-1 placeholder:text-text-4 focus:outline-none focus:border-hairline-strong"
+          />
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Write a note, synthesis, quote set, or question"
+            rows={4}
+            className="selectable bg-surface-1 border border-hairline rounded-md px-2.5 py-2 text-[12px] leading-relaxed text-text-1 placeholder:text-text-4 resize-none focus:outline-none focus:border-hairline-strong"
+          />
+          <button
+            onClick={addNote}
+            disabled={!title.trim() && !body.trim()}
+            className="primary-action inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <StickyNote size={13} aria-hidden="true" />
+            Add note
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {notebook.notes.length === 0 ? (
+          <PaneEmpty icon={StickyNote} title="No notes" body="Save synthesis here. Notes are durable and can be included or excluded from chat context." />
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+            {notebook.notes.map((note) => (
+              <NoteItem
+                key={note.id}
+                note={note}
+                onUpdate={(updates) => updateNotebookNote(note.id, updates)}
+                onDelete={() => deleteNotebookNote(note.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function NoteItem({
+  note,
+  onUpdate,
+  onDelete,
+}: {
+  note: NotebookNote;
+  onUpdate: (updates: Partial<NotebookNote>) => void;
+  onDelete: () => void;
+}) {
+  const modes: NotebookNoteContextMode[] = ["full", "off"];
+
+  return (
+    <article className="flex min-h-[228px] flex-col rounded-lg border border-hairline bg-surface-3 p-3 hover:border-hairline-strong transition-colors">
+      <div className="flex items-center gap-2">
+        <StickyNote size={13} className={note.kind === "ai" ? "text-accent" : "text-text-3"} aria-hidden="true" />
+        <input
+          value={note.title}
+          onChange={(e) => onUpdate({ title: e.target.value || "Untitled note" })}
+          className="min-w-0 flex-1 bg-transparent text-[12.5px] font-medium text-text-1 focus:outline-none"
+          aria-label="Note title"
+        />
+        <button
+          onClick={onDelete}
+          className="shrink-0 rounded-md p-1 text-text-4 hover:bg-white/5 hover:text-error transition-colors"
+          title="Delete note"
+          aria-label="Delete note"
+        >
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      </div>
+      <p className="mt-1 text-[10.5px] uppercase tracking-wide text-text-3">
+        {note.kind === "ai" ? "Assistant note" : "Manual note"}
+      </p>
+      <textarea
+        value={note.content}
+        onChange={(e) => onUpdate({ content: e.target.value })}
+        placeholder="Write in Markdown"
+        className="selectable mt-2 min-h-0 flex-1 resize-none bg-sunken/65 border border-hairline rounded-md px-2.5 py-2 text-[12px] leading-relaxed text-text-1 placeholder:text-text-4 focus:outline-none focus:border-hairline-strong"
+      />
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex rounded-md bg-sunken/70 p-0.5">
+          {modes.map((mode) => (
+            <button
+              key={mode}
+              onClick={() => onUpdate({ contextMode: mode })}
+              className={`rounded px-2 py-1 text-[10.5px] font-medium capitalize transition-colors ${
+                note.contextMode === mode
+                  ? "bg-accent text-bg"
+                  : "text-text-3 hover:bg-white/5 hover:text-text-1"
+              }`}
+              title={`Set note context to ${mode}`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+        <span className="text-[10.5px] text-text-3 tabular-nums">{formatCount(note.content.length)} chars</span>
+      </div>
+    </article>
+  );
+}
+
+function PaneEmpty({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: typeof FileText;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex h-full min-h-[220px] flex-col items-center justify-center px-4 text-center">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg border border-hairline bg-surface-3 text-text-3">
+        <Icon size={18} aria-hidden="true" />
+      </div>
+      <h3 className="text-[13px] font-semibold text-text-1">{title}</h3>
+      <p className="mt-1 max-w-[260px] text-[12px] leading-relaxed text-text-3">{body}</p>
+    </div>
+  );
+}
+
+function fileToAttachment(file: File): Promise<Attachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+    reader.onload = () =>
+      resolve({
+        filename: file.name,
+        mimeType: file.type || "application/octet-stream",
+        dataUrl: String(reader.result ?? ""),
+        sizeBytes: file.size,
+      });
+    reader.readAsDataURL(file);
+  });
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function formatCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${Math.round(value / 1_000)}K`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(value);
+}
+
+function clipText(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return "No text extracted yet.";
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+function titleFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/$/, "").split("/").filter(Boolean).pop();
+    return path ? `${parsed.hostname} / ${decodeURIComponent(path)}` : parsed.hostname;
+  } catch {
+    return url;
+  }
+}
+
+function noteTitleFromContent(content: string): string {
+  const heading = content.match(/^\s*#{1,3}\s+(.+)$/m)?.[1];
+  const firstLine = heading || content.split(/\n+/).find((line) => line.trim()) || "Assistant note";
+  return clipText(firstLine.replace(/[*_`>#-]/g, ""), 64);
 }
 
 function NoNotebooksEmptyState({ onCreate }: { onCreate: () => void }) {
@@ -278,8 +910,8 @@ function NoNotebooksEmptyState({ onCreate }: { onCreate: () => void }) {
       </div>
       <h2 className="text-[18px] font-semibold text-text-1 mb-1.5">No notebooks yet</h2>
       <p className="text-[13px] text-text-3 max-w-[400px] mb-6 leading-relaxed">
-        A notebook is a freeform board of documents and runnable code with an assistant
-        that can read and edit every panel. Create one to get started.
+        A notebook keeps sources, saved notes, chat, and a canvas together so research
+        can survive reloads and turn into drafts.
       </p>
       <button
         onClick={onCreate}
@@ -300,8 +932,8 @@ function BoardEmptyState({ onAdd }: { onAdd: (kind: CanvasPanelKind) => void }) 
       </div>
       <h2 className="text-[18px] font-semibold text-text-1 mb-1.5">This notebook is empty</h2>
       <p className="text-[13px] text-text-3 max-w-[380px] mb-6 leading-relaxed">
-        Drop documents and runnable code anywhere on the board, then ask the assistant
-        on the right to draft, edit, or refactor any of them.
+        Use the canvas for drafted documents and runnable code, then ask the assistant
+        to refine, refactor, or turn them into notes.
       </p>
       <div className="flex gap-2">
         <button
@@ -597,7 +1229,10 @@ function AssistantRail({
   addPanel: (kind: CanvasPanelKind, title?: string, content?: string) => string;
   onOpenSettings?: () => void;
 }) {
-  const chat = useChatStore((s) => s.getActiveNotebook()?.chat ?? []);
+  const activeNotebook = useChatStore((s) => s.getActiveNotebook());
+  const chat = activeNotebook?.chat ?? [];
+  const context = useMemo(() => (activeNotebook ? buildNotebookContext(activeNotebook) : null), [activeNotebook]);
+  const addNotebookNote = useChatStore((s) => s.addNotebookNote);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -638,6 +1273,21 @@ function AssistantRail({
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
+
+  const saveAssistantNote = useCallback(
+    (content: string) => {
+      const clean = content.trim();
+      if (!clean) return;
+      addNotebookNote(
+        createNotebookNote({
+          title: noteTitleFromContent(clean),
+          content: clean,
+          kind: "ai",
+        }),
+      );
+    },
+    [addNotebookNote],
+  );
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -686,6 +1336,22 @@ function AssistantRail({
       createPanel: (kind, title, content) => addPanel(kind, title, content),
       setPanelContent: (panelId, content) => updatePanelField(panelId, { content }),
       setPanelTitle: (panelId, title) => updatePanelField(panelId, { title }),
+      createNote: (title, content, sourceIds) => {
+        const note = createNotebookNote({
+          title,
+          content,
+          kind: "ai",
+          sourceIds,
+        });
+        useChatStore.getState().addNotebookNote(note);
+        return note.id;
+      },
+      setNoteContent: (noteId, content) => {
+        useChatStore.getState().updateNotebookNote(noteId, { content });
+      },
+      setNoteTitle: (noteId, title) => {
+        useChatStore.getState().updateNotebookNote(noteId, { title });
+      },
     };
 
     // Live, structured feedback. Each tool call becomes a row that shows
@@ -816,14 +1482,16 @@ function AssistantRail({
       <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-hairline">
         <Sparkles size={14} className="text-accent" aria-hidden="true" />
         <span className="text-[13px] font-semibold text-text-1">Assistant</span>
-        <span className="text-[11px] text-text-3">reads &amp; edits every panel</span>
+        <span className="text-[11px] text-text-3 tabular-nums">
+          {context ? `${context.sourceCount} sources · ${context.noteCount} notes` : "reads notebook context"}
+        </span>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {chat.length === 0 ? (
           <RailEmptyState />
         ) : (
-          chat.map((m) => <RailMessage key={m.id} message={m} />)
+          chat.map((m) => <RailMessage key={m.id} message={m} onSaveNote={saveAssistantNote} />)
         )}
         {error && (
           <div className="rounded-lg border border-error/30 bg-error/[0.08] px-3 py-2 text-[12px] text-error">
@@ -879,14 +1547,21 @@ function RailEmptyState() {
         <Wand2 size={20} className="text-accent" aria-hidden="true" />
       </div>
       <p className="text-[13px] text-text-2 leading-relaxed max-w-[260px]">
-        I can see every panel on the board. Ask me to write a draft, tighten the wording,
-        fix a bug, or spin up a new doc or script.
+        I can read selected sources, notes, and canvas panels. Ask for synthesis,
+        citations, drafting, or a saved note.
       </p>
     </div>
   );
 }
 
-function RailMessage({ message }: { message: CanvasChatMessage }) {
+function RailMessage({
+  message,
+  onSaveNote,
+}: {
+  message: CanvasChatMessage;
+  onSaveNote?: (content: string) => void;
+}) {
+  const [saved, setSaved] = useState(false);
   if (message.role === "user") {
     return (
       <div className="self-end max-w-[88%] rounded-2xl rounded-br-md bg-surface-2 border border-hairline px-3 py-2 text-[13px] text-text-1 whitespace-pre-wrap leading-relaxed">
@@ -901,6 +1576,20 @@ function RailMessage({ message }: { message: CanvasChatMessage }) {
         <div className="text-[13px] text-text-1 leading-relaxed selectable">
           <MarkdownRenderer content={message.content} isStreaming={message.streaming} />
         </div>
+      )}
+      {message.content && !message.streaming && onSaveNote && (
+        <button
+          onClick={() => {
+            onSaveNote(message.content);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 1600);
+          }}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-hairline bg-white/[0.035] px-2 py-1 text-[11px] font-medium text-text-3 hover:border-hairline-strong hover:text-text-1 transition-colors"
+          title="Save response as a note"
+        >
+          {saved ? <Check size={12} className="text-success" aria-hidden="true" /> : <StickyNote size={12} aria-hidden="true" />}
+          {saved ? "Saved" : "Save note"}
+        </button>
       )}
       {message.streaming && !message.content && !hasActions && (
         <span className="streaming-cursor" />

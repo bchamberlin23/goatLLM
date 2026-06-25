@@ -170,6 +170,7 @@ describe("advanced agent session helpers", () => {
   it("applies budget controls and onboarding steps", () => {
     const controls: AgentBudgetControls = { maxToolCalls: 4, maxSubagents: 1, maxMinutes: 10 };
     expect(applyBudgetControls(controls)).toBe("Max 4 tool calls, 1 subagent, 10 minutes");
+    expect(applyBudgetControls({ ...controls, maxSubagents: 0 })).toBe("Max 4 tool calls, unlimited subagents, 10 minutes");
     expect(sessionOnboardingSteps({ hasWorkspace: false, hasPolicy: false, hasChecks: false })).toEqual([
       "Choose a workspace",
       "Pick a permission profile",

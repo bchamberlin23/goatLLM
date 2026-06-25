@@ -194,7 +194,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
   }, [setWorkspace, refreshWorkspaces]);
 
   const handleRemoveWorkspace = useCallback(async (ws: string) => {
-    const projectChats = conversations.filter((c) => c.workspacePath === ws);
+    const projectChats = conversations.filter((c) => c.mode === "agent" && c.workspacePath === ws);
     if (projectChats.length > 0) {
       const ok = window.confirm(
         `Remove "${ws.split("/").pop()}" from your projects?\n\n${projectChats.length} chat${projectChats.length === 1 ? "" : "s"} will move to "Personal" — they won't be deleted.`,
@@ -247,7 +247,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
     const map: Record<string, Conversation[]> = {};
     for (const c of conversations) {
       if (!c.workspacePath) continue;
-      if (c.mode === "design") continue;
+      if (c.mode !== "agent") continue;
       if (!matchesQuery(c)) continue;
       (map[c.workspacePath] ||= []).push(c);
     }
@@ -274,7 +274,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
   const totalChatsByWs = useMemo(() => {
     const map: Record<string, number> = {};
     for (const c of conversations) {
-      if (c.workspacePath) map[c.workspacePath] = (map[c.workspacePath] ?? 0) + 1;
+      if (c.mode === "agent" && c.workspacePath) map[c.workspacePath] = (map[c.workspacePath] ?? 0) + 1;
     }
     return map;
   }, [conversations]);
@@ -283,6 +283,7 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
     const map: Record<string, number> = {};
     for (const c of conversations) {
       if (!c.workspacePath) continue;
+      if (c.mode !== "agent") continue;
       if ((map[c.workspacePath] ?? 0) < c.lastMessageAt) map[c.workspacePath] = c.lastMessageAt;
     }
     return map;

@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use super::search::normalize_for_fuzzy_match;
 use super::workspace::{check_denylist_ws, get_ws_patterns, resolve_path, WorkspaceState};
 
+const EXEC_STREAM_TAIL_BYTES: usize = 32 * 1024;
+
 #[derive(Debug, Deserialize)]
 pub(crate) struct EditReplacement {
     #[serde(rename = "oldText")]
@@ -108,61 +110,149 @@ pub(crate) fn edit_file(
     Ok(msg)
 }
 
-#[tauri::command]
-pub(crate) fn exec_command(
+#[derive(Debug)]
+struct StreamTail {
+    tail: Vec<u8>,
+    total_bytes: usize,
+    truncated: bool,
+    cap_bytes: usize,
+}
+
+impl StreamTail {
+    fn new(cap_bytes: usize) -> Self {
+        Self {
+            tail: Vec::new(),
+            total_bytes: 0,
+            truncated: false,
+            cap_bytes,
+        }
+    }
+
+    fn push(&mut self, chunk: &[u8]) {
+        self.total_bytes += chunk.len();
+        self.tail.extend_from_slice(chunk);
+        if self.tail.len() > self.cap_bytes {
+            let excess = self.tail.len() - self.cap_bytes;
+            self.tail.drain(0..excess);
+            self.truncated = true;
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.total_bytes == 0
+    }
+
+    fn render(&self, label: &str) -> String {
+        let mut out = String::new();
+        if self.truncated {
+            out.push_str(&format!(
+                "[{} truncated before IPC: kept last {} of {} bytes]\n",
+                label,
+                self.tail.len(),
+                self.total_bytes
+            ));
+        }
+        out.push_str(&String::from_utf8_lossy(&self.tail));
+        out
+    }
+}
+
+async fn read_stream_tail<R>(mut reader: R) -> Result<StreamTail, String>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncReadExt;
+
+    let mut capture = StreamTail::new(EXEC_STREAM_TAIL_BYTES);
+    let mut buf = [0_u8; 8192];
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .await
+            .map_err(|e| format!("Failed to read command output: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        capture.push(&buf[..n]);
+    }
+    Ok(capture)
+}
+
+fn render_command_output(
+    status: std::process::ExitStatus,
+    stdout: StreamTail,
+    stderr: StreamTail,
+) -> String {
+    let mut result = String::new();
+    if !stdout.is_empty() {
+        result.push_str(&stdout.render("stdout"));
+    }
+    if !stderr.is_empty() {
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str("[stderr]\n");
+        result.push_str(&stderr.render("stderr"));
+    }
+    if result.is_empty() {
+        result = format!("Exit code: {}", status.code().unwrap_or(-1));
+    }
+    result
+}
+
+async fn exec_command_inner(
     workspace: String,
     command: String,
     timeout_ms: Option<u64>,
 ) -> Result<String, String> {
-    use std::process::Command;
+    use std::process::Stdio;
     use std::time::Duration;
+    use tokio::process::Command;
 
     let timeout = Duration::from_millis(timeout_ms.unwrap_or(30_000));
 
-    // Use bash -c for pipeline/redirect support
     let mut child = Command::new("bash")
         .args(["-c", &command])
         .current_dir(&workspace)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn command: {}", e))?;
 
-    // Wait with timeout
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let output = child.wait_with_output().map_err(|e| e.to_string())?;
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let mut result = String::new();
-                if !stdout.is_empty() {
-                    result.push_str(&stdout);
-                }
-                if !stderr.is_empty() {
-                    if !result.is_empty() {
-                        result.push('\n');
-                    }
-                    result.push_str("[stderr]\n");
-                    result.push_str(&stderr);
-                }
-                if result.is_empty() {
-                    result = format!("Exit code: {}", status.code().unwrap_or(-1));
-                }
-                return Ok(result);
-            }
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!("Command timed out after {}s", timeout.as_secs()));
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(e) => return Err(format!("Command error: {}", e)),
+    let stdout = child.stdout.take().ok_or("Cannot capture stdout")?;
+    let stderr = child.stderr.take().ok_or("Cannot capture stderr")?;
+    let stdout_task = tokio::spawn(read_stream_tail(stdout));
+    let stderr_task = tokio::spawn(read_stream_tail(stderr));
+
+    let status = match tokio::time::timeout(timeout, child.wait()).await {
+        Ok(Ok(status)) => status,
+        Ok(Err(e)) => return Err(format!("Command error: {}", e)),
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            return Err(format!("Command timed out after {}s", timeout.as_secs()));
         }
-    }
+    };
+
+    let stdout = stdout_task
+        .await
+        .map_err(|e| format!("Command stdout task failed: {}", e))??;
+    let stderr = stderr_task
+        .await
+        .map_err(|e| format!("Command stderr task failed: {}", e))??;
+
+    Ok(render_command_output(status, stdout, stderr))
+}
+
+#[tauri::command]
+pub(crate) async fn exec_command(
+    workspace: String,
+    command: String,
+    timeout_ms: Option<u64>,
+) -> Result<String, String> {
+    exec_command_inner(workspace, command, timeout_ms).await
 }
 
 #[tauri::command]
@@ -208,4 +298,26 @@ pub(crate) fn read_lints(workspace: String) -> Result<String, String> {
     }
 
     Err("No supported project found (Cargo.toml or package.json)".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::exec_command_inner;
+
+    #[tokio::test]
+    async fn exec_command_drains_noisy_output_while_waiting_for_exit() {
+        let workspace = std::env::temp_dir().to_string_lossy().to_string();
+        let result = exec_command_inner(
+            workspace,
+            "python3 -c 'import sys; sys.stdout.write(\"x\" * 200000)'".to_string(),
+            Some(1_000),
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "noisy command should complete instead of blocking on a full stdout pipe: {:?}",
+            result
+        );
+    }
 }

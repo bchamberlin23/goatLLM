@@ -1,8 +1,18 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useChatStore } from "../stores/chat";
 import { SquarePen, MoreHorizontal, Pencil, Trash2, FileCode, FileText, Image, Paperclip, Code, Terminal } from "lucide-react";
 import { WorkspaceFileTree } from "./WorkspaceFileTree";
 import { ContextMeter } from "./ContextMeter";
+
+function isInteractiveDragTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      "button,a,input,textarea,select,[contenteditable='true'],[role='button'],[data-no-window-drag]",
+    ),
+  );
+}
 
 export function TopBar() {
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
@@ -39,6 +49,24 @@ export function TopBar() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
+
+  useEffect(() => {
+    const handleWindowDrag = (event: PointerEvent) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest("[data-tauri-drag-region]")) return;
+      if (isInteractiveDragTarget(target)) return;
+
+      void Promise.resolve(getCurrentWindow().startDragging()).catch(() => {
+        // Browser-mode dev server and some test environments do not expose
+        // native window dragging; the data attribute remains the fallback.
+      });
+    };
+
+    document.addEventListener("pointerdown", handleWindowDrag, { capture: true });
+    return () => document.removeEventListener("pointerdown", handleWindowDrag, { capture: true });
+  }, []);
 
   useEffect(() => {
     if (renaming && renameRef.current) {

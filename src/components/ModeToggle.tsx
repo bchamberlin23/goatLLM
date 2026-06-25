@@ -81,7 +81,7 @@ export function ModeToggle() {
           role="radio"
           aria-checked={notebookMode}
           onClick={handleNotebook}
-          title="Notebook mode (WIP) — a freeform board of documents and runnable code with an AI assistant."
+          title="Notebook mode — sources, notes, chat, and a canvas in one research workspace."
           className={optionClass(notebookMode)}
         >
           <NotebookIcon size={12} strokeWidth={2} aria-hidden="true" />

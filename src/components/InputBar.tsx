@@ -1,9 +1,32 @@
 import { useState, useRef, useCallback, useEffect, KeyboardEvent, ClipboardEvent } from "react";
 import type { ToolSet } from "ai";
-import { useChatStore, Attachment, NEW_CHAT_DRAFT_KEY, type DeepResearchEvent, type DeepResearchState, type ToolCallEntry, type Message } from "../stores/chat";
-import { streamChat, generateTitle, heuristicTitle, type LlmContentPart, type LlmMessage, type ToolCallInfo, type ToolResultInfo } from "../lib/llm";
+import {
+  useChatStore,
+  Attachment,
+  NEW_CHAT_DRAFT_KEY,
+  type DeepResearchEvent,
+  type DeepResearchState,
+  type ToolCallEntry,
+  type Message,
+} from "../stores/chat";
+import {
+  streamChat,
+  generateTitle,
+  heuristicTitle,
+  type LlmContentPart,
+  type LlmMessage,
+  type ToolCallInfo,
+  type ToolResultInfo,
+} from "../lib/llm";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
-import { ALL_TOOLS, RESEARCH_TOOLS, CHAT_TOOLS, PLAN_TOOLS, filterToolsForConfiguredServices, isWriteTool } from "../lib/tools";
+import {
+  ALL_TOOLS,
+  RESEARCH_TOOLS,
+  CHAT_TOOLS,
+  PLAN_TOOLS,
+  filterToolsForConfiguredServices,
+  isWriteTool,
+} from "../lib/tools";
 import { shouldAutoApprove } from "../lib/tools/approval";
 import { classifyCommand } from "../lib/command-safety";
 import { stripLeakedToolJson } from "../lib/sanitize";
@@ -15,11 +38,14 @@ import { loadProjectContext } from "../lib/project-context";
 import { logMessage, logToolCall, logToolResult, logError } from "../lib/event-log";
 import {
   compactMessages,
+  buildCompactedLlmMessages,
   estimateContextTokens,
   estimateRequestContextTokens,
+  estimateTotalTokens,
   shouldCompact,
   summarizeWithLlm,
 } from "../lib/context-manager";
+import { createCompactionId } from "../lib/compaction/types";
 import { applyCompactionReplay } from "../lib/compaction/replay";
 import { extractAndAppend } from "../lib/attachment-extract";
 import { fetchNewUrlsFromProse } from "../lib/url-fetch";
@@ -27,7 +53,11 @@ import { buildCitationInstructions, selectUsedCitations } from "../lib/citations
 import { MAX_WEB_SEARCH_CALLS_PER_TURN } from "../lib/web-search";
 import { isLikelyScannedPdf } from "../lib/attachment-cache";
 import { providerSupportsNativePdf } from "../lib/native-pdf";
-import { loadPromptTemplates, expandPromptTemplate, type PromptTemplate } from "../lib/prompt-templates";
+import {
+  loadPromptTemplates,
+  expandPromptTemplate,
+  type PromptTemplate,
+} from "../lib/prompt-templates";
 import { readSkillFile } from "../lib/skills";
 import { startJjAgentSession, endJjAgentSession } from "../lib/jjagent";
 import { extractAndPersistTurnMemories } from "../lib/memory-extraction";
@@ -47,16 +77,28 @@ function playCompletionSound() {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);        // A5
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
     osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.06); // E6
     gain.gain.setValueAtTime(0.12, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.15);
-  } catch { /* audio not available */ }
+  } catch {
+    /* audio not available */
+  }
 }
 import { invoke } from "@tauri-apps/api/core";
 import { FileReferencePicker } from "./FileReferencePicker";
+import { SlashCommandMenu } from "./input-bar/SlashCommandMenu";
+import {
+  buildSlashCommandRegistry,
+  executeSlashCommand,
+  filterSlashCommands,
+  getSlashCommandQuery,
+  parseSlashCommandInvocation,
+  type SlashCommandActions,
+  type SlashCommandDefinition,
+} from "../lib/slash-commands";
 
 /**
  * Per-conversation cache of high-quality LLM-generated summaries. We swap
@@ -94,7 +136,9 @@ async function getPromptTemplates(workspace: string | null | undefined): Promise
  * system prompt. Returns null if the skill isn't discovered or its file
  * can't be read.
  */
-async function getSkillBody(name: string): Promise<{ name: string; filePath: string; body: string } | null> {
+async function getSkillBody(
+  name: string,
+): Promise<{ name: string; filePath: string; body: string } | null> {
   const skill = useChatStore.getState().discoveredSkills.find((s) => s.name === name);
   if (!skill) return null;
   try {
@@ -135,14 +179,47 @@ import { useSpeechToText } from "../lib/speech";
 function getFileIcon(mimeType: string, filename = "") {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (mimeType.startsWith("image/")) return ImageIcon;
-  if (mimeType.startsWith("audio/") || /^(mp3|m4a|wav|flac|ogg|aac|webm)$/.test(ext)) return FileAudio;
-  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.endsWith("xml") || mimeType.endsWith("yaml") || mimeType === "application/javascript") return FileCode;
-  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return FileSpreadsheet;
-  if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("gzip") || mimeType.includes("rar") || mimeType.includes("7z")) return FileArchive;
+  if (mimeType.startsWith("audio/") || /^(mp3|m4a|wav|flac|ogg|aac|webm)$/.test(ext))
+    return FileAudio;
   if (
-    mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("word") || mimeType.includes("presentation") ||
-    ext === "pdf" || ext === "docx" || ext === "doc" || ext === "pptx" || ext === "ppt" || ext === "rtf" || ext === "ipynb"
-  ) return FileText;
+    mimeType.startsWith("text/") ||
+    mimeType === "application/json" ||
+    mimeType.endsWith("xml") ||
+    mimeType.endsWith("yaml") ||
+    mimeType === "application/javascript"
+  )
+    return FileCode;
+  if (
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("csv") ||
+    mimeType.includes("excel") ||
+    ext === "xlsx" ||
+    ext === "xls" ||
+    ext === "csv"
+  )
+    return FileSpreadsheet;
+  if (
+    mimeType.includes("zip") ||
+    mimeType.includes("tar") ||
+    mimeType.includes("gzip") ||
+    mimeType.includes("rar") ||
+    mimeType.includes("7z")
+  )
+    return FileArchive;
+  if (
+    mimeType.includes("pdf") ||
+    mimeType.includes("document") ||
+    mimeType.includes("word") ||
+    mimeType.includes("presentation") ||
+    ext === "pdf" ||
+    ext === "docx" ||
+    ext === "doc" ||
+    ext === "pptx" ||
+    ext === "ppt" ||
+    ext === "rtf" ||
+    ext === "ipynb"
+  )
+    return FileText;
   return File;
 }
 
@@ -155,11 +232,24 @@ function formatFileSize(bytes: number): string {
 function getFileExtColor(mimeType: string, filename = ""): string {
   const ext = filename.toLowerCase().split(".").pop() ?? "";
   if (mimeType.startsWith("image/")) return "#a78bfa"; // purple
-  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType.includes("javascript")) return "#60a5fa"; // blue
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType === "application/json" ||
+    mimeType.includes("javascript")
+  )
+    return "#60a5fa"; // blue
   if (mimeType.includes("pdf") || ext === "pdf") return "#f87171"; // red
   if (mimeType.includes("word") || ext === "docx" || ext === "doc") return "#3b82f6"; // blue
   if (mimeType.includes("presentation") || ext === "pptx" || ext === "ppt") return "#fb923c"; // orange
-  if (mimeType.includes("spreadsheet") || mimeType.includes("csv") || mimeType.includes("excel") || ext === "xlsx" || ext === "xls" || ext === "csv") return "#34d399"; // green
+  if (
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("csv") ||
+    mimeType.includes("excel") ||
+    ext === "xlsx" ||
+    ext === "xls" ||
+    ext === "csv"
+  )
+    return "#34d399"; // green
   if (ext === "ipynb") return "#f59e0b"; // jupyter amber
   if (ext === "rtf") return "#94a3b8";
   if (mimeType.includes("zip") || mimeType.includes("tar")) return "#fbbf24"; // yellow
@@ -193,8 +283,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   // "Follow-up" = composing inside an existing conversation that already has
   // messages. New-chat composer stays roomy; follow-ups tighten vertically so
   // the box doesn't waste height once the thread is rolling.
-  const isFollowUp = useChatStore((s) => (s.activeId ? (s.messages[s.activeId]?.length ?? 0) > 0 : false));
-  const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
+  const isFollowUp = useChatStore((s) =>
+    s.activeId ? (s.messages[s.activeId]?.length ?? 0) > 0 : false,
+  );
+  const isStreaming = useChatStore((s) => (activeId ? s.isConversationStreaming(activeId) : false));
   const startStreaming = useChatStore((s) => s.startStreaming);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const addToolCallToMessage = useChatStore((s) => s.addToolCallToMessage);
@@ -253,6 +345,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   // the plan finishes streaming so the user can flip into write mode.
   const planMode = useChatStore((s) => s.planMode);
   const setPlanMode = useChatStore((s) => s.setPlanMode);
+  const setAgentMode = useChatStore((s) => s.setAgentMode);
+  const setDesignMode = useChatStore((s) => s.setDesignMode);
+  const setSystemPrompt = useChatStore((s) => s.setSystemPrompt);
   // Deep Research mode lives in the + menu now (used to be a top-bar toggle).
   // It's one-shot — the toggle resets after the first send (see handleSend).
   const researchMode = useChatStore((s) => s.researchMode);
@@ -307,28 +402,37 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   const [imageGenResult, setImageGenResult] = useState<string | null>(null);
   const [imageGenError, setImageGenError] = useState<string | null>(null);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [pendingSkills, setPendingSkills] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("goatllm-pending-skills");
       return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
+    } catch {
+      return [];
+    }
   });
   // Persist pending skills to localStorage so they survive remounts/reloads.
   useEffect(() => {
-    try { localStorage.setItem("goatllm-pending-skills", JSON.stringify(pendingSkills)); } catch {}
+    try {
+      localStorage.setItem("goatllm-pending-skills", JSON.stringify(pendingSkills));
+    } catch {}
   }, [pendingSkills]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // @ file reference picker state
   const [fileRefQuery, setFileRefQuery] = useState<string | null>(null);
-  const [fileRefPosition, setFileRefPosition] = useState<{ top: number; left: number } | null>(null);
+  const [fileRefPosition, setFileRefPosition] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const fileRefActiveWorkspace = useChatStore((s) =>
-    s.agentMode ? s.workspacePath : s.designMode ? s.designWorkspacePath : null
+    s.agentMode ? s.workspacePath : s.designMode ? s.designWorkspacePath : null,
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Forward ref for handleSend so effects can call into it without
   // breaking the dependency array. Assigned just below the callback def.
-  const handleSendRef = useRef<((overrides?: { content?: string; attachments?: Attachment[] }) => void) | null>(null);
+  const handleSendRef = useRef<
+    ((overrides?: { content?: string; attachments?: Attachment[] }) => void) | null
+  >(null);
   // Tracks the last artifact scan timestamp so we can throttle the full-content
   // splitContentByArtifacts regex to ~80ms during streaming.
   const artifactScanRef = useRef({ lastScan: 0, rafPending: false });
@@ -406,8 +510,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     ta.style.height = `${Math.min(ta.scrollHeight, 180)}px`;
   }, []);
 
-  useEffect(() => { adjustHeight(); }, [value, adjustHeight]);
-  useEffect(() => { textareaRef.current?.focus(); }, [activeId, focusNonce]);
+  useEffect(() => {
+    adjustHeight();
+  }, [value, adjustHeight]);
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [activeId, focusNonce]);
 
   const handleAttach = useCallback(() => fileInputRef.current?.click(), []);
 
@@ -452,1197 +560,1336 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     setFiles((prev) => [...prev, ...newAttachments]);
   }, []);
 
-  const handleSend = useCallback(async (overrides?: { content?: string; attachments?: Attachment[]; fromQueue?: boolean; steered?: boolean }) => {
-    const rawTrimmed = (overrides?.content ?? value).trim();
-    const currentFiles = overrides?.attachments ?? files;
-    // A queued/steered dispatch is a genuine new user turn (must be added to
-    // the thread + sent), unlike an edit/regenerate resend whose message is
-    // already in history.
-    const isQueuedDispatch = overrides?.fromQueue === true;
-    const isResend = !!overrides && !isQueuedDispatch;
-    if (!rawTrimmed && currentFiles.length === 0) return;
+  const handleSend = useCallback(
+    async (overrides?: {
+      content?: string;
+      attachments?: Attachment[];
+      fromQueue?: boolean;
+      steered?: boolean;
+    }) => {
+      const rawTrimmed = (overrides?.content ?? value).trim();
+      const currentFiles = overrides?.attachments ?? files;
+      // A queued/steered dispatch is a genuine new user turn (must be added to
+      // the thread + sent), unlike an edit/regenerate resend whose message is
+      // already in history.
+      const isQueuedDispatch = overrides?.fromQueue === true;
+      const isResend = !!overrides && !isQueuedDispatch;
+      if (!rawTrimmed && currentFiles.length === 0) return;
 
-    // While a turn is streaming, queue the new message instead of blocking.
-    // Works in every mode now (chat, agent, design) — the user can line up a
-    // follow-up or steer the in-flight turn.
-    if (isStreaming) {
-      const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
-      if (rawTrimmed && activeId) {
-        enqueueMessage(activeId, rawTrimmed);
-        clearDraft(k);
-        setValue("");
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-        return;
-      }
-      return;
-    }
-
-    const llmConfig = getActiveLlmConfig();
-    if (!llmConfig) {
-      setError("No model selected. Pick a model from the dropdown above.");
-      return;
-    }
-    const models = getModels();
-    const selectedModel = models.find((m) => m.id === selectedModelId);
-    if (!selectedModel) { setError("Selected model not found."); return; }
-    if (
-      !llmConfig.apiKey &&
-      selectedModel.providerId !== "ollama" &&
-      selectedModel.providerId !== "lmstudio" &&
-      selectedModel.providerId !== OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID
-    ) {
-      setError(`No API key configured for ${selectedModel.providerId}. Add one in Settings.`);
-      return;
-    }
-
-    setError(null);
-    let convId = activeId;
-    const startingDraftKey = convId ?? NEW_CHAT_DRAFT_KEY;
-    if (!convId) {
-      convId = createConversation();
-      if (pendingSkills.length > 0) {
-        setConversationSkills(convId, pendingSkills);
-        setPendingSkills([]);
-        try { localStorage.removeItem("goatllm-pending-skills"); } catch {}
-      }
-    }
-    if (selectedModelId) {
-      useChatStore.getState().setConversationModel(convId, selectedModelId);
-    }
-
-    // Slash command: /skill:name [optional message].
-    // Switches the conversation's active skill (persists across sends) and
-    // strips the command prefix from the message. If only `/skill:name` is
-    // sent with no body, the next turn carries the skill instructions in
-    // the system prompt and a tiny note as the user message.
-    const ws = useChatStore.getState().workspacePath;
-    let trimmed = rawTrimmed;
-    const skillCmd = trimmed.match(/^\/skill:([a-z0-9][a-z0-9-]*)(?:\s+([\s\S]*))?$/);
-    if (skillCmd) {
-      const reqName = skillCmd[1];
-      const matched = useChatStore.getState().discoveredSkills.find((s) => s.name === reqName);
-      if (matched) {
-        const fits =
-          matched.mode === "both" ||
-          (useChatStore.getState().agentMode ? matched.mode === "agent" : matched.mode === "chat");
-        if (!fits) {
-          setError(
-            `Skill "${reqName}" is ${matched.mode}-mode only. ${
-              matched.mode === "agent" ? "Switch on Agent mode to use it." : "Switch off Agent mode to use it."
-            }`,
-          );
+      // While a turn is streaming, queue the new message instead of blocking.
+      // Works in every mode now (chat, agent, design) — the user can line up a
+      // follow-up or steer the in-flight turn.
+      if (isStreaming) {
+        const k = useChatStore.getState().activeId ?? NEW_CHAT_DRAFT_KEY;
+        if (rawTrimmed && activeId) {
+          enqueueMessage(activeId, rawTrimmed);
+          clearDraft(k);
+          setValue("");
+          if (textareaRef.current) textareaRef.current.style.height = "auto";
           return;
         }
-        setConversationSkills(convId!, [reqName]);
-        trimmed = (skillCmd[2] ?? "").trim();
-        if (!trimmed) trimmed = `Apply the "${reqName}" skill from now on.`;
+        return;
       }
-    }
 
-    // Prompt-template expansion (e.g. /review, /ship). Skipped when the
-    // line is a /skill: command — those are handled above.
-    if (trimmed.startsWith("/") && !trimmed.startsWith("/skill:") && ws) {
-      const tpls = await getPromptTemplates(ws);
-      if (tpls.length > 0) {
-        const expanded = expandPromptTemplate(trimmed, tpls);
-        if (expanded !== trimmed) trimmed = expanded;
+      const llmConfig = getActiveLlmConfig();
+      if (!llmConfig) {
+        setError("No model selected. Pick a model from the dropdown above.");
+        return;
       }
-    }
+      const models = getModels();
+      const selectedModel = models.find((m) => m.id === selectedModelId);
+      if (!selectedModel) {
+        setError("Selected model not found.");
+        return;
+      }
+      if (
+        !llmConfig.apiKey &&
+        selectedModel.providerId !== "ollama" &&
+        selectedModel.providerId !== "lmstudio" &&
+        selectedModel.providerId !== OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID
+      ) {
+        setError(`No API key configured for ${selectedModel.providerId}. Add one in Settings.`);
+        return;
+      }
 
-    if (!isResend && useChatStore.getState().pursueGoalMode) {
-      const goal = trimmed;
-      useChatStore.getState().setPursueGoalMode(false);
-      useChatStore.getState().setPlanMode(false);
-      trimmed =
-        `Pursue Goal:\n\n${goal}\n\n` +
-        `Work autonomously until the goal is genuinely handled. Start by making a concise plan, then inspect the project, browser, files, tools, and runtime state as needed. Execute the work, iterate on failures, verify with the strongest available checks, and end with a final result that explains what changed and what was validated.`;
-    }
+      setError(null);
+      let convId = activeId;
+      const startingDraftKey = convId ?? NEW_CHAT_DRAFT_KEY;
+      if (!convId) {
+        convId = createConversation();
+        if (pendingSkills.length > 0) {
+          setConversationSkills(convId, pendingSkills);
+          setPendingSkills([]);
+          try {
+            localStorage.removeItem("goatllm-pending-skills");
+          } catch {}
+        }
+      }
+      if (selectedModelId) {
+        useChatStore.getState().setConversationModel(convId, selectedModelId);
+      }
 
-    // Bash inline execution: !command runs and sends output to LLM,
-    // !!command runs but does NOT send output (just shows in chat).
-    // Only available in agent or design mode with a workspace.
-    const bashWorkspace = useChatStore.getState().agentMode
-      ? useChatStore.getState().workspacePath
-      : useChatStore.getState().designMode
-        ? useChatStore.getState().designWorkspacePath
-        : null;
-    if (bashWorkspace && (trimmed.startsWith("!") || trimmed.startsWith("!!"))) {
-      const sendToLlm = trimmed.startsWith("!!");
-      const cmd = sendToLlm ? trimmed.slice(2).trim() : trimmed.slice(1).trim();
-      if (cmd) {
+      // Slash command: /skill:name [optional message].
+      // Switches the conversation's active skill (persists across sends) and
+      // strips the command prefix from the message. If only `/skill:name` is
+      // sent with no body, the next turn carries the skill instructions in
+      // the system prompt and a tiny note as the user message.
+      const ws = useChatStore.getState().workspacePath;
+      let trimmed = rawTrimmed;
+      const skillCmd = trimmed.match(/^\/skill:([a-z0-9][a-z0-9-]*)(?:\s+([\s\S]*))?$/);
+      if (skillCmd) {
+        const reqName = skillCmd[1];
+        const matched = useChatStore.getState().discoveredSkills.find((s) => s.name === reqName);
+        if (matched) {
+          const fits =
+            matched.mode === "both" ||
+            (useChatStore.getState().agentMode
+              ? matched.mode === "agent"
+              : matched.mode === "chat");
+          if (!fits) {
+            setError(
+              `Skill "${reqName}" is ${matched.mode}-mode only. ${
+                matched.mode === "agent"
+                  ? "Switch on Agent mode to use it."
+                  : "Switch off Agent mode to use it."
+              }`,
+            );
+            return;
+          }
+          setConversationSkills(convId!, [reqName]);
+          trimmed = (skillCmd[2] ?? "").trim();
+          if (!trimmed) trimmed = `Apply the "${reqName}" skill from now on.`;
+        }
+      }
+
+      // Prompt-template expansion (e.g. /review, /ship). Skipped when the
+      // line is a /skill: command — those are handled above.
+      if (trimmed.startsWith("/") && !trimmed.startsWith("/skill:") && ws) {
+        const tpls = await getPromptTemplates(ws);
+        if (tpls.length > 0) {
+          const expanded = expandPromptTemplate(trimmed, tpls);
+          if (expanded !== trimmed) trimmed = expanded;
+        }
+      }
+
+      if (!isResend && useChatStore.getState().pursueGoalMode) {
+        const goal = trimmed;
+        useChatStore.getState().setPursueGoalMode(false);
+        useChatStore.getState().setPlanMode(false);
+        trimmed =
+          `Pursue Goal:\n\n${goal}\n\n` +
+          `Work autonomously until the goal is genuinely handled. Start by making a concise plan, then inspect the project, browser, files, tools, and runtime state as needed. Execute the work, iterate on failures, verify with the strongest available checks, and end with a final result that explains what changed and what was validated.`;
+      }
+
+      // Bash inline execution: !command runs and sends output to LLM,
+      // !!command runs but does NOT send output (just shows in chat).
+      // Only available in agent or design mode with a workspace.
+      const bashWorkspace = useChatStore.getState().agentMode
+        ? useChatStore.getState().workspacePath
+        : useChatStore.getState().designMode
+          ? useChatStore.getState().designWorkspacePath
+          : null;
+      if (bashWorkspace && (trimmed.startsWith("!") || trimmed.startsWith("!!"))) {
+        const sendToLlm = trimmed.startsWith("!!");
+        const cmd = sendToLlm ? trimmed.slice(2).trim() : trimmed.slice(1).trim();
+        if (cmd) {
+          try {
+            const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+            const result = await tauriInvoke<{ stdout: string; stderr: string; code: number }>(
+              "exec_command",
+              {
+                workspace: bashWorkspace,
+                command: cmd,
+              },
+            );
+            const output = [
+              result.stdout?.trim(),
+              result.stderr?.trim(),
+              result.code !== 0 ? `[exit code: ${result.code}]` : "",
+            ]
+              .filter(Boolean)
+              .join("\n");
+            if (sendToLlm) {
+              // !!command: run only, don't send to LLM — show output in chat
+              addMessage({
+                conversationId: convId,
+                role: "user",
+                content: `!${cmd}`,
+              });
+              addMessage({
+                conversationId: convId,
+                role: "assistant",
+                content: `Command output:\n\n\`\`\`\n${output || "(no output)"}\n\`\`\``,
+              });
+              clearDraft(startingDraftKey);
+              if (textareaRef.current) textareaRef.current.style.height = "auto";
+              setValue("");
+              setFiles([]);
+              return;
+            } else {
+              // !command: run and send output to LLM
+              trimmed = `${trimmed}\n\nCommand output:\n\`\`\`\n${output || "(no output)"}\n\`\`\``;
+            }
+          } catch (e) {
+            const err = e instanceof Error ? e.message : String(e);
+            trimmed = `${trimmed}\n\n[Command failed: ${err}]`;
+          }
+        }
+      }
+
+      if (!isResend) {
+        clearDraft(startingDraftKey);
+        // If a brand-new conversation was just created from the "new chat"
+        // draft, also clear the conversation-keyed slot in case anything
+        // raced into it.
+        if (startingDraftKey !== convId) clearDraft(convId!);
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+      }
+
+      let displayContent = trimmed;
+      // OCR fallback: when the active model isn't vision-capable, the AI SDK
+      // strips image parts on send (or providers reject them). Offer the user
+      // a way to read whiteboard photos / homework photos anyway by OCR-ing
+      // images server-side and inlining the text alongside the original
+      // attachment chips. Best-effort — if Tesseract isn't installed we keep
+      // the existing behavior and surface the install hint inline.
+      const activeModelObj = getModels().find((m) => m.id === selectedModelId);
+      const modelIsVision = !!activeModelObj?.vision;
+      const imageAttachments = currentFiles.filter((f) => f.mimeType.startsWith("image/"));
+      if (!modelIsVision && imageAttachments.length > 0) {
         try {
-          const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-          const result = await tauriInvoke<{ stdout: string; stderr: string; code: number }>("exec_command", {
-            workspace: bashWorkspace,
-            command: cmd,
-          });
-          const output = [
-            result.stdout?.trim(),
-            result.stderr?.trim(),
-            result.code !== 0 ? `[exit code: ${result.code}]` : "",
-          ].filter(Boolean).join("\n");
-          if (sendToLlm) {
-            // !!command: run only, don't send to LLM — show output in chat
-            addMessage({
-              conversationId: convId,
-              role: "user",
-              content: `!${cmd}`,
-            });
-            addMessage({
-              conversationId: convId,
-              role: "assistant",
-              content: `Command output:\n\n\`\`\`\n${output || "(no output)"}\n\`\`\``,
-            });
-            clearDraft(startingDraftKey);
-            if (textareaRef.current) textareaRef.current.style.height = "auto";
-            setValue("");
-            setFiles([]);
-            return;
-          } else {
-            // !command: run and send output to LLM
-            trimmed = `${trimmed}\n\nCommand output:\n\`\`\`\n${output || "(no output)"}\n\`\`\``;
-          }
-        } catch (e) {
-          const err = e instanceof Error ? e.message : String(e);
-          trimmed = `${trimmed}\n\n[Command failed: ${err}]`;
-        }
-      }
-    }
-
-    if (!isResend) {
-      clearDraft(startingDraftKey);
-      // If a brand-new conversation was just created from the "new chat"
-      // draft, also clear the conversation-keyed slot in case anything
-      // raced into it.
-      if (startingDraftKey !== convId) clearDraft(convId!);
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-    }
-
-    let displayContent = trimmed;
-    // OCR fallback: when the active model isn't vision-capable, the AI SDK
-    // strips image parts on send (or providers reject them). Offer the user
-    // a way to read whiteboard photos / homework photos anyway by OCR-ing
-    // images server-side and inlining the text alongside the original
-    // attachment chips. Best-effort — if Tesseract isn't installed we keep
-    // the existing behavior and surface the install hint inline.
-    const activeModelObj = getModels().find((m) => m.id === selectedModelId);
-    const modelIsVision = !!activeModelObj?.vision;
-    const imageAttachments = currentFiles.filter((f) => f.mimeType.startsWith("image/"));
-    if (!modelIsVision && imageAttachments.length > 0) {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const tesseractAvailable = await invoke<boolean>("ocr_available").catch(() => false);
-        if (tesseractAvailable) {
-          const { putAttachmentText } = await import("../lib/attachment-cache");
-          for (const img of imageAttachments) {
-            try {
-              const ocrText = await invoke<string>("ocr_image", { dataUrl: img.dataUrl });
-              if (ocrText.trim()) {
-                displayContent += (displayContent ? "\n\n" : "") +
-                  `[Image OCR: ${img.filename}]\n${ocrText.trim()}`;
-                if (convId) {
-                  putAttachmentText(convId, img.filename, "Image OCR", ocrText.trim());
+          const { invoke } = await import("@tauri-apps/api/core");
+          const tesseractAvailable = await invoke<boolean>("ocr_available").catch(() => false);
+          if (tesseractAvailable) {
+            const { putAttachmentText } = await import("../lib/attachment-cache");
+            for (const img of imageAttachments) {
+              try {
+                const ocrText = await invoke<string>("ocr_image", { dataUrl: img.dataUrl });
+                if (ocrText.trim()) {
+                  displayContent +=
+                    (displayContent ? "\n\n" : "") +
+                    `[Image OCR: ${img.filename}]\n${ocrText.trim()}`;
+                  if (convId) {
+                    putAttachmentText(convId, img.filename, "Image OCR", ocrText.trim());
+                  }
                 }
+              } catch (e) {
+                const reason = e instanceof Error ? e.message : String(e);
+                displayContent +=
+                  (displayContent ? "\n\n" : "") +
+                  `[Image: ${img.filename}] (OCR failed: ${reason}; switch to a vision model to read this image directly.)`;
               }
-            } catch (e) {
-              const reason = e instanceof Error ? e.message : String(e);
-              displayContent += (displayContent ? "\n\n" : "") +
-                `[Image: ${img.filename}] (OCR failed: ${reason}; switch to a vision model to read this image directly.)`;
+            }
+          } else {
+            // No tesseract; surface a single hint rather than a per-image one
+            // so the chat doesn't spam the user.
+            displayContent +=
+              (displayContent ? "\n\n" : "") +
+              `[Heads up] You attached ${imageAttachments.length} image${imageAttachments.length === 1 ? "" : "s"} but "${activeModelObj?.name ?? selectedModelId}" is text-only. Switch to a vision model (e.g. Claude, GPT-4o, Gemini) to read images directly, or install Tesseract (\`brew install tesseract\`) to enable OCR.`;
+          }
+        } catch {
+          // Tauri bridge unavailable (browser-mode dev?) — ignore silently;
+          // the AI SDK will drop the image and the model will respond as best
+          // it can.
+        }
+      }
+      displayContent = await extractAndAppend(displayContent, currentFiles, convId);
+
+      // Auto-fetch URLs and YouTube links the user typed in their message.
+      // Each unique URL gets its readable text inlined as `[Web: ...]` or
+      // `[YouTube: ...]` and cached so subsequent turns can navigate it via
+      // read_attachment. Fetched once per conversation per URL.
+      if (convId) {
+        try {
+          const fetched = await fetchNewUrlsFromProse(trimmed, convId);
+          if (fetched.length > 0) {
+            const { putAttachmentText } = await import("../lib/attachment-cache");
+            for (const f of fetched) {
+              const cacheKey = f.label === "YouTube" ? `${f.title} (${f.url})` : f.url;
+              putAttachmentText(convId, cacheKey, f.label, f.body);
+              displayContent +=
+                (displayContent ? "\n\n" : "") + `[${f.label}: ${f.title}]\n${f.url}\n\n${f.body}`;
             }
           }
-        } else {
-          // No tesseract; surface a single hint rather than a per-image one
-          // so the chat doesn't spam the user.
-          displayContent += (displayContent ? "\n\n" : "") +
-            `[Heads up] You attached ${imageAttachments.length} image${imageAttachments.length === 1 ? "" : "s"} but "${activeModelObj?.name ?? selectedModelId}" is text-only. Switch to a vision model (e.g. Claude, GPT-4o, Gemini) to read images directly, or install Tesseract (\`brew install tesseract\`) to enable OCR.`;
+        } catch {
+          // URL auto-fetch is a nice-to-have; never block sending if it fails.
         }
-      } catch {
-        // Tauri bridge unavailable (browser-mode dev?) — ignore silently;
-        // the AI SDK will drop the image and the model will respond as best
-        // it can.
       }
-    }
-    displayContent = await extractAndAppend(displayContent, currentFiles, convId);
 
-    // Auto-fetch URLs and YouTube links the user typed in their message.
-    // Each unique URL gets its readable text inlined as `[Web: ...]` or
-    // `[YouTube: ...]` and cached so subsequent turns can navigate it via
-    // read_attachment. Fetched once per conversation per URL.
-    if (convId) {
-      try {
-        const fetched = await fetchNewUrlsFromProse(trimmed, convId);
-        if (fetched.length > 0) {
-          const { putAttachmentText } = await import("../lib/attachment-cache");
-          for (const f of fetched) {
-            const cacheKey = f.label === "YouTube" ? `${f.title} (${f.url})` : f.url;
-            putAttachmentText(convId, cacheKey, f.label, f.body);
-            displayContent += (displayContent ? "\n\n" : "") +
-              `[${f.label}: ${f.title}]\n${f.url}\n\n${f.body}`;
+      const sourceUserContent = displayContent;
+      let sourceUserMessageId: string | undefined;
+      if (!isResend) {
+        // Auto-pin messages that carry non-trivial attachments. Without this,
+        // a 30KB PDF extraction can fall out of the recency budget on the next
+        // turn and the model loses the body — the summary only keeps the first
+        // 200 chars of the user prose. Pinning survives compaction.
+        const hasHeavyAttachment =
+          currentFiles.length > 0 &&
+          currentFiles.some(
+            (f) => f.sizeBytes > 4 * 1024 || /\.(pdf|docx|pptx|xlsx|ipynb|rtf)$/i.test(f.filename),
+          );
+        const userMessage = addMessage({
+          conversationId: convId,
+          role: "user",
+          content: displayContent,
+          attachments: currentFiles.length > 0 ? currentFiles : undefined,
+          pinned: hasHeavyAttachment || undefined,
+          steered: overrides?.steered || undefined,
+        });
+        sourceUserMessageId = userMessage.id;
+        logMessage(convId!, "user", displayContent, "");
+        // Mark the conversation as "title pending" the moment the user sends so
+        // the sidebar can show a shimmer instead of the placeholder "New chat".
+        const convForTitle = useChatStore.getState().conversations.find((c) => c.id === convId);
+        if (convForTitle && convForTitle.title === "New Conversation") {
+          setTitleGenerating(convId!, true);
+          // Kick off title generation in parallel with the LLM stream so the
+          // sidebar shows a real title within a second or two instead of waiting
+          // for the full assistant reply to finish.
+          const titleConfig = getActiveLlmConfig();
+          const userExcerpt = displayContent.slice(0, 600);
+          const applyEarlyTitle = (title: string) => {
+            // The user (or a later auto-title pass) may have already renamed
+            // this conversation while we were waiting on the title model — only
+            // overwrite if it's still the placeholder.
+            const latest = useChatStore.getState().conversations.find((c) => c.id === convId);
+            if (!latest || latest.title !== "New Conversation") {
+              setTitleGenerating(convId!, false);
+              return;
+            }
+            const safe = title.trim();
+            if (safe) renameConversation(convId!, safe);
+            else setTitleGenerating(convId!, false);
+          };
+          if (titleConfig) {
+            generateTitle(userExcerpt, titleConfig)
+              .then((title) => applyEarlyTitle(title || heuristicTitle(displayContent)))
+              .catch(() => applyEarlyTitle(heuristicTitle(displayContent)));
+          } else {
+            applyEarlyTitle(heuristicTitle(displayContent));
           }
         }
-      } catch {
-        // URL auto-fetch is a nice-to-have; never block sending if it fails.
       }
-    }
 
-    const sourceUserContent = displayContent;
-    let sourceUserMessageId: string | undefined;
-    if (!isResend) {
-      // Auto-pin messages that carry non-trivial attachments. Without this,
-      // a 30KB PDF extraction can fall out of the recency budget on the next
-      // turn and the model loses the body — the summary only keeps the first
-      // 200 chars of the user prose. Pinning survives compaction.
-      const hasHeavyAttachment =
-        currentFiles.length > 0 &&
-        currentFiles.some((f) => f.sizeBytes > 4 * 1024 || /\.(pdf|docx|pptx|xlsx|ipynb|rtf)$/i.test(f.filename));
-      const userMessage = addMessage({
-        conversationId: convId,
-        role: "user",
-        content: displayContent,
-        attachments: currentFiles.length > 0 ? currentFiles : undefined,
-        pinned: hasHeavyAttachment || undefined,
-        steered: overrides?.steered || undefined,
+      const history = getActiveMessages();
+      const currentWorkspace = useChatStore.getState().workspacePath;
+      let designWorkspace = useChatStore.getState().designWorkspacePath;
+      const isAgentMode = useChatStore.getState().agentMode;
+      const isDesignMode = useChatStore.getState().designMode;
+
+      // Design mode with no project folder yet → auto-provision one under
+      // ~/.goat/designs/<slug> so the design agent actually writes files to disk
+      // (the artifact is the live preview; the files are the deliverable). Without
+      // a workspace the model can only emit in-memory artifacts and never touches
+      // the filesystem — which is the "it doesn't create files" gap.
+      if (isDesignMode && !designWorkspace && convId) {
+        try {
+          const home = await invoke<string>("home_dir");
+          const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
+          const slug =
+            (conv?.title || "")
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/^-+|-+$/g, "")
+              .slice(0, 40) || `design-${convId.slice(0, 8)}`;
+          const folder = `${home}/.goat/designs/${slug}`;
+          try {
+            await invoke("create_dir_abs", { path: folder });
+          } catch {
+            /* lazy-create on first write */
+          }
+          useChatStore.getState().addDesignWorkspace(folder);
+          useChatStore.getState().setDesignWorkspace(folder);
+          useChatStore.getState().moveConversationToWorkspace?.(convId, folder);
+          designWorkspace = folder;
+        } catch {
+          /* home dir unavailable — fall back to artifact-only mode */
+        }
+      }
+      const isPlanMode = isAgentMode && useChatStore.getState().planMode;
+      // Deep Research mode is one-shot: we snapshot the toggle at send time and
+      // immediately flip it off so the indicator resets in the UI. Anything
+      // downstream in this turn (tool selection, system prompt, max rounds)
+      // uses the captured value so the request the user just sent still
+      // gets the research treatment.
+      const isResearchMode = useChatStore.getState().researchMode;
+      if (isResearchMode) {
+        useChatStore.getState().setResearchMode(false);
+      }
+      const currentBackend = useChatStore.getState().searchBackend;
+      const hasWebSearch =
+        currentBackend === "tavily" ? !!useChatStore.getState().tavilyApiKey : true;
+      // Cached attachments unlock the read_attachment / search_attachment tools
+      // even in plain chat with no web backend, so the model can navigate a
+      // 600-page book the user uploaded.
+      const { hasAttachments } = await import("../lib/attachment-cache");
+      const hasAttachmentCache = !!convId && hasAttachments(convId);
+      const { ATTACHMENT_TOOLS, CODE_EXEC_TOOLS } = await import("../lib/tools");
+      const chatCodeExec = useChatStore.getState().chatCodeExec;
+      // Agent mode → full workspace tool set, OR read-only plan subset when
+      // plan mode is on. Design mode with a workspace → full tools so the
+      // design agent can read/write/edit files and run commands.
+      // Chat + research → web tools (+ attachment tools).
+      // Plain chat with web backend → web_search + attachment tools.
+      // Plain chat without web → attachment tools only when there's something
+      // cached to navigate. Code-exec tools are mixed in for chat mode when the
+      // user has opted in via Settings (off by default).
+      let activeTools: ToolSet | undefined =
+        isAgentMode && currentWorkspace
+          ? isPlanMode
+            ? PLAN_TOOLS
+            : ALL_TOOLS
+          : isDesignMode && designWorkspace
+            ? ALL_TOOLS
+            : isResearchMode
+              ? RESEARCH_TOOLS
+              : hasWebSearch
+                ? CHAT_TOOLS
+                : hasAttachmentCache
+                  ? ATTACHMENT_TOOLS
+                  : undefined;
+      if (activeTools) {
+        activeTools = filterToolsForConfiguredServices(
+          activeTools,
+          useChatStore.getState().firecrawlApiKey,
+        );
+      }
+      if (!isAgentMode && !isDesignMode && chatCodeExec) {
+        activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
+      }
+      // Expose load_skill in chat/research mode whenever the model has skills it
+      // can pull on demand (pi-style progressive disclosure). Agent/design mode
+      // already get it via ALL_TOOLS. We only attach it if at least one enabled,
+      // model-invocable skill applies to the current mode — otherwise there's
+      // nothing to load and the tool would just be noise.
+      if (!isAgentMode && !isDesignMode) {
+        const s = useChatStore.getState();
+        const hasModelSkills = s.discoveredSkills.some(
+          (sk) =>
+            !sk.disableModelInvocation &&
+            !s.disabledSkills.has(sk.name) &&
+            (sk.mode === "chat" || sk.mode === "both"),
+        );
+        if (hasModelSkills) {
+          const { SKILL_TOOLS } = await import("../lib/tools");
+          activeTools = { ...(activeTools ?? {}), ...SKILL_TOOLS } as ToolSet;
+        }
+      }
+
+      const latestCompactionEntry = useChatStore.getState().compactionEntries[convId!]?.[0] ?? null;
+      const replayed = applyCompactionReplay(history, latestCompactionEntry);
+      let compactedMessages: LlmMessage[] = buildCompactedLlmMessages(replayed.llmMessages, {
+        stripTools: !activeTools,
       });
-      sourceUserMessageId = userMessage.id;
-      logMessage(convId!, "user", displayContent, "");
-      // Mark the conversation as "title pending" the moment the user sends so
-      // the sidebar can show a shimmer instead of the placeholder "New chat".
-      const convForTitle = useChatStore.getState().conversations.find((c) => c.id === convId);
-      if (convForTitle && convForTitle.title === "New Conversation") {
-        setTitleGenerating(convId!, true);
-        // Kick off title generation in parallel with the LLM stream so the
-        // sidebar shows a real title within a second or two instead of waiting
-        // for the full assistant reply to finish.
-        const titleConfig = getActiveLlmConfig();
-        const userExcerpt = displayContent.slice(0, 600);
-        const applyEarlyTitle = (title: string) => {
-          // The user (or a later auto-title pass) may have already renamed
-          // this conversation while we were waiting on the title model — only
-          // overwrite if it's still the placeholder.
-          const latest = useChatStore.getState().conversations.find((c) => c.id === convId);
-          if (!latest || latest.title !== "New Conversation") {
-            setTitleGenerating(convId!, false);
-            return;
-          }
-          const safe = title.trim();
-          if (safe) renameConversation(convId!, safe);
-          else setTitleGenerating(convId!, false);
-        };
-        if (titleConfig) {
-          generateTitle(userExcerpt, titleConfig)
-            .then((title) => applyEarlyTitle(title || heuristicTitle(displayContent)))
-            .catch(() => applyEarlyTitle(heuristicTitle(displayContent)));
-        } else {
-          applyEarlyTitle(heuristicTitle(displayContent));
-        }
-      }
-    }
 
-    const history = getActiveMessages();
-    const currentWorkspace = useChatStore.getState().workspacePath;
-    let designWorkspace = useChatStore.getState().designWorkspacePath;
-    const isAgentMode = useChatStore.getState().agentMode;
-    const isDesignMode = useChatStore.getState().designMode;
-
-    // Design mode with no project folder yet → auto-provision one under
-    // ~/.goat/designs/<slug> so the design agent actually writes files to disk
-    // (the artifact is the live preview; the files are the deliverable). Without
-    // a workspace the model can only emit in-memory artifacts and never touches
-    // the filesystem — which is the "it doesn't create files" gap.
-    if (isDesignMode && !designWorkspace && convId) {
-      try {
-        const home = await invoke<string>("home_dir");
-        const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
-        const slug =
-          (conv?.title || "")
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "")
-            .slice(0, 40) || `design-${convId.slice(0, 8)}`;
-        const folder = `${home}/.goat/designs/${slug}`;
-        try { await invoke("create_dir_abs", { path: folder }); } catch { /* lazy-create on first write */ }
-        useChatStore.getState().addDesignWorkspace(folder);
-        useChatStore.getState().setDesignWorkspace(folder);
-        useChatStore.getState().moveConversationToWorkspace?.(convId, folder);
-        designWorkspace = folder;
-      } catch { /* home dir unavailable — fall back to artifact-only mode */ }
-    }
-    const isPlanMode = isAgentMode && useChatStore.getState().planMode;
-    // Deep Research mode is one-shot: we snapshot the toggle at send time and
-    // immediately flip it off so the indicator resets in the UI. Anything
-    // downstream in this turn (tool selection, system prompt, max rounds)
-    // uses the captured value so the request the user just sent still
-    // gets the research treatment.
-    const isResearchMode = useChatStore.getState().researchMode;
-    if (isResearchMode) {
-      useChatStore.getState().setResearchMode(false);
-    }
-    const currentBackend = useChatStore.getState().searchBackend;
-    const hasWebSearch = currentBackend === "tavily" ? !!useChatStore.getState().tavilyApiKey : true;
-    // Cached attachments unlock the read_attachment / search_attachment tools
-    // even in plain chat with no web backend, so the model can navigate a
-    // 600-page book the user uploaded.
-    const { hasAttachments } = await import("../lib/attachment-cache");
-    const hasAttachmentCache = !!convId && hasAttachments(convId);
-    const { ATTACHMENT_TOOLS, CODE_EXEC_TOOLS } = await import("../lib/tools");
-    const chatCodeExec = useChatStore.getState().chatCodeExec;
-    // Agent mode → full workspace tool set, OR read-only plan subset when
-    // plan mode is on. Design mode with a workspace → full tools so the
-    // design agent can read/write/edit files and run commands.
-    // Chat + research → web tools (+ attachment tools).
-    // Plain chat with web backend → web_search + attachment tools.
-    // Plain chat without web → attachment tools only when there's something
-    // cached to navigate. Code-exec tools are mixed in for chat mode when the
-    // user has opted in via Settings (off by default).
-    let activeTools: ToolSet | undefined =
-      isAgentMode && currentWorkspace
-        ? (isPlanMode ? PLAN_TOOLS : ALL_TOOLS)
-        : isDesignMode && designWorkspace
-          ? ALL_TOOLS
-          : isResearchMode
-            ? RESEARCH_TOOLS
-            : hasWebSearch
-              ? CHAT_TOOLS
-              : hasAttachmentCache
-                ? ATTACHMENT_TOOLS
-                : undefined;
-    if (activeTools) {
-      activeTools = filterToolsForConfiguredServices(activeTools, useChatStore.getState().firecrawlApiKey);
-    }
-    if (!isAgentMode && !isDesignMode && chatCodeExec) {
-      activeTools = { ...(activeTools ?? {}), ...CODE_EXEC_TOOLS } as ToolSet;
-    }
-    // Expose load_skill in chat/research mode whenever the model has skills it
-    // can pull on demand (pi-style progressive disclosure). Agent/design mode
-    // already get it via ALL_TOOLS. We only attach it if at least one enabled,
-    // model-invocable skill applies to the current mode — otherwise there's
-    // nothing to load and the tool would just be noise.
-    if (!isAgentMode && !isDesignMode) {
-      const s = useChatStore.getState();
-      const hasModelSkills = s.discoveredSkills.some(
-        (sk) =>
-          !sk.disableModelInvocation &&
-          !s.disabledSkills.has(sk.name) &&
-          (sk.mode === "chat" || sk.mode === "both"),
+      const compactionSettings = useChatStore.getState().usageSettings.compactionSettings;
+      const contextEstimate = estimateContextTokens(history);
+      const contextWindow = selectedModel.contextWindow;
+      const shouldRunCompaction = shouldCompact(
+        contextEstimate.tokens,
+        contextWindow,
+        compactionSettings,
       );
-      if (hasModelSkills) {
-        const { SKILL_TOOLS } = await import("../lib/tools");
-        activeTools = { ...(activeTools ?? {}), ...SKILL_TOOLS } as ToolSet;
-      }
-    }
-
-    const latestCompactionEntry = useChatStore.getState().compactionEntries[convId!]?.[0] ?? null;
-    const replayed = applyCompactionReplay(history, latestCompactionEntry);
-    let compactedMessages: LlmMessage[] = replayed.llmMessages
-      .filter((message) => message.role === "user" || message.role === "assistant" || message.role === "system")
-      .map((message) => ({
-        role: message.role as "user" | "assistant" | "system",
-        content: message.content,
-      }));
-
-    const compactionSettings = useChatStore.getState().usageSettings.compactionSettings;
-    const contextEstimate = estimateContextTokens(history);
-    const contextWindow = selectedModel.contextWindow;
-    const shouldRunCompaction = shouldCompact(
-      contextEstimate.tokens,
-      contextWindow,
-      compactionSettings,
-    );
-    const maxTokensAfterReserve = Math.max(1, contextWindow - compactionSettings.reserveTokens);
-    const compaction = shouldRunCompaction
-      ? compactMessages(history, maxTokensAfterReserve, {
-          stripTools: !activeTools,
-          previousEntry: latestCompactionEntry,
-          previousSummary: latestCompactionEntry?.summary,
-          conversationId: convId!,
-          source: "auto",
-          mode: isDesignMode ? "design" : isAgentMode ? "agent" : "chat",
-          modelId: selectedModelId ?? undefined,
-          tokensBefore: contextEstimate.tokens,
-          keepRecentTokens: compactionSettings.keepRecentTokens,
-        })
-      : null;
-    const compacted = compaction?.compacted ?? replayed.hiddenCount > 0;
-    const summarizedCount = compaction?.summarizedCount ?? 0;
-    const truncatedCount = compaction?.truncatedCount ?? 0;
-    const toolsInlinedCount = compaction?.toolsInlinedCount ?? 0;
-
-    if (compaction?.compactionEntry) {
-      const entry = compaction.compactionEntry;
-      addCompactionEntry(entry);
-      compactedMessages = compaction.messages;
-
-      const firstKeptIndex = history.findIndex((message) => message.id === entry.firstKeptId);
-      const sourceMessages = firstKeptIndex > 0
-        ? history.slice(0, firstKeptIndex).filter((message) => message.role !== "system")
-        : [];
-      if (sourceMessages.length >= 4 && llmConfig && entry.source !== "mid-loop") {
-        void summarizeWithLlm(
-          sourceMessages,
-          llmConfig,
-          undefined,
-          undefined,
-          latestCompactionEntry?.summary,
-          { readFiles: entry.readFiles, modifiedFiles: entry.modifiedFiles },
-        )
-          .then((summary) => {
-            if (!summary || summary.length <= 40) return;
-            addCompactionEntry({
-              ...entry,
-              summary,
-              promptVersion: latestCompactionEntry ? "update" : "initial",
-            });
+      const maxTokensAfterReserve = Math.max(1, contextWindow - compactionSettings.reserveTokens);
+      const compaction = shouldRunCompaction
+        ? compactMessages(history, maxTokensAfterReserve, {
+            stripTools: !activeTools,
+            previousEntry: latestCompactionEntry,
+            previousSummary: latestCompactionEntry?.summary,
+            conversationId: convId!,
+            source: "auto",
+            mode: isDesignMode ? "design" : isAgentMode ? "agent" : "chat",
+            modelId: selectedModelId ?? undefined,
+            tokensBefore: contextEstimate.tokens,
+            keepRecentTokens: compactionSettings.keepRecentTokens,
           })
-          .catch(() => { /* graceful fallback already applied inside summarizeWithLlm */ });
-      }
-    }
+        : null;
+      const compacted = compaction?.compacted ?? replayed.hiddenCount > 0;
+      const summarizedCount = compaction?.summarizedCount ?? 0;
+      const truncatedCount = compaction?.truncatedCount ?? 0;
+      const toolsInlinedCount = compaction?.toolsInlinedCount ?? 0;
 
-    if (compacted && (summarizedCount > 0 || truncatedCount > 0)) {
-      if (summarizedCount > 0) {
-        console.log(`[context] Summarized ${summarizedCount} earlier messages.`);
-      }
-      if (truncatedCount > 0) {
-        console.log(`[context] Truncated ${truncatedCount} oversized tool outputs.`);
-      }
-      if (toolsInlinedCount > 0) {
-        console.log(`[context] Inlined tool results from ${toolsInlinedCount} messages for non-tool model.`);
-      }
-    }
+      if (compaction?.compactionEntry) {
+        const entry = compaction.compactionEntry;
+        addCompactionEntry(entry);
+        compactedMessages = compaction.messages;
 
-    const llmMessages = compactedMessages.map((m) => {
-      if (m.role === "user" && typeof m.content === "string") {
-        // Re-attach native binary parts from the original message if present.
-        // - Images go through every vision-capable provider.
-        // - Scanned/empty-text PDFs go as native file parts to Anthropic
-        //   (server-side OCR + layout); on other providers they fall back
-        //   to the inlined `(no extractable text)` note plus a hint.
-        const origMsg = history.find((h) => h.role === "user" && h.content === m.content);
-        const imgs = origMsg?.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
-        const nativePdf =
-          modelIsVision && providerSupportsNativePdf(llmConfig.provider);
-        const scannedPdfs = nativePdf
-          ? (origMsg?.attachments?.filter((a) =>
-              (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
-              isLikelyScannedPdf(convId!, a.filename),
-            ) ?? [])
-          : [];
-        if (imgs.length > 0 || scannedPdfs.length > 0) {
-          const parts: LlmContentPart[] = [];
-          for (const img of imgs) parts.push({ type: "image", image: img.dataUrl, mimeType: img.mimeType });
-          for (const pdf of scannedPdfs) parts.push({ type: "file", data: pdf.dataUrl, mimeType: "application/pdf" });
-          if (m.content.trim()) parts.unshift({ type: "text", text: m.content as string });
-          return { role: "user" as const, content: parts };
+        const firstKeptIndex = history.findIndex((message) => message.id === entry.firstKeptId);
+        const sourceMessages =
+          firstKeptIndex > 0
+            ? history.slice(0, firstKeptIndex).filter((message) => message.role !== "system")
+            : [];
+        if (sourceMessages.length >= 4 && llmConfig && entry.source !== "mid-loop") {
+          void summarizeWithLlm(
+            sourceMessages,
+            llmConfig,
+            undefined,
+            undefined,
+            latestCompactionEntry?.summary,
+            { readFiles: entry.readFiles, modifiedFiles: entry.modifiedFiles },
+          )
+            .then((summary) => {
+              if (!summary || summary.length <= 40) return;
+              addCompactionEntry({
+                ...entry,
+                summary,
+                promptVersion: latestCompactionEntry ? "update" : "initial",
+              });
+            })
+            .catch(() => {
+              /* graceful fallback already applied inside summarizeWithLlm */
+            });
         }
       }
-      return { role: m.role as "user" | "assistant" | "system", content: m.content };
-    });
 
-    const ac = new AbortController();
-    useChatStore.getState().resetWebSearchCount();
-    // Reset the per-turn citation registry and seed it with the documents the
-    // user attached this turn (chat mode only). Web results append later as the
-    // search tool runs. Each source gets a stable [n] the model cites inline;
-    // onDone keeps only the numbers that actually appear in the reply.
-    useChatStore.getState().resetCitationSources();
-    if (!isAgentMode && !isDesignMode && currentFiles.length > 0) {
-      useChatStore.getState().addCitationSources(
-        currentFiles.map((f) => ({ type: "document" as const, title: f.filename })),
-      );
-    }
-    startStreaming(convId!, ac);
+      if (compacted && (summarizedCount > 0 || truncatedCount > 0)) {
+        if (summarizedCount > 0) {
+          console.log(`[context] Summarized ${summarizedCount} earlier messages.`);
+        }
+        if (truncatedCount > 0) {
+          console.log(`[context] Truncated ${truncatedCount} oversized tool outputs.`);
+        }
+        if (toolsInlinedCount > 0) {
+          console.log(
+            `[context] Inlined tool results from ${toolsInlinedCount} messages for non-tool model.`,
+          );
+        }
+      }
 
-    const assistantMsg = addMessage({ conversationId: convId, role: "assistant", content: "", isStreaming: true });
-    logMessage(convId!, "assistant", "", assistantMsg.id);
-    const streamStartTime = performance.now();
-
-    if (isResearchMode) {
-      try {
-        const { runDeepResearch, planResolvers } = await import("../lib/deep-research");
-        let eventCounter = 0;
-        const events: DeepResearchEvent[] = [];
-        const startedAt = Date.now();
-        const phaseMessage = (progress: ResearchProgress) => {
-          if (progress.message) return progress.message;
-          if (progress.phase === "planning") return "Planning strategy";
-          if (progress.phase === "searching") {
-            return progress.query_preview
-              ? `Searching for "${progress.query_preview}"`
-              : `Searching web${progress.round ? `, round ${progress.round}` : ""}`;
+      const llmMessages = compactedMessages.map((m) => {
+        if (m.role === "user" && typeof m.content === "string") {
+          // Re-attach native binary parts from the original message if present.
+          // - Images go through every vision-capable provider.
+          // - Scanned/empty-text PDFs go as native file parts to Anthropic
+          //   (server-side OCR + layout); on other providers they fall back
+          //   to the inlined `(no extractable text)` note plus a hint.
+          const origMsg = history.find((h) => h.role === "user" && h.content === m.content);
+          const imgs = origMsg?.attachments?.filter((a) => a.mimeType.startsWith("image/")) ?? [];
+          const nativePdf = modelIsVision && providerSupportsNativePdf(llmConfig.provider);
+          const scannedPdfs = nativePdf
+            ? (origMsg?.attachments?.filter(
+                (a) =>
+                  (a.mimeType === "application/pdf" || /\.pdf$/i.test(a.filename)) &&
+                  isLikelyScannedPdf(convId!, a.filename),
+              ) ?? [])
+            : [];
+          if (imgs.length > 0 || scannedPdfs.length > 0) {
+            const parts: LlmContentPart[] = [];
+            for (const img of imgs)
+              parts.push({ type: "image", image: img.dataUrl, mimeType: img.mimeType });
+            for (const pdf of scannedPdfs)
+              parts.push({ type: "file", data: pdf.dataUrl, mimeType: "application/pdf" });
+            if (m.content.trim()) parts.unshift({ type: "text", text: m.content as string });
+            return { role: "user" as const, content: parts };
           }
-          if (progress.phase === "reading") {
-            if (progress.current_source?.title || progress.title) {
-              return `Reading ${progress.current_source?.title || progress.title}`;
+        }
+        return { role: m.role as "user" | "assistant" | "system", content: m.content };
+      });
+
+      const ac = new AbortController();
+      useChatStore.getState().resetWebSearchCount();
+      // Reset the per-turn citation registry and seed it with the documents the
+      // user attached this turn (chat mode only). Web results append later as the
+      // search tool runs. Each source gets a stable [n] the model cites inline;
+      // onDone keeps only the numbers that actually appear in the reply.
+      useChatStore.getState().resetCitationSources();
+      if (!isAgentMode && !isDesignMode && currentFiles.length > 0) {
+        useChatStore
+          .getState()
+          .addCitationSources(
+            currentFiles.map((f) => ({ type: "document" as const, title: f.filename })),
+          );
+      }
+      startStreaming(convId!, ac);
+
+      const assistantMsg = addMessage({
+        conversationId: convId,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      });
+      logMessage(convId!, "assistant", "", assistantMsg.id);
+      const streamStartTime = performance.now();
+
+      if (isResearchMode) {
+        try {
+          const { runDeepResearch, planResolvers } = await import("../lib/deep-research");
+          let eventCounter = 0;
+          const events: DeepResearchEvent[] = [];
+          const startedAt = Date.now();
+          const phaseMessage = (progress: ResearchProgress) => {
+            if (progress.message) return progress.message;
+            if (progress.phase === "planning") return "Planning strategy";
+            if (progress.phase === "searching") {
+              return progress.query_preview
+                ? `Searching for "${progress.query_preview}"`
+                : `Searching web${progress.round ? `, round ${progress.round}` : ""}`;
             }
-            if (progress.new_sources) return `Extracted findings from ${progress.new_sources} sources`;
-            return "Reading sources";
-          }
-          if (progress.phase === "analyzing") return "Analyzing findings";
-          if (progress.phase === "writing") return "Writing report";
-          if (progress.phase === "done") return "Deep Research complete";
-          if (progress.phase === "error") return "Deep Research stopped";
-          return "Deep Research update";
-        };
-        const updateLog = (progress: ResearchProgress) => {
-          const message = phaseMessage(progress);
-          if (events.length === 0 || events[events.length - 1].message !== message) {
-            events.push({
-              id: `${assistantMsg.id}-research-${eventCounter++}`,
-              phase: progress.phase,
-              message,
-              at: Date.now(),
-            });
-          }
+            if (progress.phase === "reading") {
+              if (progress.current_source?.title || progress.title) {
+                return `Reading ${progress.current_source?.title || progress.title}`;
+              }
+              if (progress.new_sources)
+                return `Extracted findings from ${progress.new_sources} sources`;
+              return "Reading sources";
+            }
+            if (progress.phase === "analyzing") return "Analyzing findings";
+            if (progress.phase === "writing") return "Writing report";
+            if (progress.phase === "done") return "Deep Research complete";
+            if (progress.phase === "error") return "Deep Research stopped";
+            return "Deep Research update";
+          };
+          const updateLog = (progress: ResearchProgress) => {
+            const message = phaseMessage(progress);
+            if (events.length === 0 || events[events.length - 1].message !== message) {
+              events.push({
+                id: `${assistantMsg.id}-research-${eventCounter++}`,
+                phase: progress.phase,
+                message,
+                at: Date.now(),
+              });
+            }
 
-          const deepResearch: DeepResearchState = {
-            query: trimmed,
-            phase: progress.phase,
-            startedAt,
-            round: progress.round,
-            queries: progress.queries,
-            sourceCount: progress.total_sources,
-            findingCount: progress.total_findings,
-            sources: progress.sources,
-            findings: progress.findings,
-            currentSource: progress.current_source ?? (progress.url ? { url: progress.url, title: progress.title } : undefined),
-            events: events.slice(-8),
-            error: progress.phase === "error" ? progress.message : undefined,
+            const deepResearch: DeepResearchState = {
+              query: trimmed,
+              phase: progress.phase,
+              startedAt,
+              round: progress.round,
+              queries: progress.queries,
+              sourceCount: progress.total_sources,
+              findingCount: progress.total_findings,
+              sources: progress.sources,
+              findings: progress.findings,
+              currentSource:
+                progress.current_source ??
+                (progress.url ? { url: progress.url, title: progress.title } : undefined),
+              events: events.slice(-8),
+              error: progress.phase === "error" ? progress.message : undefined,
+            };
+
+            const updates: Partial<Message> = { deepResearch };
+            if (progress.phase !== "done" && progress.phase !== "error") {
+              updates.content = "";
+            }
+            updateMessage(convId!, assistantMsg.id, updates);
           };
 
-          const updates: Partial<Message> = { deepResearch };
-          if (progress.phase !== "done" && progress.phase !== "error") {
-            updates.content = "";
-          }
-          updateMessage(convId!, assistantMsg.id, updates);
-        };
-
-        const finalReport = await runDeepResearch(
-          trimmed,
-          llmConfig,
-          updateLog,
-          ac.signal,
-          deepResearchMaxRounds,
-          undefined,
-          {
-            maxUrlsPerRound: deepResearchMaxSearches,
-            onPlanReady: ({ title, steps }) => {
-              return new Promise<string[]>((resolve) => {
-                planResolvers.set(assistantMsg.id, resolve);
-                updateMessage(convId!, assistantMsg.id, {
-                  deepResearch: {
-                    query: trimmed,
-                    phase: "planning",
-                    startedAt,
-                    events: events.slice(-8),
-                    planTitle: title,
-                    planSteps: steps,
-                    planApproved: false,
-                  }
+          const finalReport = await runDeepResearch(
+            trimmed,
+            llmConfig,
+            updateLog,
+            ac.signal,
+            deepResearchMaxRounds,
+            undefined,
+            {
+              maxUrlsPerRound: deepResearchMaxSearches,
+              onPlanReady: ({ title, steps }) => {
+                return new Promise<string[]>((resolve) => {
+                  planResolvers.set(assistantMsg.id, resolve);
+                  updateMessage(convId!, assistantMsg.id, {
+                    deepResearch: {
+                      query: trimmed,
+                      phase: "planning",
+                      startedAt,
+                      events: events.slice(-8),
+                      planTitle: title,
+                      planSteps: steps,
+                      planApproved: false,
+                    },
+                  });
                 });
-              });
+              },
+              getLatestPlan: () => {
+                const latestMsg = useChatStore
+                  .getState()
+                  .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+                return {
+                  title: latestMsg?.deepResearch?.planTitle || trimmed,
+                  steps: latestMsg?.deepResearch?.planSteps || [],
+                };
+              },
             },
-            getLatestPlan: () => {
-              const latestMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-              return {
-                title: latestMsg?.deepResearch?.planTitle || trimmed,
-                steps: latestMsg?.deepResearch?.planSteps || [],
-              };
-            }
-          }
-        );
+          );
 
-        const wordCount = finalReport.split(/\s+/).length;
-        updateMessage(convId!, assistantMsg.id, {
-          content: finalReport,
-          isStreaming: false,
-          streamingDurationMs: performance.now() - streamStartTime,
-          turnDurationMs: performance.now() - streamStartTime,
-          modelId: selectedModelId ?? undefined,
-          outputTokens: Math.round(wordCount * 1.33),
-        });
-
-        stopStreaming(convId!);
-        if (finalReport.trim()) {
-          detectArtifacts(convId!, assistantMsg.id, finalReport);
-        }
-        finalizeStreamingArtifacts(convId!, assistantMsg.id);
-
-        const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
-        if (latestConv && latestConv.isGeneratingTitle && latestConv.title !== "New Conversation") {
-          setTitleGenerating(convId!, false);
-        }
-
-        if (useChatStore.getState().completionSound) {
-          playCompletionSound();
-        }
-      } catch (err) {
-        const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-        const currentDr = currentMsg?.deepResearch;
-        if (ac.signal.aborted) {
+          const wordCount = finalReport.split(/\s+/).length;
           updateMessage(convId!, assistantMsg.id, {
-            content: "Deep Research aborted.",
-            deepResearch: currentDr ? {
-              ...currentDr,
-              phase: "error",
-              error: "Deep Research aborted.",
-            } : undefined,
+            content: finalReport,
             isStreaming: false,
-            interrupted: true,
+            streamingDurationMs: performance.now() - streamStartTime,
+            turnDurationMs: performance.now() - streamStartTime,
+            modelId: selectedModelId ?? undefined,
+            outputTokens: Math.round(wordCount * 1.33),
           });
+
           stopStreaming(convId!);
-          return;
-        }
-        const errMsg = err instanceof Error ? err.message : String(err);
-        updateMessage(convId!, assistantMsg.id, {
-          content: `Deep Research Error: ${errMsg}`,
-          deepResearch: currentDr ? {
-            ...currentDr,
-            phase: "error",
-            error: errMsg,
-          } : undefined,
-          isStreaming: false,
-        });
-        logError(convId!, errMsg, "deep-research");
-        setError(errMsg);
-        stopStreaming(convId!);
-      }
-      return;
-    }
-
-    const editedFilesThisTurn = new Set<string>();
-    let capturedInputTokens: number | undefined;
-    let capturedOutputTokens: number | undefined;
-    let capturedGenerationMs: number | undefined;
-    let capturedUsage: Message["usage"] | undefined;
-
-    const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
-    const userPrompt = conv?.systemPrompt || "";
-
-    // Auto-load project-context files (GOAT.md / CLAUDE.md / AGENTS.md) so
-    // the agent picks up project conventions on every turn. Cheap because
-    // these are small and the read tool itself caches at the FS layer.
-    const projectContextFiles = isAgentMode && currentWorkspace
-      ? await loadProjectContext(currentWorkspace).catch(() => [])
-      : (isDesignMode && designWorkspace)
-        ? await loadProjectContext(designWorkspace).catch(() => [])
-        : [];
-
-    // If skills are bound to this conversation, fetch each SKILL.md so they
-    // can be injected into the system prompt for this turn (and every turn
-    // until the user toggles them off). This is the goatLLM equivalent of
-    // pi's progressive-disclosure /skill mechanism.
-    //
-    // Skip injection when the bound skill's mode doesn't match the current
-    // mode — e.g. an agent-only skill (filesystem editing) bound while in
-    // chat mode silently drops out instead of giving the model bad advice.
-    const activeSkillNamesForConv = useChatStore.getState().conversations.find((c) => c.id === convId)?.activeSkillNames ?? [];
-    const activeSkillDatas: { name: string; filePath: string; body: string }[] = [];
-    for (const sn of activeSkillNamesForConv) {
-      const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
-      if (!obj) continue;
-      const matches = obj.mode === "both" ||
-        (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
-      if (!matches) continue;
-      try {
-        const body = await getSkillBody(sn);
-        if (body) activeSkillDatas.push(body);
-      } catch { /* skip */ }
-    }
-    const activeSkillBlock = activeSkillDatas.length > 0
-      ? `\n<active_skills>\n${activeSkillDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills are active for the rest of this conversation. Apply their instructions to every reply.\n</active_skills>\n`
-      : "";
-
-    // Auto-trigger skills: their full SKILL.md body is injected into every
-    // system prompt so the model follows the instructions automatically
-    // without needing to read the file itself.
-    const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
-    const autoTriggerDatas: { name: string; filePath: string; body: string }[] = [];
-    for (const sn of autoTriggerNames) {
-      const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
-      if (!obj) continue;
-      const matches = obj.mode === "both" ||
-        (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
-      if (!matches) continue;
-      // Skip if already in active skills (don't inject twice)
-      if (activeSkillNamesForConv.includes(sn)) continue;
-      try {
-        const body = await getSkillBody(sn);
-        if (body) autoTriggerDatas.push(body);
-      } catch { /* skip */ }
-    }
-    const autoTriggerBlock = autoTriggerDatas.length > 0
-      ? `\n<auto_trigger_skills>\n${autoTriggerDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills auto-load every turn. Follow their instructions without re-reading them.\n</auto_trigger_skills>\n`
-      : "";
-
-    const systemPrompt = isDesignMode
-      ? (() => {
-          const s = useChatStore.getState();
-          // First turn = the assistant message we just appended is the
-          // first assistant turn for this conversation. Anything after the
-          // discovery form coming back counts as a follow-up.
-          const turns = (s.messages[convId!] ?? []).filter((m) => m.role === "user").length;
-          return buildDesignSystemPrompt({
-            skillId: s.activeSkillId,
-            systemId: s.activeDesignSystemId,
-            directionId: s.activeDirectionId,
-            isFirstTurn: turns <= 1,
-            userPrompt,
-            hasWorkspace: !!designWorkspace,
-            craftSections: ["typography", "color", "anti-ai-slop"],
-          });
-        })()
-      : isAgentMode
-      ? (() => {
-          // Only include enabled skills that apply to agent mode.
-          // Auto-trigger skills are excluded from available_skills —
-          // their full body is injected directly so the model follows
-          // them without needing to read the file.
-          const allSkills = useChatStore.getState().discoveredSkills;
-          const disabled = useChatStore.getState().disabledSkills;
-          const autoTrigger = useChatStore.getState().autoTriggerSkills;
-          const enabledSkills = allSkills.filter(
-            (s) => !disabled.has(s.name) && !autoTrigger.has(s.name) && (s.mode === "agent" || s.mode === "both"),
-          );
-          const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
-
-          const dynamicPrompt = buildAgentSystemPrompt({
-            tools: activeTools ?? {},
-            workspacePath: currentWorkspace,
-            researchMode: isResearchMode,
-            planMode: useChatStore.getState().planMode,
-            projectContextFiles,
-            existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
-          });
-          const prefix = userPrompt ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>` : dynamicPrompt;
-          let out = prefix;
-          if (skillsBlock) out += `\n${skillsBlock}`;
-          if (autoTriggerBlock) out += autoTriggerBlock;
-          if (activeSkillBlock) out += activeSkillBlock;
-          return out;
-        })()
-      : (() => {
-          // Chat mode: only chat-compatible skills, drop agent-only ones.
-          // Auto-trigger skills are excluded from available_skills —
-          // their full body is injected directly.
-          const allSkills = useChatStore.getState().discoveredSkills;
-          const disabled = useChatStore.getState().disabledSkills;
-          const autoTrigger = useChatStore.getState().autoTriggerSkills;
-          const enabledSkills = allSkills.filter(
-            (s) => !disabled.has(s.name) && !autoTrigger.has(s.name) && (s.mode === "chat" || s.mode === "both"),
-          );
-          const skillsBlock = enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
-          const autoArtifacts = useChatStore.getState().autoArtifacts;
-          const officeArtifacts = useChatStore.getState().officeArtifacts;
-          const advancedArtifacts = useChatStore.getState().advancedArtifacts;
-          const base = buildChatSystemPrompt(userPrompt, isResearchMode, hasWebSearch && !isResearchMode, {
-            autoArtifacts,
-            officeArtifacts,
-            advancedArtifacts,
-            existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({ kind: a.kind, title: a.title })),
-            hasScrapeUrl: !!useChatStore.getState().firecrawlApiKey.trim(),
-          });
-          let out = base;
-          if (skillsBlock) out += `\n${skillsBlock}`;
-          if (autoTriggerBlock) out += autoTriggerBlock;
-          if (activeSkillBlock) out += activeSkillBlock;
-          return out;
-        })();
-
-    const handleToolCall = (tc: ToolCallInfo) => {
-      // The `done` tool is an internal completion signal — its summary
-      // becomes the closing message content, not a visible tool pill.
-      if (tc.toolName === "done") return;
-
-      const writeTool = isWriteTool(tc.toolName);
-      const permissionMode = useChatStore.getState().permissionMode;
-      const autoApproved =
-        isDesignMode || shouldAutoApprove(tc.toolName, permissionMode);
-      // Capture how much text content exists at this point for chronological interleaving
-      const currentContent = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)?.content || "";
-      const entry: ToolCallEntry = {
-        toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input,
-        state: writeTool && !autoApproved ? "pending_approval" : "running",
-        contentAtInvocation: currentContent.length,
-      };
-      // Suppress web_search pills beyond the hard cap — the tool returns an
-      // error to the model but the user never sees a doomed search attempt.
-      // Deep Research mode is exempt from the cap (it has its own budget via stepCountIs).
-      if (tc.toolName === "web_search" && !isResearchMode && useChatStore.getState().webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
-        return;
-      }
-      if (tc.toolName === "exec_command" || tc.toolName === "bash") {
-        const input = tc.input as { command?: string } | undefined;
-        if (input?.command) {
-          const classification = classifyCommand(input.command);
-          if (classification.level !== "safe") {
-            entry.dangerLevel = classification.level;
-            entry.dangerReason = classification.reason;
+          if (finalReport.trim()) {
+            detectArtifacts(convId!, assistantMsg.id, finalReport);
           }
-        }
-      }
-      addToolCallToMessage(convId!, assistantMsg.id, entry);
-      logToolCall(convId!, tc.toolCallId, tc.toolName, tc.input);
-    };
-
-    const handleToolResult = async (tr: ToolResultInfo) => {
-      completeToolCall(convId!, assistantMsg.id, tr.toolCallId, tr.output);
-      logToolResult(convId!, tr.toolCallId, tr.toolName, tr.output);
-
-      if (
-        (tr.toolName === "write_file" || tr.toolName === "edit_file") &&
-        typeof tr.output === "string" &&
-        !tr.output.startsWith("Error") &&
-        !tr.output.startsWith("❌") &&
-        !/failed:/i.test(tr.output)
-      ) {
-        const input = tr.input as { path?: string } | undefined;
-        const filePath =
-          typeof input?.path === "string" ? input.path.trim() : "";
-        if (filePath) {
-          editedFilesThisTurn.add(filePath);
-          const live = useChatStore
-            .getState()
-            .messages[convId!]
-            ?.find((m) => m.id === assistantMsg.id);
-          const prev = live?.editedFiles ?? [];
-          if (!prev.includes(filePath)) {
-            updateMessage(convId!, assistantMsg.id, {
-              editedFiles: [...prev, filePath],
-            });
-          }
-        }
-      }
-
-      // Design mode: when an HTML file is written/edited, sync it as an
-      // artifact so the preview panel shows it live.
-      if (
-        isDesignMode &&
-        designWorkspace &&
-        (tr.toolName === "write_file" || tr.toolName === "edit_file")
-      ) {
-        const input = tr.input as { path?: string } | undefined;
-        const filePath =
-          typeof input?.path === "string" ? input.path : "";
-        if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
-          try {
-            const content = await invoke<string>("read_file", {
-              workspace: designWorkspace,
-              path: filePath,
-            });
-            const title =
-              filePath
-                .replace(/\.html?$/, "")
-                .split("/")
-                .pop() || filePath;
-            useChatStore
-              .getState()
-              .upsertDesignArtifact(convId!, title, content);
-          } catch {
-            /* file read failed, skip */
-          }
-        }
-      }
-    };
-
-    // Start jjagent isolation change if enabled and workspace is a jj repo.
-    const jjagentEnabled = useChatStore.getState().jjagent;
-    const jjWs = isDesignMode ? designWorkspace : currentWorkspace;
-    if (jjagentEnabled && jjWs && (isAgentMode || isDesignMode)) {
-      const historyMsgs = useChatStore.getState().messages[convId!];
-      const turnIndex = (historyMsgs ?? []).filter((m) => m.role === "user").length;
-      const session = await startJjAgentSession(jjWs, convId!, turnIndex);
-      if (session) {
-        useChatStore.getState().setJjAgentChangeId(session.changeId);
-      }
-    }
-
-    const endJjAgentSessionIfNeeded = () => {
-      const changeId = useChatStore.getState().jjagentChangeId;
-      const s = useChatStore.getState();
-      const ws = s.designMode ? s.designWorkspacePath : s.workspacePath;
-      if (changeId && ws) {
-        endJjAgentSession(ws, { changeId, startedAt: Date.now() });
-        s.setJjAgentChangeId(null);
-      }
-    };
-
-    // Hybrid memory search & prompt injection
-    let finalSystemPrompt = systemPrompt;
-    const isMemoryEnabled = useChatStore.getState().memoryEnabled;
-    if (isMemoryEnabled && trimmed) {
-      try {
-        const { searchMemories, incrementMemoryUses } = await import("../lib/memory");
-        const memories = await searchMemories(trimmed);
-        if (memories && memories.length > 0) {
-          const formattedMemories = memories
-            .map((m) => `- [Category: ${m.category}] ${m.text}`)
-            .join("\n");
-          finalSystemPrompt += `\n<memories>\n${formattedMemories}\nThese are your long-term memories relevant to this prompt. Use them if helpful.\n</memories>\n`;
-          
-          // Increment uses for injected memories
-          for (const m of memories) {
-            await incrementMemoryUses(m.id).catch(() => {});
-          }
-        }
-      } catch (e) {
-        console.warn("Failed to search/inject memories:", e);
-      }
-    }
-
-    // Citation instructions (chat mode only). Tells the model how to cite the
-    // numbered document sources seeded above and the web results that arrive
-    // mid-turn, so onDone can surface a clickable "Sources" element. Agent and
-    // design turns expose their sources as tool-call pills instead.
-    if (!isAgentMode && !isDesignMode) {
-      const documentSources = useChatStore.getState().citationSources;
-      const citationBlock = buildCitationInstructions(documentSources, hasWebSearch);
-      if (citationBlock) finalSystemPrompt += `\n${citationBlock}\n`;
-    }
-
-    useChatStore.getState().updateMessage(convId!, assistantMsg.id, {
-      estimatedContextTokens: estimateRequestContextTokens(finalSystemPrompt, llmMessages, activeTools),
-    });
-
-    await streamChat(llmMessages, finalSystemPrompt, llmConfig, {
-      onToken: (chunk) => {
-        appendToMessage(convId!, assistantMsg.id, chunk);
-        // Pipe any partial artifact bodies into the canvas for live code
-        // preview. The artifact-fence regex scan is throttled to ~80ms so
-        // it doesn't burn CPU on every token. Fence open/close lines (which
-        // contain ```   ) trigger an immediate scan so the artifact panel
-        // opens/closes at the right moment.
-        const artifactScanNow = artifactScanRef.current.lastScan === 0 ||
-          /```/.test(chunk) ||
-          performance.now() - artifactScanRef.current.lastScan > 80;
-        if (artifactScanNow && !artifactScanRef.current.rafPending) {
-          artifactScanRef.current.rafPending = true;
-          requestAnimationFrame(() => {
-            artifactScanRef.current.rafPending = false;
-            artifactScanRef.current.lastScan = performance.now();
-            const live = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-            const content = live?.content || "";
-            if (content.length === 0) return;
-            const segments = splitContentByArtifacts(content);
-            let fenceIndex = 0;
-            for (const seg of segments) {
-              if (seg.type !== "artifact") continue;
-              if (seg.code.length > 0) {
-                streamArtifactDelta(
-                  convId!,
-                  assistantMsg.id,
-                  seg.kind,
-                  seg.title,
-                  fenceIndex,
-                  seg.code,
-                );
-              }
-              fenceIndex++;
-            }
-          });
-        }
-      },
-      onThinking: (chunk) => {
-        appendToThinking(convId!, assistantMsg.id, chunk);
-      },
-      onToolCall: handleToolCall,
-      onToolResult: handleToolResult,
-      onUsage: (usage) => {
-        capturedUsage = {
-          totalTokens: usage.totalTokens,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cacheRead: usage.cacheRead,
-          cacheWrite: usage.cacheWrite,
-        };
-        capturedInputTokens = usage.inputTokens;
-        capturedOutputTokens = usage.outputTokens;
-        if (usage.generationMs) capturedGenerationMs = usage.generationMs;
-      },
-      onDone: (fullText, summary) => {
-        const streamDurationMs = performance.now() - streamStartTime;
-        // Any tool call still flagged "running" never got its result chunk
-        // (stream ended early, abort, partial response, etc.) — flip it to
-        // done so the UI stops shimmering "Reading…" forever.
-        finalizeStuckToolCalls(convId!, assistantMsg.id);
-        const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-        const currentContent = currentMsg?.content || "";
-        const finalContent = fullText || currentContent;
-        const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
-
-        // Strip ephemeral status lines ("Reading…", "Writing the HTML…")
-        // from the final message. These are live progress indicators during
-        // streaming — once the turn is done, they're noise.
-        const statusStripped = hasToolActivity
-          ? finalContent
-              .split("\n")
-              .filter((line) => {
-                const t = line.trim();
-                if (!t) return false;
-                // Match short status lines ending with ellipsis
-                if (/^[A-Z][a-z].*…$/.test(t) && t.length < 60) return false;
-                // Match common status patterns
-                if (/^(Reading|Writing|Editing|Planning|Searching|Checking|Running|Fetching|Creating|Updating|Building|Analyzing)\b/i.test(t) && t.length < 80) return false;
-                return true;
-              })
-              .join("\n")
-              .trim()
-          : finalContent;
-        // Strip any leaked tool-call JSON ({summary, {"filename"...}) before
-        // persisting so it never lands in storage, copy, or reload.
-        const cleanedContent = stripLeakedToolJson(statusStripped);
-        // If the model only put its answer in the `done` tool args (or leaked
-        // JSON that got stripped), fall back to the done summary.
-        const displayContent =
-          cleanedContent.trim() || (summary?.trim() ?? "");
-
-        // Stopped before the model produced anything — drop the empty bubble
-        // entirely so the chat looks like the turn never started. BUT if the
-        // model had already streamed reasoning ("thinking"), keep the bubble so
-        // those thoughts survive the stop — nothing the user saw should vanish.
-        const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
-        if (!displayContent.trim() && !hasToolActivity && !hasThinking) {
-          deleteMessage(convId!, assistantMsg.id);
-          stopStreaming(convId!);
-          endJjAgentSessionIfNeeded();
-          return;
-        }
-
-        const outputTokens = capturedOutputTokens ?? (displayContent.length / 4); // fallback: ~4 chars/token
-        // Use generationMs from the agent loop when available — it excludes
-        // tool execution time (bash, file reads, etc.) so t/s is accurate.
-        // Falls back to wall-clock streamDurationMs for simple single-call paths.
-        const displayDurationMs = capturedGenerationMs ?? streamDurationMs;
-        const editedFiles =
-          editedFilesThisTurn.size > 0
-            ? Array.from(editedFilesThisTurn)
-            : useChatStore
-                .getState()
-                .messages[convId!]
-                ?.find((m) => m.id === assistantMsg.id)?.editedFiles;
-        // Citations (chat mode only): keep only the sources whose [n] marker
-        // the model actually used in the final reply. Availability never
-        // produces a citation — the model has to cite it.
-        const citations =
-          !isAgentMode && !isDesignMode
-            ? selectUsedCitations(
-                useChatStore.getState().citationSources,
-                displayContent,
-              )
-            : [];
-        updateMessage(convId!, assistantMsg.id, {
-          content: displayContent,
-          isStreaming: false,
-          streamingDurationMs: displayDurationMs,
-          turnDurationMs: streamDurationMs,
-          inputTokens: capturedInputTokens,
-          outputTokens,
-          usage: capturedUsage,
-          modelId: selectedModelId ?? undefined,
-          editedFiles:
-            editedFiles && editedFiles.length > 0 ? editedFiles : undefined,
-          citations: citations.length > 0 ? citations : undefined,
-        });
-        stopStreaming(convId!);
-        // Auto-detect artifacts in completed messages
-        if (displayContent.trim()) {
-          detectArtifacts(convId!, assistantMsg.id, displayContent);
-        }
-        // Any remaining streaming flags from this message clear here so
-        // the canvas auto-flips from code to preview view.
-        finalizeStreamingArtifacts(convId!, assistantMsg.id);
-        const extractionSettings = useChatStore.getState().memoryExtractionSettings;
-        if (useChatStore.getState().memoryEnabled && extractionSettings.enabled) {
-          void extractAndPersistTurnMemories({
-            userText: sourceUserContent,
-            assistantText: displayContent,
-            workspacePath: currentWorkspace,
-            settings: extractionSettings,
-            conversationId: convId!,
-            sourceMessageIds: [sourceUserMessageId, assistantMsg.id].filter((id): id is string => !!id),
-          }).catch((e) => console.warn("Failed to extract memories:", e));
-        }
-        // Title generation is kicked off when the user sends (see above), so
-        // by the time we get here the conversation has usually been renamed
-        // already. We just clear the shimmer flag if it somehow lingered.
-        const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
-        if (latestConv && latestConv.isGeneratingTitle && latestConv.title !== "New Conversation") {
-          setTitleGenerating(convId!, false);
-        }
-        // Squash jjagent change back into parent now that the turn is complete.
-        endJjAgentSessionIfNeeded();
-        // Play completion sound in agent/design mode if enabled.
-        if ((isAgentMode || isDesignMode) && useChatStore.getState().completionSound) {
-          playCompletionSound();
-        }
-      },
-      onError: (err) => {
-        // If the user aborted, don't surface an error — onDone has already
-        // handled cleanup (or we'll do it here as a safety net).
-        if (ac.signal.aborted) {
-          finalizeStuckToolCalls(convId!, assistantMsg.id);
           finalizeStreamingArtifacts(convId!, assistantMsg.id);
-          const currentMsg = useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id);
-          const currentContent = currentMsg?.content || "";
-          const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
-          const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
-          if (!currentContent.trim() && !hasToolActivity && !hasThinking) {
-            deleteMessage(convId!, assistantMsg.id);
-          } else {
+
+          const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
+          if (
+            latestConv &&
+            latestConv.isGeneratingTitle &&
+            latestConv.title !== "New Conversation"
+          ) {
+            setTitleGenerating(convId!, false);
+          }
+
+          if (useChatStore.getState().completionSound) {
+            playCompletionSound();
+          }
+        } catch (err) {
+          const currentMsg = useChatStore
+            .getState()
+            .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+          const currentDr = currentMsg?.deepResearch;
+          if (ac.signal.aborted) {
             updateMessage(convId!, assistantMsg.id, {
-              content: currentContent,
+              content: "Deep Research aborted.",
+              deepResearch: currentDr
+                ? {
+                    ...currentDr,
+                    phase: "error",
+                    error: "Deep Research aborted.",
+                  }
+                : undefined,
               isStreaming: false,
               interrupted: true,
             });
+            stopStreaming(convId!);
+            return;
           }
+          const errMsg = err instanceof Error ? err.message : String(err);
+          updateMessage(convId!, assistantMsg.id, {
+            content: `Deep Research Error: ${errMsg}`,
+            deepResearch: currentDr
+              ? {
+                  ...currentDr,
+                  phase: "error",
+                  error: errMsg,
+                }
+              : undefined,
+            isStreaming: false,
+          });
+          logError(convId!, errMsg, "deep-research");
+          setError(errMsg);
           stopStreaming(convId!);
-          endJjAgentSessionIfNeeded();
+        }
+        return;
+      }
+
+      const editedFilesThisTurn = new Set<string>();
+      let capturedInputTokens: number | undefined;
+      let capturedOutputTokens: number | undefined;
+      let capturedGenerationMs: number | undefined;
+      let capturedUsage: Message["usage"] | undefined;
+
+      const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
+      const userPrompt = conv?.systemPrompt || "";
+
+      // Auto-load project-context files (GOAT.md / CLAUDE.md / AGENTS.md) so
+      // the agent picks up project conventions on every turn. Cheap because
+      // these are small and the read tool itself caches at the FS layer.
+      const projectContextFiles =
+        isAgentMode && currentWorkspace
+          ? await loadProjectContext(currentWorkspace).catch(() => [])
+          : isDesignMode && designWorkspace
+            ? await loadProjectContext(designWorkspace).catch(() => [])
+            : [];
+
+      // If skills are bound to this conversation, fetch each SKILL.md so they
+      // can be injected into the system prompt for this turn (and every turn
+      // until the user toggles them off). This is the goatLLM equivalent of
+      // pi's progressive-disclosure /skill mechanism.
+      //
+      // Skip injection when the bound skill's mode doesn't match the current
+      // mode — e.g. an agent-only skill (filesystem editing) bound while in
+      // chat mode silently drops out instead of giving the model bad advice.
+      const activeSkillNamesForConv =
+        useChatStore.getState().conversations.find((c) => c.id === convId)?.activeSkillNames ?? [];
+      const activeSkillDatas: { name: string; filePath: string; body: string }[] = [];
+      for (const sn of activeSkillNamesForConv) {
+        const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
+        if (!obj) continue;
+        const matches =
+          obj.mode === "both" || (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
+        if (!matches) continue;
+        try {
+          const body = await getSkillBody(sn);
+          if (body) activeSkillDatas.push(body);
+        } catch {
+          /* skip */
+        }
+      }
+      const activeSkillBlock =
+        activeSkillDatas.length > 0
+          ? `\n<active_skills>\n${activeSkillDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills are active for the rest of this conversation. Apply their instructions to every reply.\n</active_skills>\n`
+          : "";
+
+      // Auto-trigger skills: their full SKILL.md body is injected into every
+      // system prompt so the model follows the instructions automatically
+      // without needing to read the file itself.
+      const autoTriggerNames = useChatStore.getState().autoTriggerSkills;
+      const autoTriggerDatas: { name: string; filePath: string; body: string }[] = [];
+      for (const sn of autoTriggerNames) {
+        const obj = useChatStore.getState().discoveredSkills.find((s) => s.name === sn) ?? null;
+        if (!obj) continue;
+        const matches =
+          obj.mode === "both" || (isAgentMode ? obj.mode === "agent" : obj.mode === "chat");
+        if (!matches) continue;
+        // Skip if already in active skills (don't inject twice)
+        if (activeSkillNamesForConv.includes(sn)) continue;
+        try {
+          const body = await getSkillBody(sn);
+          if (body) autoTriggerDatas.push(body);
+        } catch {
+          /* skip */
+        }
+      }
+      const autoTriggerBlock =
+        autoTriggerDatas.length > 0
+          ? `\n<auto_trigger_skills>\n${autoTriggerDatas.map((s) => `<skill name="${s.name}" location="${s.filePath}">\n${s.body}\n</skill>`).join("\n")}\nThese skills auto-load every turn. Follow their instructions without re-reading them.\n</auto_trigger_skills>\n`
+          : "";
+
+      const systemPrompt = isDesignMode
+        ? (() => {
+            const s = useChatStore.getState();
+            // First turn = the assistant message we just appended is the
+            // first assistant turn for this conversation. Anything after the
+            // discovery form coming back counts as a follow-up.
+            const turns = (s.messages[convId!] ?? []).filter((m) => m.role === "user").length;
+            return buildDesignSystemPrompt({
+              skillId: s.activeSkillId,
+              systemId: s.activeDesignSystemId,
+              directionId: s.activeDirectionId,
+              isFirstTurn: turns <= 1,
+              userPrompt,
+              hasWorkspace: !!designWorkspace,
+              craftSections: ["typography", "color", "anti-ai-slop"],
+            });
+          })()
+        : isAgentMode
+          ? (() => {
+              // Only include enabled skills that apply to agent mode.
+              // Auto-trigger skills are excluded from available_skills —
+              // their full body is injected directly so the model follows
+              // them without needing to read the file.
+              const allSkills = useChatStore.getState().discoveredSkills;
+              const disabled = useChatStore.getState().disabledSkills;
+              const autoTrigger = useChatStore.getState().autoTriggerSkills;
+              const enabledSkills = allSkills.filter(
+                (s) =>
+                  !disabled.has(s.name) &&
+                  !autoTrigger.has(s.name) &&
+                  (s.mode === "agent" || s.mode === "both"),
+              );
+              const skillsBlock =
+                enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
+
+              const dynamicPrompt = buildAgentSystemPrompt({
+                tools: activeTools ?? {},
+                workspacePath: currentWorkspace,
+                researchMode: isResearchMode,
+                planMode: useChatStore.getState().planMode,
+                projectContextFiles,
+                existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map((a) => ({
+                  kind: a.kind,
+                  title: a.title,
+                })),
+              });
+              const prefix = userPrompt
+                ? `${dynamicPrompt}\n\n<user_system_prompt>\n${userPrompt}\n</user_system_prompt>`
+                : dynamicPrompt;
+              let out = prefix;
+              if (skillsBlock) out += `\n${skillsBlock}`;
+              if (autoTriggerBlock) out += autoTriggerBlock;
+              if (activeSkillBlock) out += activeSkillBlock;
+              return out;
+            })()
+          : (() => {
+              // Chat mode: only chat-compatible skills, drop agent-only ones.
+              // Auto-trigger skills are excluded from available_skills —
+              // their full body is injected directly.
+              const allSkills = useChatStore.getState().discoveredSkills;
+              const disabled = useChatStore.getState().disabledSkills;
+              const autoTrigger = useChatStore.getState().autoTriggerSkills;
+              const enabledSkills = allSkills.filter(
+                (s) =>
+                  !disabled.has(s.name) &&
+                  !autoTrigger.has(s.name) &&
+                  (s.mode === "chat" || s.mode === "both"),
+              );
+              const skillsBlock =
+                enabledSkills.length > 0 ? formatSkillsForPrompt(enabledSkills) : "";
+              const autoArtifacts = useChatStore.getState().autoArtifacts;
+              const officeArtifacts = useChatStore.getState().officeArtifacts;
+              const advancedArtifacts = useChatStore.getState().advancedArtifacts;
+              const base = buildChatSystemPrompt(
+                userPrompt,
+                isResearchMode,
+                hasWebSearch && !isResearchMode,
+                {
+                  autoArtifacts,
+                  officeArtifacts,
+                  advancedArtifacts,
+                  existingArtifacts: (useChatStore.getState().artifacts[convId!] ?? []).map(
+                    (a) => ({ kind: a.kind, title: a.title }),
+                  ),
+                  hasScrapeUrl: !!useChatStore.getState().firecrawlApiKey.trim(),
+                },
+              );
+              let out = base;
+              if (skillsBlock) out += `\n${skillsBlock}`;
+              if (autoTriggerBlock) out += autoTriggerBlock;
+              if (activeSkillBlock) out += activeSkillBlock;
+              return out;
+            })();
+
+      const handleToolCall = (tc: ToolCallInfo) => {
+        // The `done` tool is an internal completion signal — its summary
+        // becomes the closing message content, not a visible tool pill.
+        if (tc.toolName === "done") return;
+
+        const writeTool = isWriteTool(tc.toolName);
+        const permissionMode = useChatStore.getState().permissionMode;
+        const autoApproved = isDesignMode || shouldAutoApprove(tc.toolName, permissionMode);
+        // Capture how much text content exists at this point for chronological interleaving
+        const currentContent =
+          useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)
+            ?.content || "";
+        const entry: ToolCallEntry = {
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          input: tc.input,
+          state: writeTool && !autoApproved ? "pending_approval" : "running",
+          contentAtInvocation: currentContent.length,
+        };
+        // Suppress web_search pills beyond the hard cap — the tool returns an
+        // error to the model but the user never sees a doomed search attempt.
+        // Deep Research mode is exempt from the cap (it has its own budget via stepCountIs).
+        if (
+          tc.toolName === "web_search" &&
+          !isResearchMode &&
+          useChatStore.getState().webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN
+        ) {
           return;
         }
-        finalizeStuckToolCalls(convId!, assistantMsg.id);
-        finalizeStreamingArtifacts(convId!, assistantMsg.id);
-        endJjAgentSessionIfNeeded();
-        // Context-overflow gets dedicated UX: instead of a raw error string,
-        // we surface a friendly banner with quick-action buttons. The model
-        // dropdown still shows everything, but we steer the user toward
-        // longer-context options and one-click history trimming.
-        const isOverflow =
-          (err as Error & { code?: string }).code === "context_overflow";
-        const errMsg =
-          err?.message?.trim() || "Something went wrong during the response.";
-        if (isOverflow) {
-          updateMessage(convId!, assistantMsg.id, {
-            content: `⚠ Context overflow\n\nThis turn exceeded "${selectedModel?.name ?? selectedModelId}"'s context window. Try switching to a longer-context model from the picker, or trim earlier messages by deleting older turns.\n\n${errMsg.split("\n")[0]}`,
-            isStreaming: false,
-          });
-          logError(convId!, errMsg, "streaming");
-          setError("Context window exceeded — see banner above.");
-        } else {
-          updateMessage(convId!, assistantMsg.id, {
-            content: `Error: ${errMsg}`,
-            isStreaming: false,
-          });
-          logError(convId!, errMsg, "streaming");
-          setError(errMsg);
+        if (tc.toolName === "exec_command" || tc.toolName === "bash") {
+          const input = tc.input as { command?: string } | undefined;
+          if (input?.command) {
+            const classification = classifyCommand(input.command);
+            if (classification.level !== "safe") {
+              entry.dangerLevel = classification.level;
+              entry.dangerReason = classification.reason;
+            }
+          }
         }
-        stopStreaming(convId!);
-        endJjAgentSessionIfNeeded();
-      },
-    }, {
-      abortSignal: ac.signal,
-      tools: activeTools,
-      maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined,
-      subagentsEnabled: (agentMode || designMode) && subagentsEnabled,
-      // Session ID for prompt cache affinity — derived from conversation ID
-      // so the same conversation gets consistent cache routing.
-      sessionId: convId ? `goatllm-${convId}` : undefined,
-      cacheRetention: "long",
-    });
-  }, [value, files, isStreaming, activeId, selectedModelId,
-    addMessage, addCompactionEntry, startStreaming, stopStreaming, appendToMessage, appendToThinking, updateMessage,
-    createConversation, getActiveMessages, getActiveLlmConfig, getModels,
-    renameConversation, setTitleGenerating, conversations,
-    addToolCallToMessage, completeToolCall, updateToolCallState, finalizeStuckToolCalls,
-    detectArtifacts, streamArtifactDelta, finalizeStreamingArtifacts,
-    enqueueMessage, setSteerPayload, clearDraft]);
+        addToolCallToMessage(convId!, assistantMsg.id, entry);
+        logToolCall(convId!, tc.toolCallId, tc.toolName, tc.input);
+      };
+
+      const handleToolResult = async (tr: ToolResultInfo) => {
+        completeToolCall(convId!, assistantMsg.id, tr.toolCallId, tr.output);
+        logToolResult(convId!, tr.toolCallId, tr.toolName, tr.output);
+
+        if (
+          (tr.toolName === "write_file" || tr.toolName === "edit_file") &&
+          typeof tr.output === "string" &&
+          !tr.output.startsWith("Error") &&
+          !tr.output.startsWith("❌") &&
+          !/failed:/i.test(tr.output)
+        ) {
+          const input = tr.input as { path?: string } | undefined;
+          const filePath = typeof input?.path === "string" ? input.path.trim() : "";
+          if (filePath) {
+            editedFilesThisTurn.add(filePath);
+            const live = useChatStore
+              .getState()
+              .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+            const prev = live?.editedFiles ?? [];
+            if (!prev.includes(filePath)) {
+              updateMessage(convId!, assistantMsg.id, {
+                editedFiles: [...prev, filePath],
+              });
+            }
+          }
+        }
+
+        // Design mode: when an HTML file is written/edited, sync it as an
+        // artifact so the preview panel shows it live.
+        if (
+          isDesignMode &&
+          designWorkspace &&
+          (tr.toolName === "write_file" || tr.toolName === "edit_file")
+        ) {
+          const input = tr.input as { path?: string } | undefined;
+          const filePath = typeof input?.path === "string" ? input.path : "";
+          if (filePath.endsWith(".html") || filePath.endsWith(".htm")) {
+            try {
+              const content = await invoke<string>("read_file", {
+                workspace: designWorkspace,
+                path: filePath,
+              });
+              const title =
+                filePath
+                  .replace(/\.html?$/, "")
+                  .split("/")
+                  .pop() || filePath;
+              useChatStore.getState().upsertDesignArtifact(convId!, title, content);
+            } catch {
+              /* file read failed, skip */
+            }
+          }
+        }
+      };
+
+      // Start jjagent isolation change if enabled and workspace is a jj repo.
+      const jjagentEnabled = useChatStore.getState().jjagent;
+      const jjWs = isDesignMode ? designWorkspace : currentWorkspace;
+      if (jjagentEnabled && jjWs && (isAgentMode || isDesignMode)) {
+        const historyMsgs = useChatStore.getState().messages[convId!];
+        const turnIndex = (historyMsgs ?? []).filter((m) => m.role === "user").length;
+        const session = await startJjAgentSession(jjWs, convId!, turnIndex);
+        if (session) {
+          useChatStore.getState().setJjAgentChangeId(session.changeId);
+        }
+      }
+
+      const endJjAgentSessionIfNeeded = () => {
+        const changeId = useChatStore.getState().jjagentChangeId;
+        const s = useChatStore.getState();
+        const ws = s.designMode ? s.designWorkspacePath : s.workspacePath;
+        if (changeId && ws) {
+          endJjAgentSession(ws, { changeId, startedAt: Date.now() });
+          s.setJjAgentChangeId(null);
+        }
+      };
+
+      // Hybrid memory search & prompt injection
+      let finalSystemPrompt = systemPrompt;
+      const isMemoryEnabled = useChatStore.getState().memoryEnabled;
+      if (isMemoryEnabled && trimmed) {
+        try {
+          const { searchMemories, incrementMemoryUses } = await import("../lib/memory");
+          const memories = await searchMemories(trimmed);
+          if (memories && memories.length > 0) {
+            const formattedMemories = memories
+              .map((m) => `- [Category: ${m.category}] ${m.text}`)
+              .join("\n");
+            finalSystemPrompt += `\n<memories>\n${formattedMemories}\nThese are your long-term memories relevant to this prompt. Use them if helpful.\n</memories>\n`;
+
+            // Increment uses for injected memories
+            for (const m of memories) {
+              await incrementMemoryUses(m.id).catch(() => {});
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to search/inject memories:", e);
+        }
+      }
+
+      // Citation instructions (chat mode only). Tells the model how to cite the
+      // numbered document sources seeded above and the web results that arrive
+      // mid-turn, so onDone can surface a clickable "Sources" element. Agent and
+      // design turns expose their sources as tool-call pills instead.
+      if (!isAgentMode && !isDesignMode) {
+        const documentSources = useChatStore.getState().citationSources;
+        const citationBlock = buildCitationInstructions(documentSources, hasWebSearch);
+        if (citationBlock) finalSystemPrompt += `\n${citationBlock}\n`;
+      }
+
+      useChatStore.getState().updateMessage(convId!, assistantMsg.id, {
+        estimatedContextTokens: estimateRequestContextTokens(
+          finalSystemPrompt,
+          llmMessages,
+          activeTools,
+        ),
+      });
+
+      await streamChat(
+        llmMessages,
+        finalSystemPrompt,
+        llmConfig,
+        {
+          onToken: (chunk) => {
+            appendToMessage(convId!, assistantMsg.id, chunk);
+            // Pipe any partial artifact bodies into the canvas for live code
+            // preview. The artifact-fence regex scan is throttled to ~80ms so
+            // it doesn't burn CPU on every token. Fence open/close lines (which
+            // contain ```   ) trigger an immediate scan so the artifact panel
+            // opens/closes at the right moment.
+            const artifactScanNow =
+              artifactScanRef.current.lastScan === 0 ||
+              /```/.test(chunk) ||
+              performance.now() - artifactScanRef.current.lastScan > 80;
+            if (artifactScanNow && !artifactScanRef.current.rafPending) {
+              artifactScanRef.current.rafPending = true;
+              requestAnimationFrame(() => {
+                artifactScanRef.current.rafPending = false;
+                artifactScanRef.current.lastScan = performance.now();
+                const live = useChatStore
+                  .getState()
+                  .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+                const content = live?.content || "";
+                if (content.length === 0) return;
+                const segments = splitContentByArtifacts(content);
+                let fenceIndex = 0;
+                for (const seg of segments) {
+                  if (seg.type !== "artifact") continue;
+                  if (seg.code.length > 0) {
+                    streamArtifactDelta(
+                      convId!,
+                      assistantMsg.id,
+                      seg.kind,
+                      seg.title,
+                      fenceIndex,
+                      seg.code,
+                    );
+                  }
+                  fenceIndex++;
+                }
+              });
+            }
+          },
+          onThinking: (chunk) => {
+            appendToThinking(convId!, assistantMsg.id, chunk);
+          },
+          onToolCall: handleToolCall,
+          onToolResult: handleToolResult,
+          onUsage: (usage) => {
+            capturedUsage = {
+              totalTokens: usage.totalTokens,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              cacheRead: usage.cacheRead,
+              cacheWrite: usage.cacheWrite,
+            };
+            capturedInputTokens = usage.inputTokens;
+            capturedOutputTokens = usage.outputTokens;
+            if (usage.generationMs) capturedGenerationMs = usage.generationMs;
+          },
+          onDone: (fullText, summary) => {
+            const streamDurationMs = performance.now() - streamStartTime;
+            // Any tool call still flagged "running" never got its result chunk
+            // (stream ended early, abort, partial response, etc.) — flip it to
+            // done so the UI stops shimmering "Reading…" forever.
+            finalizeStuckToolCalls(convId!, assistantMsg.id);
+            const currentMsg = useChatStore
+              .getState()
+              .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+            const currentContent = currentMsg?.content || "";
+            const finalContent = fullText || currentContent;
+            const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
+
+            // Strip ephemeral status lines ("Reading…", "Writing the HTML…")
+            // from the final message. These are live progress indicators during
+            // streaming — once the turn is done, they're noise.
+            const statusStripped = hasToolActivity
+              ? finalContent
+                  .split("\n")
+                  .filter((line) => {
+                    const t = line.trim();
+                    if (!t) return false;
+                    // Match short status lines ending with ellipsis
+                    if (/^[A-Z][a-z].*…$/.test(t) && t.length < 60) return false;
+                    // Match common status patterns
+                    if (
+                      /^(Reading|Writing|Editing|Planning|Searching|Checking|Running|Fetching|Creating|Updating|Building|Analyzing)\b/i.test(
+                        t,
+                      ) &&
+                      t.length < 80
+                    )
+                      return false;
+                    return true;
+                  })
+                  .join("\n")
+                  .trim()
+              : finalContent;
+            // Strip any leaked tool-call JSON ({summary, {"filename"...}) before
+            // persisting so it never lands in storage, copy, or reload.
+            const cleanedContent = stripLeakedToolJson(statusStripped);
+            // If the model only put its answer in the `done` tool args (or leaked
+            // JSON that got stripped), fall back to the done summary.
+            const displayContent = cleanedContent.trim() || (summary?.trim() ?? "");
+
+            // Stopped before the model produced anything — drop the empty bubble
+            // entirely so the chat looks like the turn never started. BUT if the
+            // model had already streamed reasoning ("thinking"), keep the bubble so
+            // those thoughts survive the stop — nothing the user saw should vanish.
+            const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
+            if (!displayContent.trim() && !hasToolActivity && !hasThinking) {
+              deleteMessage(convId!, assistantMsg.id);
+              stopStreaming(convId!);
+              endJjAgentSessionIfNeeded();
+              return;
+            }
+
+            const outputTokens = capturedOutputTokens ?? displayContent.length / 4; // fallback: ~4 chars/token
+            // Use generationMs from the agent loop when available — it excludes
+            // tool execution time (bash, file reads, etc.) so t/s is accurate.
+            // Falls back to wall-clock streamDurationMs for simple single-call paths.
+            const displayDurationMs = capturedGenerationMs ?? streamDurationMs;
+            const editedFiles =
+              editedFilesThisTurn.size > 0
+                ? Array.from(editedFilesThisTurn)
+                : useChatStore.getState().messages[convId!]?.find((m) => m.id === assistantMsg.id)
+                    ?.editedFiles;
+            // Citations (chat mode only): keep only the sources whose [n] marker
+            // the model actually used in the final reply. Availability never
+            // produces a citation — the model has to cite it.
+            const citations =
+              !isAgentMode && !isDesignMode
+                ? selectUsedCitations(useChatStore.getState().citationSources, displayContent)
+                : [];
+            updateMessage(convId!, assistantMsg.id, {
+              content: displayContent,
+              isStreaming: false,
+              streamingDurationMs: displayDurationMs,
+              turnDurationMs: streamDurationMs,
+              inputTokens: capturedInputTokens,
+              outputTokens,
+              usage: capturedUsage,
+              modelId: selectedModelId ?? undefined,
+              editedFiles: editedFiles && editedFiles.length > 0 ? editedFiles : undefined,
+              citations: citations.length > 0 ? citations : undefined,
+            });
+            stopStreaming(convId!);
+            // Auto-detect artifacts in completed messages
+            if (displayContent.trim()) {
+              detectArtifacts(convId!, assistantMsg.id, displayContent);
+            }
+            // Any remaining streaming flags from this message clear here so
+            // the canvas auto-flips from code to preview view.
+            finalizeStreamingArtifacts(convId!, assistantMsg.id);
+            const extractionSettings = useChatStore.getState().memoryExtractionSettings;
+            if (useChatStore.getState().memoryEnabled && extractionSettings.enabled) {
+              void extractAndPersistTurnMemories({
+                userText: sourceUserContent,
+                assistantText: displayContent,
+                workspacePath: currentWorkspace,
+                settings: extractionSettings,
+                conversationId: convId!,
+                sourceMessageIds: [sourceUserMessageId, assistantMsg.id].filter(
+                  (id): id is string => !!id,
+                ),
+              }).catch((e) => console.warn("Failed to extract memories:", e));
+            }
+            // Title generation is kicked off when the user sends (see above), so
+            // by the time we get here the conversation has usually been renamed
+            // already. We just clear the shimmer flag if it somehow lingered.
+            const latestConv = useChatStore.getState().conversations.find((c) => c.id === convId);
+            if (
+              latestConv &&
+              latestConv.isGeneratingTitle &&
+              latestConv.title !== "New Conversation"
+            ) {
+              setTitleGenerating(convId!, false);
+            }
+            // Squash jjagent change back into parent now that the turn is complete.
+            endJjAgentSessionIfNeeded();
+            // Play completion sound in agent/design mode if enabled.
+            if ((isAgentMode || isDesignMode) && useChatStore.getState().completionSound) {
+              playCompletionSound();
+            }
+          },
+          onError: (err) => {
+            // If the user aborted, don't surface an error — onDone has already
+            // handled cleanup (or we'll do it here as a safety net).
+            if (ac.signal.aborted) {
+              finalizeStuckToolCalls(convId!, assistantMsg.id);
+              finalizeStreamingArtifacts(convId!, assistantMsg.id);
+              const currentMsg = useChatStore
+                .getState()
+                .messages[convId!]?.find((m) => m.id === assistantMsg.id);
+              const currentContent = currentMsg?.content || "";
+              const hasToolActivity = (currentMsg?.toolCalls?.length ?? 0) > 0;
+              const hasThinking = (currentMsg?.thinkingContent?.trim().length ?? 0) > 0;
+              if (!currentContent.trim() && !hasToolActivity && !hasThinking) {
+                deleteMessage(convId!, assistantMsg.id);
+              } else {
+                updateMessage(convId!, assistantMsg.id, {
+                  content: currentContent,
+                  isStreaming: false,
+                  interrupted: true,
+                });
+              }
+              stopStreaming(convId!);
+              endJjAgentSessionIfNeeded();
+              return;
+            }
+            finalizeStuckToolCalls(convId!, assistantMsg.id);
+            finalizeStreamingArtifacts(convId!, assistantMsg.id);
+            endJjAgentSessionIfNeeded();
+            // Context-overflow gets dedicated UX: instead of a raw error string,
+            // we surface a friendly banner with quick-action buttons. The model
+            // dropdown still shows everything, but we steer the user toward
+            // longer-context options and one-click history trimming.
+            const isOverflow = (err as Error & { code?: string }).code === "context_overflow";
+            const errMsg = err?.message?.trim() || "Something went wrong during the response.";
+            if (isOverflow) {
+              updateMessage(convId!, assistantMsg.id, {
+                content: `⚠ Context overflow\n\nThis turn exceeded "${selectedModel?.name ?? selectedModelId}"'s context window. Try switching to a longer-context model from the picker, or trim earlier messages by deleting older turns.\n\n${errMsg.split("\n")[0]}`,
+                isStreaming: false,
+              });
+              logError(convId!, errMsg, "streaming");
+              setError("Context window exceeded — see banner above.");
+            } else {
+              updateMessage(convId!, assistantMsg.id, {
+                content: `Error: ${errMsg}`,
+                isStreaming: false,
+              });
+              logError(convId!, errMsg, "streaming");
+              setError(errMsg);
+            }
+            stopStreaming(convId!);
+            endJjAgentSessionIfNeeded();
+          },
+        },
+        {
+          abortSignal: ac.signal,
+          tools: activeTools,
+          maxToolRounds: isResearchMode ? 30 : isDesignMode ? 75 : undefined,
+          subagentsEnabled: (agentMode || designMode) && subagentsEnabled,
+          // Session ID for prompt cache affinity — derived from conversation ID
+          // so the same conversation gets consistent cache routing.
+          sessionId: convId ? `goatllm-${convId}` : undefined,
+          cacheRetention: "long",
+        },
+      );
+    },
+    [
+      value,
+      files,
+      isStreaming,
+      activeId,
+      selectedModelId,
+      addMessage,
+      addCompactionEntry,
+      startStreaming,
+      stopStreaming,
+      appendToMessage,
+      appendToThinking,
+      updateMessage,
+      createConversation,
+      getActiveMessages,
+      getActiveLlmConfig,
+      getModels,
+      renameConversation,
+      setTitleGenerating,
+      conversations,
+      addToolCallToMessage,
+      completeToolCall,
+      updateToolCallState,
+      finalizeStuckToolCalls,
+      detectArtifacts,
+      streamArtifactDelta,
+      finalizeStreamingArtifacts,
+      enqueueMessage,
+      setSteerPayload,
+      clearDraft,
+    ],
+  );
 
   // Keep the ref pointed at the latest handleSend so the question-form
   // effect (which fires from outside this component) doesn't see a stale
@@ -1651,7 +1898,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
   useEffect(() => {
     if (!resendPayload) return;
-    if (resendPayload.conversationId !== activeId) { clearResend(); return; }
+    if (resendPayload.conversationId !== activeId) {
+      clearResend();
+      return;
+    }
     clearResend();
     handleSend({ content: resendPayload.content, attachments: resendPayload.attachments });
   }, [resendPayload, activeId, clearResend, handleSend]);
@@ -1663,7 +1913,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     const conversationId = steerPayload.conversationId;
     setSteerPayload(null);
     void handleSend({ content, fromQueue: true, steered })
-      .catch((error) => setError(error instanceof Error ? error.message : "Unable to send queued message."))
+      .catch((error) =>
+        setError(error instanceof Error ? error.message : "Unable to send queued message."),
+      )
       .finally(() => finishQueuedMessageDispatch(conversationId));
   }, [steerPayload, activeId, setSteerPayload, handleSend, finishQueuedMessageDispatch]);
 
@@ -1674,36 +1926,46 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     if (next) {
       setSteerPayload({ conversationId: activeId, content: next.content, steered: false });
     }
-  }, [activeId, isStreaming, messageQueue, steerPayload, beginQueuedMessageDispatch, setSteerPayload]);
+  }, [
+    activeId,
+    isStreaming,
+    messageQueue,
+    steerPayload,
+    beginQueuedMessageDispatch,
+    setSteerPayload,
+  ]);
 
   // Handle @ file reference selection
-  const handleFileRefSelect = useCallback((path: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
+  const handleFileRefSelect = useCallback(
+    (path: string) => {
+      const ta = textareaRef.current;
+      if (!ta) return;
 
-    const cursorPos = ta.selectionStart;
-    const textBeforeCursor = value.slice(0, cursorPos);
-    const atIndex = textBeforeCursor.lastIndexOf("@");
+      const cursorPos = ta.selectionStart;
+      const textBeforeCursor = value.slice(0, cursorPos);
+      const atIndex = textBeforeCursor.lastIndexOf("@");
 
-    if (atIndex >= 0) {
-      // Replace @query with @path
-      const before = value.slice(0, atIndex);
-      const after = value.slice(cursorPos);
-      const newValue = `${before}@${path} ${after}`;
-      setValue(newValue);
+      if (atIndex >= 0) {
+        // Replace @query with @path
+        const before = value.slice(0, atIndex);
+        const after = value.slice(cursorPos);
+        const newValue = `${before}@${path} ${after}`;
+        setValue(newValue);
 
-      // Move cursor after the inserted path
-      requestAnimationFrame(() => {
-        const newPos = atIndex + path.length + 2; // +2 for @ and space
-        ta.selectionStart = newPos;
-        ta.selectionEnd = newPos;
-        ta.focus();
-      });
-    }
+        // Move cursor after the inserted path
+        requestAnimationFrame(() => {
+          const newPos = atIndex + path.length + 2; // +2 for @ and space
+          ta.selectionStart = newPos;
+          ta.selectionEnd = newPos;
+          ta.focus();
+        });
+      }
 
-    setFileRefQuery(null);
-    setFileRefPosition(null);
-  }, [value]);
+      setFileRefQuery(null);
+      setFileRefPosition(null);
+    },
+    [value],
+  );
 
   const handleFileRefClose = useCallback(() => {
     setFileRefQuery(null);
@@ -1741,7 +2003,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
+        if (!res.ok)
+          throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
         const first = json?.data?.[0];
         const base64 = first?.b64_json ?? first?.url;
         const dataUrl = base64?.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
@@ -1765,7 +2028,10 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         if (!res.ok) throw new Error(json?.error || `Ollama request failed (${res.status}).`);
         // Flux models return base64 images in the response
         const imageData = json?.images?.[0] ?? json?.image;
-        if (!imageData) throw new Error("Ollama response did not contain image data. Make sure flux2-klein is installed (ollama pull flux2-klein:4b).");
+        if (!imageData)
+          throw new Error(
+            "Ollama response did not contain image data. Make sure flux2-klein is installed (ollama pull flux2-klein:4b).",
+          );
         const dataUrl = `data:image/png;base64,${imageData}`;
         setImageGenResult(dataUrl);
         if (activeId) {
@@ -1773,17 +2039,23 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
         }
       } else {
         const endpoint = imageGenSettings.customEndpoint;
-        if (!endpoint) throw new Error("Configure a custom endpoint URL in Settings for this provider.");
+        if (!endpoint)
+          throw new Error("Configure a custom endpoint URL in Settings for this provider.");
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt, provider, model: imageGenSettings.model }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
+        if (!res.ok)
+          throw new Error(json?.error?.message || `Image request failed (${res.status}).`);
         const first = json?.data?.[0] ?? json?.images?.[0] ?? json;
         const base64 = first?.b64_json ?? first?.b64 ?? first?.image ?? first?.url ?? first?.data;
-        const dataUrl = base64?.startsWith("data:") ? base64 : typeof base64 === "string" ? `data:image/png;base64,${base64}` : JSON.stringify(json);
+        const dataUrl = base64?.startsWith("data:")
+          ? base64
+          : typeof base64 === "string"
+            ? `data:image/png;base64,${base64}`
+            : JSON.stringify(json);
         setImageGenResult(dataUrl);
         if (activeId) {
           addImageArtifact(activeId, prompt.slice(0, 64) || "Generated Image", dataUrl);
@@ -1796,15 +2068,207 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     }
   }, [imagePrompt, imageGenLoading, providerConfigs, imageGenSettings, activeId, addImageArtifact]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Don't handle Enter if file picker is open (let the picker handle it)
-    if (fileRefQuery !== null && (e.key === "Enter" || e.key === "Tab" || e.key === "Escape" || e.key === "ArrowUp" || e.key === "ArrowDown")) {
+  const compactConversationFromSlash = useCallback(
+    async (instructions: string) => {
+      const conversationId = useChatStore.getState().activeId;
+      if (!conversationId) {
+        setError("Open a conversation before compacting context.");
+        return;
+      }
+      const config = getActiveLlmConfig();
+      if (!config) {
+        setError("Pick a model before compacting context.");
+        return;
+      }
+      const messages = useChatStore.getState().messages[conversationId] ?? [];
+      const recent = messages.slice(-4);
+      const toSummarize = messages.slice(0, -4).filter((message) => !message.pinned);
+      if (toSummarize.length === 0 || !recent[0]) {
+        setError("There is not enough older context to compact yet.");
+        return;
+      }
+      const latestEntry = useChatStore.getState().compactionEntries[conversationId]?.[0];
+      const summary = await summarizeWithLlm(
+        toSummarize,
+        config,
+        undefined,
+        instructions.trim() || undefined,
+        latestEntry?.summary,
+        {
+          readFiles: latestEntry?.readFiles ?? [],
+          modifiedFiles: latestEntry?.modifiedFiles ?? [],
+        },
+      );
+
+      addCompactionEntry({
+        id: createCompactionId(),
+        conversationId,
+        firstKeptId: recent[0].id,
+        summary,
+        readFiles: latestEntry?.readFiles ?? [],
+        modifiedFiles: latestEntry?.modifiedFiles ?? [],
+        tokensBefore: estimateTotalTokens(messages),
+        source: "manual",
+        isSplitTurn: false,
+        promptVersion: latestEntry ? "update" : "initial",
+        createdAt: Date.now(),
+        mode: useChatStore.getState().getActiveConversation()?.mode ?? "chat",
+        modelId: useChatStore.getState().selectedModelId ?? undefined,
+      });
+    },
+    [addCompactionEntry, getActiveLlmConfig],
+  );
+
+  const activeModeKey = agentMode ? "agent" : designMode ? "design" : "chat";
+  const searchAvailable = searchBackend === "tavily" ? !!tavilyApiKey : true;
+  const slashCommands = buildSlashCommandRegistry({
+    activeId,
+    agentMode,
+    designMode,
+    featureFlags,
+    hasSearch: searchAvailable,
+    hasSkills: skillsForCurrentMode.length > 0,
+    isStreaming,
+    planMode,
+    researchMode,
+    activeSkillNames,
+    skills: skillsForCurrentMode.filter((skill) => !disabledSkills.has(skill.name)),
+  });
+  const slashQuery = getSlashCommandQuery(
+    value,
+    textareaRef.current?.selectionStart ?? value.length,
+  );
+  const filteredSlashCommands = slashQuery
+    ? filterSlashCommands(slashCommands, slashQuery.query).slice(0, 9)
+    : [];
+  const slashMenuOpen = filteredSlashCommands.length > 0;
+  const slashActions: SlashCommandActions = {
+    attachFile: handleAttach,
+    cancelStreaming,
+    clearComposer: () => {
+      setValue("");
+      requestAnimationFrame(() => {
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+      });
+    },
+    compactConversation: compactConversationFromSlash,
+    focusComposer: () => textareaRef.current?.focus(),
+    openImageGenerator: () => {
+      setImageGenResult(null);
+      setImageGenError(null);
+      setImagePrompt("");
+      setShowImageGen(true);
+    },
+    openSettings: () => onOpenSettings?.(),
+    openSkills: () => {
+      setPendingSkills(activeId ? activeSkillNames : pendingSkills);
+      setShowSkillPicker(true);
+    },
+    sendMessage: (content) => handleSend({ content }),
+    setAgentMode,
+    setComposerValue: setValue,
+    setDesignMode,
+    setError,
+    setPlanMode,
+    setPursueGoalMode,
+    setResearchMode: (enabled) => {
+      if (enabled !== researchMode) toggleResearchMode();
+    },
+    setSteerPayload: (payload) => {
+      if (!activeId) return;
+      setSteerPayload({ conversationId: activeId, ...payload });
+    },
+    setSystemPrompt: (prompt) => {
+      if (!activeId) {
+        setError("Open a conversation before setting a system prompt.");
+        return;
+      }
+      setSystemPrompt(activeId, prompt);
+    },
+  };
+  const runSlashCommand = async (command: SlashCommandDefinition, args: string) => {
+    setShowPlusMenu(false);
+    await executeSlashCommand(command, args, slashActions);
+    setSlashActiveIndex(0);
+  };
+  const selectSlashCommand = (command: SlashCommandDefinition) => {
+    if (command.argumentHint) {
+      setValue(`/${command.name} `);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      setSlashActiveIndex(0);
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
-  }, [handleSend, fileRefQuery]);
+    void runSlashCommand(command, "");
+  };
+  const handleComposerSubmit = () => {
+    const invocation = parseSlashCommandInvocation(value.trim());
+    if (invocation) {
+      const command = slashCommands.find((item) => item.name === invocation.name);
+      if (command) {
+        void runSlashCommand(command, invocation.args);
+        return;
+      }
+    }
+    handleSend();
+  };
 
-  const canSend = (value.trim().length > 0 || files.length > 0) && !noModelsAvailable && !!selectedModelId;
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Don't handle Enter if file picker is open (let the picker handle it)
+      if (
+        fileRefQuery !== null &&
+        (e.key === "Enter" ||
+          e.key === "Tab" ||
+          e.key === "Escape" ||
+          e.key === "ArrowUp" ||
+          e.key === "ArrowDown")
+      ) {
+        return;
+      }
+      if (slashMenuOpen) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setSlashActiveIndex((index) => (index + 1) % filteredSlashCommands.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setSlashActiveIndex(
+            (index) => (index - 1 + filteredSlashCommands.length) % filteredSlashCommands.length,
+          );
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+          e.preventDefault();
+          selectSlashCommand(
+            filteredSlashCommands[Math.min(slashActiveIndex, filteredSlashCommands.length - 1)],
+          );
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setValue("");
+          setSlashActiveIndex(0);
+          return;
+        }
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleComposerSubmit();
+      }
+    },
+    [
+      fileRefQuery,
+      filteredSlashCommands,
+      handleComposerSubmit,
+      selectSlashCommand,
+      slashActiveIndex,
+      slashMenuOpen,
+    ],
+  );
+
+  const canSend =
+    (value.trim().length > 0 || files.length > 0) && !noModelsAvailable && !!selectedModelId;
 
   const handleToggleMic = useCallback(() => {
     if (speech.listening) {
@@ -1814,15 +2278,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     }
   }, [speech]);
 
-  const activeModeKey = agentMode ? "agent" : designMode ? "design" : "chat";
-
   return (
     <div className="w-full max-w-[720px] min-w-0">
       <div
-        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${animatedBorderEnabled ? "animated-border" : ""} ${showPlusMenu || showSkillPicker ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
+        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${animatedBorderEnabled ? "animated-border" : ""} ${showPlusMenu || showSkillPicker || slashMenuOpen ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
       >
         {animatedBorderEnabled && (
-          <div className="pointer-events-none absolute inset-0 rounded-[24px]" style={{ zIndex: 10 }}>
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[24px]"
+            style={{ zIndex: 10 }}
+          >
             <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
               <rect
                 x="0"
@@ -1842,9 +2307,23 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-[#f87171]/[0.055] border border-[#f87171]/20 rounded-lg text-[12.5px] text-[#fca5a5] animate-[fadeIn_180ms_ease]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#f87171] shrink-0" aria-hidden="true" />
             <span className="flex-1 leading-relaxed">{error}</span>
-            <button onClick={() => setError(null)} className="control-icon p-1 rounded transition-colors" aria-label="Dismiss">
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <line x1="1" y1="1" x2="11" y2="11" /><line x1="11" y1="1" x2="1" y2="11" />
+            <button
+              onClick={() => setError(null)}
+              className="control-icon p-1 rounded transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <line x1="1" y1="1" x2="11" y2="11" />
+                <line x1="11" y1="1" x2="1" y2="11" />
               </svg>
             </button>
           </div>
@@ -1902,34 +2381,39 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           </div>
         )}
 
-          {/* Active skill chips */}
-          {(activeId ? activeSkillNames : pendingSkills).length > 0 && (
-            <div className="mb-2 flex items-center gap-1.5 flex-wrap">
-              {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
-                <span
-                  key={sn}
-                  className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(var(--theme-accent-rgb),0.08)]"
+        {/* Active skill chips */}
+        {(activeId ? activeSkillNames : pendingSkills).length > 0 && (
+          <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+            {(activeId ? activeSkillNames : pendingSkills).map((sn) => (
+              <span
+                key={sn}
+                className="inline-flex items-center gap-1.5 pl-1.5 pr-1 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-[12px] text-[#d4944a] shadow-[inset_0_1px_0_rgba(var(--theme-accent-rgb),0.08)]"
+              >
+                <Wand2
+                  size={10}
+                  strokeWidth={1.75}
+                  className="shrink-0 opacity-80"
+                  aria-hidden="true"
+                />
+                <span>{sn}</span>
+                <button
+                  onClick={() => {
+                    if (activeId) {
+                      const next = activeSkillNames.filter((n) => n !== sn);
+                      setConversationSkills(activeId, next);
+                    } else {
+                      setPendingSkills((prev) => prev.filter((n) => n !== sn));
+                    }
+                  }}
+                  className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent/20 transition-colors text-[#d4944a]/60 hover:text-[#d4944a]"
+                  aria-label={`Remove ${sn} skill`}
                 >
-                  <Wand2 size={10} strokeWidth={1.75} className="shrink-0 opacity-80" aria-hidden="true" />
-                  <span>{sn}</span>
-                  <button
-                    onClick={() => {
-                      if (activeId) {
-                        const next = activeSkillNames.filter((n) => n !== sn);
-                        setConversationSkills(activeId, next);
-                      } else {
-                        setPendingSkills((prev) => prev.filter((n) => n !== sn));
-                      }
-                    }}
-                    className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent/20 transition-colors text-[#d4944a]/60 hover:text-[#d4944a]"
-                    aria-label={`Remove ${sn} skill`}
-                  >
-                    <X size={9} strokeWidth={2.5} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+                  <X size={9} strokeWidth={2.5} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         <textarea
           ref={textareaRef}
@@ -1972,9 +2456,28 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           onPaste={handlePaste}
           rows={1}
           aria-label="Message input"
-          placeholder={speech.listening ? "Listening…" : isStreaming ? "Working — type to queue or steer…" : noModelsAvailable ? "Add a provider in Settings to begin" : designMode ? "Design anything" : agentMode ? "Do anything" : "Ask anything"}
+          placeholder={
+            speech.listening
+              ? "Listening…"
+              : isStreaming
+                ? "Working — type to queue or steer…"
+                : noModelsAvailable
+                  ? "Add a provider in Settings to begin"
+                  : designMode
+                    ? "Design anything"
+                    : agentMode
+                      ? "Do anything"
+                      : "Ask anything"
+          }
           className={`w-full ${isFollowUp ? "min-h-[28px]" : "min-h-[40px]"} max-h-[180px] bg-transparent text-[16px] text-[#ececec] placeholder:text-[#b4b4b4] resize-none focus:outline-none leading-relaxed`}
         />
+        {slashMenuOpen && (
+          <SlashCommandMenu
+            commands={filteredSlashCommands}
+            activeIndex={Math.min(slashActiveIndex, filteredSlashCommands.length - 1)}
+            onSelect={selectSlashCommand}
+          />
+        )}
 
         {/* @ file reference picker */}
         {fileRefQuery !== null && fileRefPosition && fileRefActiveWorkspace && (
@@ -1987,7 +2490,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           />
         )}
 
-        <div className={`flex flex-wrap items-center justify-between gap-2 ${isFollowUp ? "mt-2.5 pt-2.5" : "mt-4 min-h-[40px] pt-3"} border-t border-white/5`}>
+        <div
+          className={`flex flex-wrap items-center justify-between gap-2 ${isFollowUp ? "mt-2.5 pt-2.5" : "mt-4 min-h-[40px] pt-3"} border-t border-white/5`}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             {/* + menu */}
             {!designMode && (
@@ -2006,55 +2511,106 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                     <div className="popover-surface absolute bottom-full left-0 mb-2 w-64 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                       {[
                         ...(plusMenuVisibility[activeModeKey]?.upload !== false
-                          ? [{ icon: Upload, label: "Upload file", onClick: () => { setShowPlusMenu(false); handleAttach(); } }]
+                          ? [
+                              {
+                                icon: Upload,
+                                label: "Upload file",
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  handleAttach();
+                                },
+                              },
+                            ]
                           : []),
-                        ...(featureFlags.pursueGoal && plusMenuVisibility[activeModeKey]?.pursueGoal !== false
-                          ? [{
-                              icon: Target,
-                              label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
-                              description: pursueGoalMode
-                                ? "Your next message becomes an autonomous goal run."
-                                : "Plan, inspect, execute, iterate, and verify.",
-                              active: pursueGoalMode,
-                              onClick: () => { setShowPlusMenu(false); setPursueGoalMode(!pursueGoalMode); },
-                            }]
+                        ...(featureFlags.pursueGoal &&
+                        plusMenuVisibility[activeModeKey]?.pursueGoal !== false
+                          ? [
+                              {
+                                icon: Target,
+                                label: pursueGoalMode ? "Pursue Goal — on" : "Pursue Goal",
+                                description: pursueGoalMode
+                                  ? "Your next message becomes an autonomous goal run."
+                                  : "Plan, inspect, execute, iterate, and verify.",
+                                active: pursueGoalMode,
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  setPursueGoalMode(!pursueGoalMode);
+                                },
+                              },
+                            ]
                           : []),
-                        ...(featureFlags.imageGeneration && plusMenuVisibility[activeModeKey]?.image !== false
-                          ? [{ icon: ImageIcon, label: "Generate image", description: "Create image artifacts from a prompt.", onClick: () => { setShowPlusMenu(false); setImageGenResult(null); setImageGenError(null); setImagePrompt(""); setShowImageGen(true); } }]
+                        ...(featureFlags.imageGeneration &&
+                        plusMenuVisibility[activeModeKey]?.image !== false
+                          ? [
+                              {
+                                icon: ImageIcon,
+                                label: "Generate image",
+                                description: "Create image artifacts from a prompt.",
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  setImageGenResult(null);
+                                  setImageGenError(null);
+                                  setImagePrompt("");
+                                  setShowImageGen(true);
+                                },
+                              },
+                            ]
                           : []),
                         ...(agentMode && plusMenuVisibility[activeModeKey]?.plan !== false
-                          ? [{
-                              icon: ListChecks,
-                              label: planMode ? "Plan mode — on" : "Plan mode",
-                              description: planMode
-                                ? "Read-only investigation. Toggle off to write."
-                                : "Read-only investigation, then a Build button.",
-                              active: planMode,
-                              onClick: () => { setShowPlusMenu(false); setPlanMode(!planMode); },
-                            }]
+                          ? [
+                              {
+                                icon: ListChecks,
+                                label: planMode ? "Plan mode — on" : "Plan mode",
+                                description: planMode
+                                  ? "Read-only investigation. Toggle off to write."
+                                  : "Read-only investigation, then a Build button.",
+                                active: planMode,
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  setPlanMode(!planMode);
+                                },
+                              },
+                            ]
                           : []),
-                        ...(((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true)) && plusMenuVisibility[activeModeKey]?.research !== false)
-                          ? [{
-                              icon: Telescope,
-                              label: researchMode ? "Deep Research — on" : "Deep Research",
-                              description: researchMode
-                                ? "Applies to your next message, then resets."
-                                : agentMode
-                                  ? "Multi-step web research with citations."
-                                  : "Multi-step web research with citations.",
-                              active: researchMode,
-                              onClick: () => { setShowPlusMenu(false); toggleResearchMode(); },
-                            }]
+                        ...((agentMode || (searchBackend === "tavily" ? !!tavilyApiKey : true)) &&
+                        plusMenuVisibility[activeModeKey]?.research !== false
+                          ? [
+                              {
+                                icon: Telescope,
+                                label: researchMode ? "Deep Research — on" : "Deep Research",
+                                description: researchMode
+                                  ? "Applies to your next message, then resets."
+                                  : agentMode
+                                    ? "Multi-step web research with citations."
+                                    : "Multi-step web research with citations.",
+                                active: researchMode,
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  toggleResearchMode();
+                                },
+                              },
+                            ]
                           : []),
-                        ...(skillsForCurrentMode.length > 0 && plusMenuVisibility[activeModeKey]?.skills !== false
-                          ? [{ icon: Wand2, label: "Choose skills", onClick: () => { setShowPlusMenu(false); setPendingSkills(activeId ? activeSkillNames : pendingSkills); setShowSkillPicker((s) => !s); } }]
+                        ...(skillsForCurrentMode.length > 0 &&
+                        plusMenuVisibility[activeModeKey]?.skills !== false
+                          ? [
+                              {
+                                icon: Wand2,
+                                label: "Choose skills",
+                                onClick: () => {
+                                  setShowPlusMenu(false);
+                                  setPendingSkills(activeId ? activeSkillNames : pendingSkills);
+                                  setShowSkillPicker((s) => !s);
+                                },
+                              },
+                            ]
                           : []),
                       ].map((opt) => (
                         <button
                           key={opt.label}
                           onClick={opt.onClick}
                           className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
-                            ("active" in opt && opt.active)
+                            "active" in opt && opt.active
                               ? "bg-white/[0.06] text-text-1"
                               : "text-[#ececec] hover:bg-white/[0.065]"
                           }`}
@@ -2062,7 +2618,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                           <opt.icon
                             size={14}
                             strokeWidth={1.75}
-                            className={`shrink-0 mt-0.5 ${("active" in opt && opt.active) ? "text-text-2" : "text-[#c9c9c9]"}`}
+                            className={`shrink-0 mt-0.5 ${"active" in opt && opt.active ? "text-text-2" : "text-[#c9c9c9]"}`}
                           />
                           <div className="flex flex-col min-w-0 flex-1">
                             <span className="truncate">{opt.label}</span>
@@ -2072,8 +2628,11 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                               </span>
                             )}
                           </div>
-                          {("active" in opt && opt.active) && (
-                            <span aria-hidden className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
+                          {"active" in opt && opt.active && (
+                            <span
+                              aria-hidden
+                              className="shrink-0 mt-1.5 h-1.5 w-1.5 rounded-full bg-accent"
+                            />
                           )}
                         </button>
                       ))}
@@ -2091,7 +2650,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                     <div className="popover-surface absolute bottom-full left-0 mb-2 w-72 rounded-xl p-1.5 z-[90] origin-bottom-left animate-[dropdownIn_110ms_ease-out]">
                       {/* Header */}
                       <div className="flex items-center gap-2 px-2.5 py-2 mb-0.5">
-                        <Wand2 size={13} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden="true" />
+                        <Wand2
+                          size={13}
+                          strokeWidth={1.75}
+                          className="text-accent shrink-0"
+                          aria-hidden="true"
+                        />
                         <span className="text-[12px] font-semibold text-text-1">Choose skills</span>
                       </div>
                       {skillsForCurrentMode
@@ -2109,7 +2673,9 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                               key={skill.name}
                               onClick={() => {
                                 setPendingSkills((prev) =>
-                                  selected ? prev.filter((n) => n !== skill.name) : [...prev, skill.name]
+                                  selected
+                                    ? prev.filter((n) => n !== skill.name)
+                                    : [...prev, skill.name],
                                 );
                               }}
                               className={`flex items-start gap-2.5 w-full px-2.5 py-2 rounded-md text-[13px] transition-colors duration-[120ms] text-left ${
@@ -2126,12 +2692,16 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                                     : "border border-white/20"
                                 }`}
                               >
-                                {selected && <Check size={9} strokeWidth={3} className="text-[#1a1a1c]" />}
+                                {selected && (
+                                  <Check size={9} strokeWidth={3} className="text-[#1a1a1c]" />
+                                )}
                               </span>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 truncate">
                                   <span className="truncate">{skill.name}</span>
-                                  <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded border font-medium ${modeColor}`}>
+                                  <span
+                                    className={`shrink-0 text-[9px] px-1 py-0.5 rounded border font-medium ${modeColor}`}
+                                  >
                                     {skill.mode}
                                   </span>
                                 </div>
@@ -2180,26 +2750,24 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
             {/* Mic button */}
             {showMic && (
-            <button
-              onClick={handleToggleMic}
-              className={`control-icon p-1.5 rounded-md transition-colors ${
-                speech.listening
-                  ? "text-accent bg-accent/10 border-accent/25"
-                  : ""
-              }`}
-              aria-label={speech.listening ? "Stop dictation" : "Start dictation"}
-              aria-pressed={speech.listening}
-              title={speech.listening ? "Stop listening" : "Dictate"}
-            >
-              {speech.listening ? (
-                <StopCircle size={15} strokeWidth={1.75} aria-hidden="true" />
-              ) : (
-                <Mic size={15} strokeWidth={1.75} aria-hidden="true" />
-              )}
-            </button>
+              <button
+                onClick={handleToggleMic}
+                className={`control-icon p-1.5 rounded-md transition-colors ${
+                  speech.listening ? "text-accent bg-accent/10 border-accent/25" : ""
+                }`}
+                aria-label={speech.listening ? "Stop dictation" : "Start dictation"}
+                aria-pressed={speech.listening}
+                title={speech.listening ? "Stop listening" : "Dictate"}
+              >
+                {speech.listening ? (
+                  <StopCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+                ) : (
+                  <Mic size={15} strokeWidth={1.75} aria-hidden="true" />
+                )}
+              </button>
             )}
 
-            {designMode ? (!activeId && <DesignPills />) : <AgentPill />}
+            {designMode ? !activeId && <DesignPills /> : <AgentPill />}
             {agentMode && planMode && (
               <button
                 type="button"
@@ -2222,7 +2790,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               const disabled = !isStreaming && !canSend;
               return (
                 <button
-                  onClick={showStop ? cancelStreaming : () => handleSend()}
+                  onClick={showStop ? cancelStreaming : handleComposerSubmit}
                   disabled={disabled}
                   aria-label={showStop ? "Stop generating" : "Send message"}
                   className={`ml-1 w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all duration-200 ${
@@ -2234,9 +2802,19 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                   }`}
                 >
                   {showStop ? (
-                    <Square size={11} strokeWidth={2.5} className="text-[#2d2d2d]" aria-hidden="true" />
+                    <Square
+                      size={11}
+                      strokeWidth={2.5}
+                      className="text-[#2d2d2d]"
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <ArrowUp size={16} strokeWidth={2.4} className={disabled ? "text-[#a0a0a0]" : "text-[#1a1a1c]"} aria-hidden="true" />
+                    <ArrowUp
+                      size={16}
+                      strokeWidth={2.4}
+                      className={disabled ? "text-[#a0a0a0]" : "text-[#1a1a1c]"}
+                      aria-hidden="true"
+                    />
                   )}
                 </button>
               );
@@ -2260,7 +2838,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
               <div className="flex items-center gap-2">
-                <ImageIcon size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
+                <ImageIcon
+                  size={16}
+                  strokeWidth={1.75}
+                  className="text-accent"
+                  aria-hidden="true"
+                />
                 <h3 className="text-[14px] font-semibold text-[#ececec]">Generate Image</h3>
               </div>
               <button
@@ -2273,7 +2856,8 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
             </div>
             <div className="p-5">
               <p className="text-[12px] text-[#a0a0a0] mb-3">
-                Describe the image you want to generate. Images are added to the conversation as artifacts.
+                Describe the image you want to generate. Images are added to the conversation as
+                artifacts.
               </p>
               <textarea
                 value={imagePrompt}

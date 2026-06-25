@@ -294,7 +294,10 @@ export function buildFileImpactSummary(path: string, before: string, after: stri
 }
 
 export function applyBudgetControls(controls: AgentBudgetControls): string {
-  return `Max ${controls.maxToolCalls} tool calls, ${controls.maxSubagents} ${controls.maxSubagents === 1 ? "subagent" : "subagents"}, ${controls.maxMinutes} minutes`;
+  const subagentBudget = controls.maxSubagents <= 0
+    ? "unlimited subagents"
+    : `${controls.maxSubagents} ${controls.maxSubagents === 1 ? "subagent" : "subagents"}`;
+  return `Max ${controls.maxToolCalls} tool calls, ${subagentBudget}, ${controls.maxMinutes} minutes`;
 }
 
 export function sessionOnboardingSteps({

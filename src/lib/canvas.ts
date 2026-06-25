@@ -72,6 +72,39 @@ export interface CanvasBoard {
   chat: CanvasChatMessage[];
 }
 
+export type NotebookSourceKind = "file" | "web" | "text";
+export type NotebookSourceStatus = "ready" | "processing" | "error";
+export type NotebookSourceContextMode = "full" | "summary" | "off";
+export type NotebookNoteKind = "manual" | "ai";
+export type NotebookNoteContextMode = "full" | "off";
+
+export interface NotebookSource {
+  id: string;
+  title: string;
+  kind: NotebookSourceKind;
+  content: string;
+  summary: string;
+  url?: string;
+  filename?: string;
+  mimeType?: string;
+  status: NotebookSourceStatus;
+  error?: string;
+  contextMode: NotebookSourceContextMode;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NotebookNote {
+  id: string;
+  title: string;
+  content: string;
+  kind: NotebookNoteKind;
+  sourceIds: string[];
+  contextMode: NotebookNoteContextMode;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /**
  * A named notebook wraps a board ({ panels, chat }) with identity and
  * timestamps so the app can keep a collection of them and switch between them.
@@ -81,6 +114,9 @@ export interface CanvasBoard {
 export interface Notebook {
   id: string;
   name: string;
+  description: string;
+  sources: NotebookSource[];
+  notes: NotebookNote[];
   panels: CanvasPanel[];
   chat: CanvasChatMessage[];
   createdAt: number;
@@ -205,16 +241,172 @@ export function sanitizeBoard(board: unknown): CanvasBoard {
 // ── Notebook collection (named, switchable boards) ──────────────────────────
 
 let notebookSeq = 0;
+let sourceSeq = 0;
+let noteSeq = 0;
+
+function cleanLabel(value: string | undefined, fallback: string): string {
+  const clean = (value ?? "").trim().replace(/\s+/g, " ");
+  return clean || fallback;
+}
 
 export function createNotebook(name?: string, seed = Date.now()): Notebook {
   return {
     id: `nb-${seed}-${(notebookSeq++).toString(36)}`,
     name: name?.trim() || DEFAULT_NOTEBOOK_NAME,
+    description: "",
+    sources: [],
+    notes: [],
     panels: [],
     chat: [],
     createdAt: seed,
     updatedAt: seed,
   };
+}
+
+function summarizeNotebookText(text: string, maxChars = 1200): string {
+  const clean = text.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  if (!clean) return "";
+  if (clean.length <= maxChars) return clean;
+  const paragraphs = clean.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+  const picked: string[] = [];
+  let used = 0;
+  for (const paragraph of paragraphs) {
+    if (used >= maxChars) break;
+    const remaining = maxChars - used;
+    const next = paragraph.length > remaining ? `${paragraph.slice(0, Math.max(0, remaining - 1)).trim()}…` : paragraph;
+    if (next) picked.push(next);
+    used += next.length + 2;
+  }
+  return picked.join("\n\n") || `${clean.slice(0, maxChars - 1).trim()}…`;
+}
+
+export function createNotebookSource(input: {
+  title: string;
+  kind: NotebookSourceKind;
+  content: string;
+  summary?: string;
+  url?: string;
+  filename?: string;
+  mimeType?: string;
+  contextMode?: NotebookSourceContextMode;
+  status?: NotebookSourceStatus;
+  error?: string;
+  seed?: number;
+}): NotebookSource {
+  const seed = input.seed ?? Date.now();
+  const content = input.content ?? "";
+  return {
+    id: `src-${seed}-${(sourceSeq++).toString(36)}`,
+    title: cleanLabel(input.title, input.filename || input.url || "Untitled source"),
+    kind: input.kind,
+    content,
+    summary: input.summary ?? summarizeNotebookText(content),
+    url: input.url,
+    filename: input.filename,
+    mimeType: input.mimeType,
+    status: input.status ?? "ready",
+    error: input.error,
+    contextMode: input.contextMode ?? "full",
+    createdAt: seed,
+    updatedAt: seed,
+  };
+}
+
+export function createNotebookNote(input: {
+  title: string;
+  content: string;
+  kind?: NotebookNoteKind;
+  sourceIds?: string[];
+  contextMode?: NotebookNoteContextMode;
+  seed?: number;
+}): NotebookNote {
+  const seed = input.seed ?? Date.now();
+  return {
+    id: `note-${seed}-${(noteSeq++).toString(36)}`,
+    title: cleanLabel(input.title, "Untitled note"),
+    content: input.content ?? "",
+    kind: input.kind ?? "manual",
+    sourceIds: input.sourceIds ?? [],
+    contextMode: input.contextMode ?? "full",
+    createdAt: seed,
+    updatedAt: seed,
+  };
+}
+
+function sanitizeSourceKind(kind: unknown): NotebookSourceKind {
+  return kind === "file" || kind === "web" || kind === "text" ? kind : "text";
+}
+
+function sanitizeSourceStatus(status: unknown): NotebookSourceStatus {
+  if (status === "processing") return "error";
+  return status === "ready" || status === "error" ? status : "ready";
+}
+
+function sanitizeSourceContextMode(mode: unknown): NotebookSourceContextMode {
+  return mode === "summary" || mode === "off" || mode === "full" ? mode : "full";
+}
+
+function sanitizeNoteKind(kind: unknown): NotebookNoteKind {
+  return kind === "ai" ? "ai" : "manual";
+}
+
+function sanitizeNoteContextMode(mode: unknown): NotebookNoteContextMode {
+  return mode === "off" ? "off" : "full";
+}
+
+export function sanitizeNotebookSources(raw: unknown): NotebookSource[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Partial<NotebookSource> => !!item && typeof item === "object")
+    .map((item) => {
+      const now = Date.now();
+      const status = sanitizeSourceStatus(item.status);
+      const content = typeof item.content === "string" ? item.content : "";
+      const summary = typeof item.summary === "string" ? item.summary : summarizeNotebookText(content);
+      const createdAt = typeof item.createdAt === "number" ? item.createdAt : now;
+      return {
+        id: typeof item.id === "string" && item.id ? item.id : `src-${now}-${(sourceSeq++).toString(36)}`,
+        title: cleanLabel(item.title, item.filename || item.url || "Untitled source"),
+        kind: sanitizeSourceKind(item.kind),
+        content,
+        summary,
+        url: typeof item.url === "string" ? item.url : undefined,
+        filename: typeof item.filename === "string" ? item.filename : undefined,
+        mimeType: typeof item.mimeType === "string" ? item.mimeType : undefined,
+        status,
+        error:
+          status === "error"
+            ? typeof item.error === "string" && item.error.trim()
+              ? item.error
+              : "Processing was interrupted."
+            : undefined,
+        contextMode: sanitizeSourceContextMode(item.contextMode),
+        createdAt,
+        updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : createdAt,
+      };
+    });
+}
+
+export function sanitizeNotebookNotes(raw: unknown): NotebookNote[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Partial<NotebookNote> => !!item && typeof item === "object")
+    .map((item) => {
+      const now = Date.now();
+      const createdAt = typeof item.createdAt === "number" ? item.createdAt : now;
+      return {
+        id: typeof item.id === "string" && item.id ? item.id : `note-${now}-${(noteSeq++).toString(36)}`,
+        title: cleanLabel(item.title, "Untitled note"),
+        content: typeof item.content === "string" ? item.content : "",
+        kind: sanitizeNoteKind(item.kind),
+        sourceIds: Array.isArray(item.sourceIds)
+          ? item.sourceIds.filter((id): id is string => typeof id === "string")
+          : [],
+        contextMode: sanitizeNoteContextMode(item.contextMode),
+        createdAt,
+        updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : createdAt,
+      };
+    });
 }
 
 /**
@@ -230,6 +422,9 @@ export function sanitizeNotebook(raw: unknown): Notebook | null {
   return {
     id: typeof n.id === "string" && n.id ? n.id : `nb-${now}-${(notebookSeq++).toString(36)}`,
     name: typeof n.name === "string" && n.name.trim() ? n.name : DEFAULT_NOTEBOOK_NAME,
+    description: typeof n.description === "string" ? n.description : "",
+    sources: sanitizeNotebookSources(n.sources),
+    notes: sanitizeNotebookNotes(n.notes),
     panels: sanitizePanels(n.panels),
     chat: sanitizeCanvasMessages(n.chat),
     createdAt,
@@ -260,10 +455,53 @@ export function migrateLegacyBoard(
   return [
     {
       ...createNotebook("Notebook", seed),
+      description: "",
       panels: board.panels,
       chat: board.chat,
     },
   ];
+}
+
+export interface NotebookContextBuild {
+  context: string;
+  tokenCount: number;
+  charCount: number;
+  sourceCount: number;
+  noteCount: number;
+}
+
+export function buildNotebookContext(notebook: Notebook): NotebookContextBuild {
+  const blocks: string[] = [`# Notebook: ${notebook.name}`];
+  const description = notebook.description.trim();
+  if (description) blocks.push(description);
+
+  let sourceCount = 0;
+  for (const source of notebook.sources) {
+    if (source.contextMode === "off" || source.status !== "ready") continue;
+    const body = source.contextMode === "summary" ? source.summary || summarizeNotebookText(source.content) : source.content;
+    if (!body.trim()) continue;
+    sourceCount++;
+    const modeLabel = source.contextMode === "summary" ? "summary" : "full content";
+    const origin = source.url ? ` (${source.url})` : source.filename ? ` (${source.filename})` : "";
+    blocks.push(`## Source ${sourceCount}: ${source.title}${origin}\nContext: ${modeLabel}\n\n${body.trim()}`);
+  }
+
+  let noteCount = 0;
+  for (const note of notebook.notes) {
+    if (note.contextMode === "off" || !note.content.trim()) continue;
+    noteCount++;
+    const kind = note.kind === "ai" ? "AI note" : "Manual note";
+    blocks.push(`## Note ${noteCount}: ${note.title}\nType: ${kind}\n\n${note.content.trim()}`);
+  }
+
+  const context = blocks.join("\n\n").trim();
+  return {
+    context,
+    tokenCount: Math.ceil(context.length / 4),
+    charCount: context.length,
+    sourceCount,
+    noteCount,
+  };
 }
 
 // ── Document edit operations (pure, testable) ───────────────────────────────
@@ -334,22 +572,57 @@ function truncate(text: string, max: number): string {
  * gate) — modeled on the artifact editor.
  */
 export interface NotebookToolDeps {
-  getBoard: () => CanvasBoard;
+  getBoard: () => CanvasBoard | Notebook;
   createPanel: (kind: CanvasPanelKind, title: string, content: string) => string;
   setPanelContent: (panelId: string, content: string) => void;
   setPanelTitle: (panelId: string, title: string) => void;
+  createNote?: (title: string, content: string, sourceIds?: string[]) => string;
+  setNoteContent?: (noteId: string, content: string) => void;
+  setNoteTitle?: (noteId: string, title: string) => void;
 }
 
 /** Panels at or below this size are inlined whole in the system prompt; larger
  *  ones are shown as a preview and the assistant reads them on demand. */
 export const PANEL_INLINE_LIMIT = 1200;
 
+function isNotebookBoard(board: CanvasBoard | Notebook): board is Notebook {
+  return "sources" in board && "notes" in board && Array.isArray(board.sources) && Array.isArray(board.notes);
+}
+
+function sourceSnippet(text: string, query: string, max = 280): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const index = clean.toLowerCase().indexOf(query.toLowerCase());
+  const start = index === -1 ? 0 : Math.max(0, index - 90);
+  const end = Math.min(clean.length, start + max);
+  const prefix = start > 0 ? "..." : "";
+  const suffix = end < clean.length ? "..." : "";
+  return `${prefix}${clean.slice(start, end).trim()}${suffix}`;
+}
+
 export function createNotebookTools(deps: NotebookToolDeps) {
   const findPanel = (panelId: string): CanvasPanel | undefined =>
     deps.getBoard().panels.find((p) => p.id === panelId);
 
+  const getNotebook = (): Notebook | null => {
+    const board = deps.getBoard();
+    return isNotebookBoard(board) ? board : null;
+  };
+
+  const findSource = (sourceId: string): NotebookSource | undefined =>
+    getNotebook()?.sources.find((source) => source.id === sourceId);
+
+  const findNote = (noteId: string): NotebookNote | undefined =>
+    getNotebook()?.notes.find((note) => note.id === noteId);
+
   const idsHint = (): string =>
     deps.getBoard().panels.map((p) => `${p.id} ("${p.title}")`).join(", ") || "(none)";
+
+  const sourceIdsHint = (): string =>
+    getNotebook()?.sources.map((s) => `${s.id} ("${s.title}")`).join(", ") || "(none)";
+
+  const noteIdsHint = (): string =>
+    getNotebook()?.notes.map((n) => `${n.id} ("${n.title}")`).join(", ") || "(none)";
 
   const runEdit = (panelId: string, compute: (panel: CanvasPanel) => CanvasEditResult): string => {
     const panel = findPanel(panelId);
@@ -455,6 +728,129 @@ export function createNotebookTools(deps: NotebookToolDeps) {
         return `Renamed "${panel.title}" to "${clean}".`;
       },
     }),
+    list_sources: tool({
+      description:
+        "List notebook sources with ids, titles, types, context modes, status, and size. Use these ids when reading or searching source material.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const notebook = getNotebook();
+        if (!notebook?.sources.length) return "This notebook has no sources yet.";
+        return notebook.sources
+          .map((source) => {
+            const status = source.status === "error" ? `error: ${source.error || "unknown"}` : source.status;
+            return [
+              `- id ${source.id}`,
+              `"${source.title}"`,
+              source.kind,
+              `${source.content.length} chars`,
+              `context ${source.contextMode}`,
+              status,
+            ].join(" · ");
+          })
+          .join("\n");
+      },
+    }),
+    read_source: tool({
+      description:
+        "Read a notebook source's full extracted text by id. Use this before making citation-sensitive claims from a source.",
+      inputSchema: z.object({
+        source_id: z.string().describe("Target source id from list_sources."),
+      }),
+      execute: async ({ source_id }) => {
+        const source = findSource(source_id);
+        if (!source) return `No source with id "${source_id}". Existing sources: ${sourceIdsHint()}.`;
+        const origin = source.url ? `\nURL: ${source.url}` : source.filename ? `\nFile: ${source.filename}` : "";
+        const status = source.status === "ready" ? "" : `\nStatus: ${source.status}${source.error ? ` (${source.error})` : ""}`;
+        return `# ${source.title}\nType: ${source.kind}${origin}${status}\nContext mode: ${source.contextMode}\n\n${source.content || "(empty)"}`;
+      },
+    }),
+    search_sources: tool({
+      description:
+        "Search ready notebook sources and included notes for a query. Excludes sources or notes whose context mode is off. Returns short snippets with ids.",
+      inputSchema: z.object({
+        query: z.string().describe("Search text."),
+      }),
+      execute: async ({ query }) => {
+        const needle = query.trim().toLowerCase();
+        if (!needle) return "No search run: provide a non-empty query.";
+        const notebook = getNotebook();
+        if (!notebook) return "No notebook sources are available in this board.";
+        const matches: string[] = [];
+        for (const source of notebook.sources) {
+          if (source.status !== "ready" || source.contextMode === "off") continue;
+          const haystack = `${source.title}\n${source.summary}\n${source.content}`;
+          if (!haystack.toLowerCase().includes(needle)) continue;
+          matches.push(`- source ${source.id} · "${source.title}": ${sourceSnippet(haystack, query)}`);
+        }
+        for (const note of notebook.notes) {
+          if (note.contextMode === "off") continue;
+          const haystack = `${note.title}\n${note.content}`;
+          if (!haystack.toLowerCase().includes(needle)) continue;
+          matches.push(`- note ${note.id} · "${note.title}": ${sourceSnippet(haystack, query)}`);
+        }
+        return matches.length ? matches.join("\n") : `No included sources or notes matched "${query}".`;
+      },
+    }),
+    list_notes: tool({
+      description: "List notebook notes with ids, titles, type, context mode, and size.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const notes = getNotebook()?.notes ?? [];
+        if (!notes.length) return "This notebook has no notes yet.";
+        return notes
+          .map((note) => `- id ${note.id} · "${note.title}" · ${note.kind} · ${note.content.length} chars · context ${note.contextMode}`)
+          .join("\n");
+      },
+    }),
+    read_note: tool({
+      description: "Read a notebook note's full current content by id.",
+      inputSchema: z.object({
+        note_id: z.string().describe("Target note id from list_notes."),
+      }),
+      execute: async ({ note_id }) => {
+        const note = findNote(note_id);
+        if (!note) return `No note with id "${note_id}". Existing notes: ${noteIdsHint()}.`;
+        return `# ${note.title}\nType: ${note.kind}\nContext mode: ${note.contextMode}\n\n${note.content || "(empty)"}`;
+      },
+    }),
+    create_note: tool({
+      description:
+        "Create a durable notebook note from a synthesis, answer, outline, or extracted quote set. Use this when the user asks to save or when durable synthesis is clearly useful.",
+      inputSchema: z.object({
+        title: z.string().describe("Short note title."),
+        content: z.string().describe("Markdown note content."),
+        source_ids: z.array(z.string()).optional().describe("Source ids this note is based on."),
+      }),
+      execute: async ({ title, content, source_ids }) => {
+        if (!deps.createNote) return "No change: this notebook cannot create notes from tools right now.";
+        const cleanTitle = cleanLabel(title, "Untitled note");
+        const id = deps.createNote(cleanTitle, content ?? "", source_ids ?? []);
+        return `Created note "${cleanTitle}" with id ${id}.`;
+      },
+    }),
+    write_note: tool({
+      description:
+        "Replace a notebook note's title and/or entire content by id. Best for rewriting saved synthesis notes.",
+      inputSchema: z.object({
+        note_id: z.string().describe("Target note id."),
+        title: z.string().optional().describe("New note title."),
+        content: z.string().optional().describe("Complete new note content."),
+      }),
+      execute: async ({ note_id, title, content }) => {
+        const note = findNote(note_id);
+        if (!note) return `No note with id "${note_id}". Existing notes: ${noteIdsHint()}.`;
+        const nextTitle = title === undefined ? note.title : cleanLabel(title, note.title);
+        if (title !== undefined) {
+          if (!deps.setNoteTitle) return "No change: this notebook cannot rename notes from tools right now.";
+          deps.setNoteTitle(note_id, nextTitle);
+        }
+        if (content !== undefined) {
+          if (!deps.setNoteContent) return "No change: this notebook cannot edit notes from tools right now.";
+          deps.setNoteContent(note_id, content);
+        }
+        return `OK — updated note "${nextTitle}". It now has ${(content ?? note.content).length} characters.`;
+      },
+    }),
   };
 }
 
@@ -521,7 +917,7 @@ export function resolveActionResult(output: unknown): { status: "done" | "error"
   return { status: "error", detail: truncate(text, 48) };
 }
 
-export function buildNotebookSystemPrompt(board: CanvasBoard): string {
+export function buildNotebookSystemPrompt(board: CanvasBoard | Notebook): string {
   const panelList = board.panels.length
     ? board.panels
         .map((p) => {
@@ -544,10 +940,33 @@ export function buildNotebookSystemPrompt(board: CanvasBoard): string {
         .join("\n\n")
     : "(the board is empty — create a panel to start)";
 
+  const notebookContext =
+    isNotebookBoard(board)
+      ? (() => {
+          const built = buildNotebookContext(board);
+          const hasContext = built.sourceCount > 0 || built.noteCount > 0 || board.description.trim().length > 0;
+          return [
+            "NOTEBOOK CONTEXT:",
+            hasContext
+              ? `Selected context: ${built.sourceCount} source${built.sourceCount === 1 ? "" : "s"}, ${built.noteCount} note${built.noteCount === 1 ? "" : "s"}, ~${built.tokenCount.toLocaleString()} tokens.`
+              : "",
+            hasContext ? built.context : "No sources or notes are currently selected for context.",
+          ]
+            .filter(Boolean)
+            .join("\n");
+        })()
+      : "NOTEBOOK CONTEXT:\nThis board has no source or note collection attached.";
+
   return [
-    "You are the assistant inside goatLLM's Notebook — a freeform board of documents and runnable Python panels shown beside this chat. You manage the board through tool calls, the same way an agent edits files.",
+    "You are the assistant inside goatLLM's Notebook — a research workspace with sources, durable notes, chat, and a freeform canvas of documents/runnable Python panels. You manage notes and panels through tool calls, the same way an agent edits files.",
+    "",
+    "Sources are evidence. Notes are saved synthesis. Answer from the selected notebook context when it is relevant, and be explicit when the available sources do not support a claim.",
+    "",
+    notebookContext,
     "",
     "Each panel is a small document with an id, a title, and a type (doc = Markdown prose, code = runnable Python). Tools:",
+    "- list_sources / read_source / search_sources: inspect notebook evidence by id.",
+    "- list_notes / read_note / create_note / write_note: inspect or save durable notebook synthesis.",
     "- list_panels: list every panel (id, title, type, size). Use it to re-orient if unsure.",
     "- read_panel: read a panel's full current content by id. Large panels are shown below as a preview only — read_panel them before editing so your edits match.",
     "- create_panel: add a new doc or code panel (kind, title, content).",

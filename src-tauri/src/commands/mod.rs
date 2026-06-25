@@ -24,8 +24,8 @@ pub(crate) use codex::{
 };
 pub(crate) use db::{
     delete_conversation_db, delete_message_db, get_events, load_all_data, load_compaction_entries,
-    load_messages_for_conversation, log_event, save_compaction_entry, save_conversation,
-    save_message, search_messages,
+    load_messages_for_conversation, log_event, notebooks_load, notebooks_save,
+    save_compaction_entry, save_conversation, save_message, search_messages,
 };
 pub(crate) use discovered_models::{discovered_models_load, discovered_models_save};
 pub(crate) use documents::{
@@ -77,6 +77,8 @@ macro_rules! generate_handler {
             crate::commands::db::save_conversation,
             crate::commands::db::save_message,
             crate::commands::db::save_compaction_entry,
+            crate::commands::db::notebooks_load,
+            crate::commands::db::notebooks_save,
             crate::commands::db::delete_conversation_db,
             crate::commands::db::delete_message_db,
             crate::commands::db::search_messages,

@@ -22,6 +22,11 @@ import { agentLoop } from "../../agentLoop";
 import { withSubagentBypass } from "../approval";
 import { READ_ONLY_TOOLS } from "./read";
 import { WRITE_TOOLS } from "./write";
+import {
+  createSubagentLivenessMonitor,
+  resolveSubagentConfig,
+  type SubagentKind,
+} from "../../subagent-runtime";
 import type { LlmConfig, LlmMessage, StreamCallbacks } from "../../llm-types";
 import type {
   SubagentToolCall,
@@ -92,7 +97,8 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       "The subagent runs in its own context with its own tool calls and returns a " +
       "summary. Use for parallelizable research, multi-step code exploration, or " +
       "operations that don't need interactive user approval. Max depth: 2 " +
-      "(subagent can spawn at most one more level).",
+      "(subagent can spawn at most one more level). Pick explore for inspection " +
+      "and implement for code-changing subtasks so goatLLM can route the right model.",
     inputSchema: z.object({
       task: z
         .string()
@@ -100,12 +106,16 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           "Detailed description of what the subagent should do. Be specific about " +
             "expected outputs and what constitutes success.",
         ),
+      kind: z
+        .enum(["explore", "implement"])
+        .optional()
+        .describe("Subagent type. Use explore for investigation/research, implement for code-changing work."),
       max_tool_rounds: z
         .number()
         .optional()
         .describe("Max tool-call rounds before stopping (default 15, max 30)."),
     }),
-    execute: async ({ task, max_tool_rounds }, { toolCallId }) => {
+    execute: async ({ task, kind, max_tool_rounds }, { toolCallId }) => {
       // ── Depth cap ──────────────────────────────────────────
       if (ctx.depth >= 2) {
         return "Error: maximum subagent depth (2) reached. Cannot spawn further subagents.";
@@ -113,6 +123,13 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
 
       const store = useChatStore.getState();
       const permissionMode = store.permissionMode;
+      const subagentKind: SubagentKind = kind ?? "explore";
+      const subagentConfig = resolveSubagentConfig(
+        subagentKind,
+        store.subagentSettings,
+        ctx.config,
+        store.getLlmConfigForModel,
+      );
       // Plan mode restricts the parent to read-only + todo tools. Subagents
       // inherit the same restriction — no write tools, regardless of permission mode.
       const isPlanMode = store.planMode;
@@ -150,6 +167,8 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       transcript.push(assistantEntry);
 
       let fullText = "";
+      const stallState: { message?: string } = {};
+      const staleController = new AbortController();
 
       // Push transcript updates to the store so the SubagentPanel can show
       // live streaming progress. Debounced: we flush on tool events and
@@ -167,9 +186,23 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       // ── Messages ────────────────────────────────────────────
       const messages: LlmMessage[] = [{ role: "user", content: task }];
 
+      const liveness = createSubagentLivenessMonitor({
+        staleAfterMs: store.subagentSettings.staleAfterMs,
+        onStale: ({ staleAfterMs }) => {
+          const seconds = Math.round(staleAfterMs / 1000);
+          stallState.message =
+            `Subagent stalled: no progress for ${String(seconds)} seconds. ` +
+            "goatLLM stopped this subagent so the parent agent can continue or retry with a narrower task.";
+          assistantEntry.content = `${assistantEntry.content.trim()}\n\n${stallState.message}`.trim();
+          flushTranscript();
+          staleController.abort(new Error(stallState.message));
+        },
+      });
+
       // ── Callbacks ───────────────────────────────────────────
       const callbacks: StreamCallbacks = {
         onToken: (token) => {
+          liveness.markProgress();
           fullText += token;
           assistantEntry.content += token;
           // Throttle token flushes to ~200ms
@@ -180,6 +213,7 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           }
         },
         onToolCall: (tc) => {
+          liveness.markProgress();
           assistantTools.push({
             toolCallId: tc.toolCallId,
             toolName: tc.toolName,
@@ -190,6 +224,7 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           flushTranscript();
         },
         onToolResult: (tr) => {
+          liveness.markProgress();
           const found = assistantTools.find(
             (t) => t.toolCallId === tr.toolCallId,
           );
@@ -197,6 +232,7 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           flushTranscript();
         },
         onToolError: (te) => {
+          liveness.markProgress();
           const found = assistantTools.find(
             (t) => t.toolCallId === te.toolCallId,
           );
@@ -207,9 +243,11 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           flushTranscript();
         },
         onDone: () => {
+          liveness.markProgress();
           flushTranscript();
         },
         onError: (err) => {
+          liveness.markProgress();
           fullText = `Subagent error: ${err.message}`;
           assistantEntry.content = fullText;
           flushTranscript();
@@ -220,28 +258,29 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       try {
         const maxToolRounds = Math.min(max_tool_rounds ?? 15, 30);
         await withSubagentBypass(async () => {
-          if (ctx.config.provider === "openai-codex-subscription") {
+          if (subagentConfig.provider === "openai-codex-subscription") {
             const { streamCodexSubscription } = await import("../../openai-codex-subscription");
-            await streamCodexSubscription(messages, buildSubagentSystemPrompt(task), ctx.config, callbacks, {
+            await streamCodexSubscription(messages, buildSubagentSystemPrompt(task), subagentConfig, callbacks, {
               depth: ctx.depth + 1,
               parentSignal: ctx.parentSignal,
-              abortSignal: ctx.abortSignal,
+              abortSignal: combineAbortSignals(ctx.abortSignal, staleController.signal),
               tools: subagentTools,
               maxToolRounds,
             });
             return;
           }
 
-          await agentLoop(messages, buildSubagentSystemPrompt(task), ctx.config, callbacks, {
+          await agentLoop(messages, buildSubagentSystemPrompt(task), subagentConfig, callbacks, {
             depth: ctx.depth + 1,
             parentSignal: ctx.parentSignal,
-            abortSignal: ctx.abortSignal,
+            abortSignal: combineAbortSignals(ctx.abortSignal, staleController.signal),
             tools: subagentTools,
             maxToolRounds,
           });
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        if (stallState.message) return stallState.message;
         if (
           ctx.parentSignal?.aborted ||
           ctx.abortSignal?.aborted ||
@@ -250,7 +289,11 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
           return "Subagent cancelled.";
         }
         return `Subagent failed: ${msg}`;
+      } finally {
+        liveness.stop();
       }
+
+      if (stallState.message) return stallState.message;
 
       // ── Store transcript ───────────────────────────────────
       const { conversationId, messageId } = locateToolCallInStore(toolCallId);
@@ -285,4 +328,21 @@ export function createSpawnSubagent(ctx: SpawnSubagentContext) {
       return summary;
     },
   });
+}
+
+function combineAbortSignals(
+  first: AbortSignal | undefined,
+  second: AbortSignal | undefined,
+): AbortSignal | undefined {
+  if (!first) return second;
+  if (!second) return first;
+  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
+  if (typeof anyFn === "function") return anyFn([first, second]);
+
+  const controller = new AbortController();
+  const abortFirst = () => controller.abort(first.reason);
+  const abortSecond = () => controller.abort(second.reason);
+  first.addEventListener("abort", abortFirst, { once: true });
+  second.addEventListener("abort", abortSecond, { once: true });
+  return controller.signal;
 }

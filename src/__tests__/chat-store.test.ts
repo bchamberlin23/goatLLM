@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useChatStore } from "../stores/chat";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
+import { createNotebookNote, createNotebookSource } from "../lib/canvas";
 
 function freshStore() {
   // Reset store state between tests
@@ -80,6 +81,69 @@ describe("ChatStore", () => {
 
       useChatStore.getState().setSearchQuery("");
       expect(useChatStore.getState().getFilteredConversations()).toHaveLength(2);
+    });
+
+    it("keys project conversations to the selected agent workspace", () => {
+      useChatStore.setState({
+        agentMode: true,
+        designMode: false,
+        workspacePath: "/tmp/project-a",
+      });
+
+      const id = useChatStore.getState().createConversation();
+
+      expect(useChatStore.getState().conversations.find((c) => c.id === id)).toEqual(
+        expect.objectContaining({
+          mode: "agent",
+          workspacePath: "/tmp/project-a",
+        }),
+      );
+      expect(localStorage.getItem(`goatllm-journal-conv:${id}`)).toContain("/tmp/project-a");
+    });
+
+    it("marks a chat as agent-scoped when moving it into the active project", () => {
+      const store = freshStore();
+      const id = store.createConversation();
+      useChatStore.setState({
+        agentMode: true,
+        designMode: false,
+        workspacePath: "/tmp/project-b",
+      });
+
+      useChatStore.getState().moveConversationToWorkspace(id, "/tmp/project-b");
+
+      expect(useChatStore.getState().conversations.find((c) => c.id === id)).toEqual(
+        expect.objectContaining({
+          mode: "agent",
+          workspacePath: "/tmp/project-b",
+        }),
+      );
+    });
+
+    it("normalizes legacy workspace chats on hydrate", async () => {
+      freshStore();
+      const legacy = {
+        id: "legacy-project",
+        title: "Legacy project chat",
+        lastMessagePreview: "",
+        lastMessageAt: 20,
+        createdAt: 10,
+        modelId: null,
+        systemPrompt: "",
+        mode: "chat",
+        workspacePath: "/tmp/project",
+      };
+      localStorage.setItem("goatllm-journal-conv:legacy-project", JSON.stringify(legacy));
+
+      await useChatStore.getState().hydrate();
+
+      expect(useChatStore.getState().conversations.find((c) => c.id === "legacy-project")).toEqual(
+        expect.objectContaining({
+          mode: "agent",
+          workspacePath: "/tmp/project",
+        }),
+      );
+      expect(localStorage.getItem("goatllm-journal-conv:legacy-project")).toContain('"mode":"agent"');
     });
   });
 
@@ -607,6 +671,45 @@ describe("ChatStore", () => {
           expect.objectContaining({ id: expect.any(String), content: "different turn" }),
         ],
       });
+    });
+  });
+
+  describe("notebooks", () => {
+    it("mutates active notebook sources and notes with synchronous journal persistence", () => {
+      const store = freshStore();
+      const notebookId = store.createNotebook();
+      const source = createNotebookSource({
+        title: "Research paper",
+        kind: "text",
+        content: "Main body",
+        seed: 10,
+      });
+      const note = createNotebookNote({
+        title: "Synthesis",
+        content: "My take",
+        sourceIds: [source.id],
+        seed: 20,
+      });
+
+      useChatStore.getState().addNotebookSource(source);
+      useChatStore.getState().addNotebookNote(note);
+      useChatStore.getState().updateNotebookSource(source.id, { contextMode: "summary" });
+      useChatStore.getState().updateNotebookNote(note.id, { content: "Updated take" });
+
+      const active = useChatStore.getState().getActiveNotebook();
+      expect(active).toEqual(
+        expect.objectContaining({
+          id: notebookId,
+          sources: [expect.objectContaining({ id: source.id, contextMode: "summary" })],
+          notes: [expect.objectContaining({ id: note.id, content: "Updated take" })],
+        }),
+      );
+      expect(localStorage.getItem("goatllm-notebooks")).toContain("Updated take");
+
+      useChatStore.getState().deleteNotebookSource(source.id);
+      useChatStore.getState().deleteNotebookNote(note.id);
+      expect(useChatStore.getState().getActiveNotebook()?.sources).toEqual([]);
+      expect(useChatStore.getState().getActiveNotebook()?.notes).toEqual([]);
     });
   });
 });

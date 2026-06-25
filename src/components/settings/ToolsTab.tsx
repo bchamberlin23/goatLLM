@@ -36,6 +36,9 @@ export function ToolsTab() {
   const setChatCodeExec = useChatStore((s) => s.setChatCodeExec);
   const subagentsEnabled = useChatStore((s) => s.subagentsEnabled);
   const setSubagentsEnabled = useChatStore((s) => s.setSubagentsEnabled);
+  const subagentSettings = useChatStore((s) => s.subagentSettings);
+  const setSubagentSettings = useChatStore((s) => s.setSubagentSettings);
+  const models = useChatStore((s) => s.getModels());
   const deepResearchMaxRounds = useChatStore((s) => s.deepResearchMaxRounds);
   const setDeepResearchMaxRounds = useChatStore((s) => s.setDeepResearchMaxRounds);
   const deepResearchMaxSearches = useChatStore((s) => s.deepResearchMaxSearches);
@@ -59,6 +62,19 @@ export function ToolsTab() {
   const [newMemoryText, setNewMemoryText] = useState("");
   const [newMemoryCategory, setNewMemoryCategory] = useState("fact");
   const [memoryLoading, setMemoryLoading] = useState(false);
+  const enabledModels = models.filter((model) => model.isAvailable);
+
+  const updateSubagentModel = (kind: "explore" | "implement", value: string) => {
+    setSubagentSettings({
+      ...subagentSettings,
+      models: {
+        ...subagentSettings.models,
+        [kind]: value === "current"
+          ? { mode: "current" }
+          : { mode: "model", modelId: value },
+      },
+    });
+  };
 
   // Check SearXNG Docker status
   const checkSearxngStatus = useCallback(async () => {
@@ -542,6 +558,43 @@ export function ToolsTab() {
           title="Subagents"
           description="Spawn child agents for parallel work in Agent and Design modes only."
         />
+        {subagentsEnabled && (
+          <div className="soft-card grid gap-3 rounded-xl p-3.5">
+            <div className="grid gap-1">
+              <div className="text-[12.5px] font-medium text-text-1">Subagent models</div>
+              <div className="text-[11px] leading-relaxed text-text-3">
+                Use the current chat model, or route exploration and implementation to specific enabled models.
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(["explore", "implement"] as const).map((kind) => {
+                const selection = subagentSettings.models[kind];
+                return (
+                  <label key={kind} className="grid gap-1.5">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wider text-text-4">
+                      {kind === "explore" ? "Exploration" : "Implementation"}
+                    </span>
+                    <select
+                      value={selection.mode === "model" ? selection.modelId : "current"}
+                      onChange={(event) => updateSubagentModel(kind, event.currentTarget.value)}
+                      className="min-w-0 rounded-md border border-hairline bg-surface-1 px-2 py-1.5 text-[12px] text-text-1 outline-none transition-colors focus:border-hairline-strong focus:shadow-[0_0_0_3px_var(--accent-soft)]"
+                    >
+                      <option value="current">Current chat model</option>
+                      {enabledModels.map((model) => (
+                        <option key={`${kind}-${model.id}`} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="text-[11px] leading-relaxed text-text-3">
+              Stalled subagents are stopped after {Math.round(subagentSettings.staleAfterMs / 1000)} seconds without tokens or tool progress.
+            </div>
+          </div>
+        )}
       </SettingsGroup>
 
       <SettingsGroup title="Agent policy" description="Verification, permission, path, and budget defaults for agent mode.">

@@ -113,7 +113,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   const selectWorkspace = (path: string) => {
     if (scope === "design") {
       setDesignWorkspace(path);
-      if (activeId) moveConversationToWorkspace(activeId, path);
     } else setWorkspace(path);
   };
   const addWorkspace = async () => {
@@ -126,7 +125,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       if (scope === "design") {
         addDesignWorkspace(picked);
         setDesignWorkspace(picked);
-        if (activeId) moveConversationToWorkspace(activeId, picked);
       } else {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("add_workspace", { path: picked });
@@ -139,7 +137,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     }
   };
   const removeWorkspace = async (path: string) => {
-    const scoped = conversations.filter((c) => c.workspacePath === path && (scope === "design" ? c.mode === "design" : c.mode !== "design"));
+    const scoped = conversations.filter((c) => c.workspacePath === path && (scope === "design" ? c.mode === "design" : c.mode === "agent"));
     if (scoped.length && !window.confirm(`Remove "${path.split("/").pop()}"?\n\n${scoped.length} chat${scoped.length === 1 ? "" : "s"} will move to Personal.`)) return;
     scoped.forEach((conversation) => moveConversationToWorkspace(conversation.id, null));
     if (scope === "design") removeDesignWorkspace(path);
