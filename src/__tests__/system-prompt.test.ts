@@ -96,6 +96,16 @@ describe("buildAgentSystemPrompt", () => {
     expect(out).toMatch(/done/);
   });
 
+  it("gates real agent thread creation behind explicit user requests", async () => {
+    const { ALL_TOOLS } = await import("../lib/tools/registry");
+    const out = buildAgentSystemPrompt({ tools: ALL_TOOLS });
+
+    expect(out).toMatch(/create_agent_thread/);
+    expect(out).toMatch(/explicitly asks/i);
+    expect(out).toMatch(/thread\(s\)|threads/i);
+    expect(out).toMatch(/spawn_subagent/);
+  });
+
   it("relies on tool approval cards instead of telling the agent to wait separately", () => {
     const out = buildAgentSystemPrompt({ tools: [] });
 

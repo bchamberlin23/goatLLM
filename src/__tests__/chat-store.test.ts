@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { useChatStore } from "../stores/chat";
+import { useChatStore, type CreatedAgentThread } from "../stores/chat";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import { createNotebookNote, createNotebookSource } from "../lib/canvas";
 
@@ -144,6 +144,55 @@ describe("ChatStore", () => {
         }),
       );
       expect(localStorage.getItem("goatllm-journal-conv:legacy-project")).toContain('"mode":"agent"');
+    });
+
+    it("creates a background agent thread with a persisted seed prompt", () => {
+      const store = freshStore();
+      const parentId = store.createConversation();
+      useChatStore.setState({
+        activeId: parentId,
+        agentMode: true,
+        workspacePath: "/tmp/project-c",
+        selectedModelId: "openai:gpt-5.5",
+      });
+
+      const result: CreatedAgentThread = useChatStore.getState().createAgentThread({
+        title: "Investigate flaky tests",
+        prompt: "Find why the auth tests are flaky and report back.",
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          title: "Investigate flaky tests",
+          prompt: "Find why the auth tests are flaky and report back.",
+        }),
+      );
+      expect(useChatStore.getState().activeId).toBe(parentId);
+
+      const created = useChatStore.getState().conversations.find((c) => c.id === result.conversationId);
+      expect(created).toEqual(
+        expect.objectContaining({
+          title: "Investigate flaky tests",
+          mode: "agent",
+          workspacePath: "/tmp/project-c",
+          modelId: "openai:gpt-5.5",
+        }),
+      );
+      expect(useChatStore.getState().messages[result.conversationId]).toEqual([
+        expect.objectContaining({
+          role: "user",
+          content: "Find why the auth tests are flaky and report back.",
+          conversationId: result.conversationId,
+          modelId: "openai:gpt-5.5",
+        }),
+      ]);
+      expect(localStorage.getItem(`goatllm-journal-conv:${result.conversationId}`)).toContain("/tmp/project-c");
+      const messageJournalKeys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
+      const persistedSeed = messageJournalKeys
+        .filter((key): key is string => !!key?.startsWith("goatllm-journal-msg:"))
+        .map((key) => localStorage.getItem(key))
+        .find((value) => value?.includes(result.conversationId));
+      expect(persistedSeed).toContain("Find why the auth tests are flaky and report back.");
     });
   });
 

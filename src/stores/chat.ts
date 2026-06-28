@@ -602,6 +602,20 @@ export interface Conversation {
   tags?: string[];
 }
 
+export interface CreateAgentThreadInput {
+  title?: string;
+  prompt: string;
+  workspacePath?: string | null;
+  modelId?: string | null;
+}
+
+export interface CreatedAgentThread {
+  conversationId: string;
+  title: string;
+  prompt: string;
+  workspacePath: string;
+}
+
 function normalizeConversationScope(conversation: Conversation): Conversation {
   if (conversation.mode === "design") return conversation;
   if (conversation.workspacePath) {
@@ -1108,6 +1122,7 @@ export interface ChatStore {
 
   // Conversation actions
   createConversation: () => string;
+  createAgentThread: (input: CreateAgentThreadInput) => CreatedAgentThread;
   deleteConversation: (id: string) => void;
   renameConversation: (id: string, title: string) => void;
   setConversationArchived: (id: string, archived: boolean) => void;
@@ -1965,6 +1980,60 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         // this call returns.
         persistConversation(conversation);
         return id;
+      },
+
+      createAgentThread: (input) => {
+        const prompt = input.prompt.trim();
+        if (!prompt) {
+          throw new Error("Agent thread prompt cannot be empty.");
+        }
+
+        const workspacePath =
+          input.workspacePath?.trim() ||
+          get().workspacePath?.trim() ||
+          get().designWorkspacePath?.trim() ||
+          "";
+        if (!workspacePath) {
+          throw new Error("Select a workspace before creating an agent thread.");
+        }
+
+        const id = generateId();
+        const now = Date.now();
+        const title = input.title?.trim() || heuristicTitle(prompt);
+        const modelId = input.modelId !== undefined ? input.modelId : get().selectedModelId;
+        const conversation: Conversation = {
+          id,
+          title,
+          lastMessagePreview: prompt.slice(0, 80) + (prompt.length > 80 ? "…" : ""),
+          lastMessageAt: now,
+          createdAt: now,
+          modelId,
+          systemPrompt: get().defaultSystemPrompt,
+          mode: "agent",
+          workspacePath,
+        };
+        const message: Message = {
+          id: generateId(),
+          conversationId: id,
+          role: "user",
+          content: prompt,
+          createdAt: nextCreatedAt(),
+          modelId: modelId ?? undefined,
+        };
+
+        set((state) => ({
+          conversations: [conversation, ...state.conversations],
+          messages: { ...state.messages, [id]: [message] },
+        }));
+        persistConversation(conversation);
+        persistMessage(message);
+
+        return {
+          conversationId: id,
+          title,
+          prompt,
+          workspacePath,
+        };
       },
 
       deleteConversation: (id: string) => {
