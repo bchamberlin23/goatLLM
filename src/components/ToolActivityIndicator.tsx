@@ -4,9 +4,6 @@ import { presentTool } from "./InlineToolCall";
 import { Shimmer } from "./ThinkingIndicator";
 import { shouldShowToolCall } from "../lib/tool-visibility";
 
-/** Stable empty array reference to avoid re-renders. */
-const EMPTY_ARRAY: never[] = [];
-
 /**
  * Floating status bar that shows what the agent is currently doing.
  * Appears above the input bar when a tool is running in agent or design mode.
@@ -18,22 +15,28 @@ export function ToolActivityIndicator() {
   const agentMode = useChatStore((s) => s.agentMode);
   const designMode = useChatStore((s) => s.designMode);
   const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
+  const renderMode = designMode ? "design" : agentMode ? "agent" : "chat";
 
-  // Get the latest message count to detect changes without subscribing to the full array
-  const messageCount = useChatStore((s) => {
-    if (!activeId) return 0;
-    return (s.messages[activeId] ?? EMPTY_ARRAY).length;
+  const runningToolSignature = useChatStore((s) => {
+    if (!activeId || !isStreaming || (!agentMode && !designMode)) return "";
+    const messages = s.messages[activeId] ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const toolCalls = messages[i].toolCalls;
+      if (!toolCalls) continue;
+      for (let j = toolCalls.length - 1; j >= 0; j--) {
+        const tc = toolCalls[j];
+        if (tc.state === "running" && shouldShowToolCall(tc, renderMode)) {
+          return `${messages[i].id}:${tc.toolCallId}:${tc.toolName}`;
+        }
+      }
+    }
+    return "";
   });
 
-  // Get the latest tool call state directly from the store in the render
-  // This avoids subscribing to the entire messages array
   const activity = useMemo(() => {
-    if (!isStreaming || !activeId || messageCount === 0) return null;
+    if (!runningToolSignature || !isStreaming || !activeId) return null;
     if (!agentMode && !designMode) return null;
-    const renderMode = designMode ? "design" : agentMode ? "agent" : "chat";
-
-    // Read directly from store to avoid stale closure
-    const msgs = useChatStore.getState().messages[activeId] ?? EMPTY_ARRAY;
+    const msgs = useChatStore.getState().messages[activeId] ?? [];
 
     // Find the most recent running tool call across all messages
     for (let i = msgs.length - 1; i >= 0; i--) {
@@ -54,9 +57,7 @@ export function ToolActivityIndicator() {
     }
 
     return null;
-    // messageCount changes when messages are added/removed, which is when we need to re-check
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messageCount, isStreaming, agentMode, designMode, activeId]);
+  }, [runningToolSignature, isStreaming, agentMode, designMode, activeId, renderMode]);
 
   if (!activity) return null;
 

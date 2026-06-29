@@ -283,8 +283,18 @@ export function TopBar() {
 
 function ChatAssetsMenu() {
   const activeId = useChatStore((s) => s.activeId);
-  const artifacts = useChatStore((s) => (activeId ? s.artifacts[activeId] : undefined));
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
+  const artifactSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    return (s.artifacts[activeId] ?? [])
+      .map((artifact) => `${artifact.id}:${artifact.kind}:${artifact.title}`)
+      .join("|");
+  });
+  const attachmentSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    const messages = s.messages[activeId] ?? [];
+    const last = messages[messages.length - 1];
+    return `${messages.length}:${last?.id ?? ""}:${last?.attachments?.length ?? 0}`;
+  });
   const setActiveArtifact = useChatStore((s) => s.setActiveArtifact);
   const setActiveAttachment = useChatStore((s) => s.setActiveAttachment);
   const setWorkspaceFile = useChatStore((s) => s.setWorkspaceFile);
@@ -296,8 +306,15 @@ function ChatAssetsMenu() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const artifacts = useMemo(
+    () => (activeId ? useChatStore.getState().artifacts[activeId] : undefined),
+    [activeId, artifactSignature],
+  );
+
   // Gather all attachments from user messages in this chat
   const attachments = useMemo(() => {
+    if (!activeId) return [];
+    const messages = useChatStore.getState().messages[activeId];
     if (!messages) return [];
     const result: { filename: string; mimeType: string; dataUrl: string; messageId: string }[] = [];
     for (const msg of messages) {
@@ -308,7 +325,7 @@ function ChatAssetsMenu() {
       }
     }
     return result;
-  }, [messages]);
+  }, [activeId, attachmentSignature]);
 
   const hasContent = (artifacts && artifacts.length > 0) || attachments.length > 0 || (agentMode && !!workspacePath) || (designMode && !!designWorkspacePath);
 

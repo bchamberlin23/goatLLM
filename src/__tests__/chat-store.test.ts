@@ -272,6 +272,59 @@ describe("ChatStore", () => {
       expect(msgs[0].content).toBe("Hello world");
     });
 
+    it("throttles conversation preview churn while streaming and flushes the final preview", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000);
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      const msg = useChatStore.getState().addMessage({
+        conversationId: convId,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      });
+
+      useChatStore.getState().appendToMessage(convId, msg.id, "Hel");
+      const afterFirst = useChatStore.getState().conversations.find((c) => c.id === convId)!;
+      expect(afterFirst.lastMessagePreview).toBe("Hel");
+
+      vi.setSystemTime(1_100);
+      useChatStore.getState().appendToMessage(convId, msg.id, "lo");
+      const afterSecond = useChatStore.getState().conversations.find((c) => c.id === convId)!;
+      expect(afterSecond).toBe(afterFirst);
+      expect(afterSecond.lastMessagePreview).toBe("Hel");
+
+      useChatStore.getState().finalizeStreamingMessage(convId, msg.id);
+      const afterFinal = useChatStore.getState().conversations.find((c) => c.id === convId)!;
+      expect(afterFinal.lastMessagePreview).toBe("Hello");
+
+      vi.useRealTimers();
+    });
+
+    it("persists the final conversation preview even when it matches the throttled preview", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(1_000);
+      const store = freshStore();
+      const convId = store.createConversation();
+
+      const msg = useChatStore.getState().addMessage({
+        conversationId: convId,
+        role: "assistant",
+        content: "",
+        isStreaming: true,
+      });
+
+      useChatStore.getState().appendToMessage(convId, msg.id, "Done");
+      useChatStore.getState().finalizeStreamingMessage(convId, msg.id);
+
+      expect(localStorage.getItem(`goatllm-journal-conv:${convId}`)).toContain(
+        '"lastMessagePreview":"Done"',
+      );
+
+      vi.useRealTimers();
+    });
+
     it("updates a message", () => {
       const store = freshStore();
       const convId = store.createConversation();

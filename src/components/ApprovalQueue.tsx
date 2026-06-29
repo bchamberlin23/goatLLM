@@ -1,4 +1,5 @@
 import { Check, X } from "lucide-react";
+import { useMemo } from "react";
 import { approveExecution, denyExecution } from "../lib/tools";
 import { useChatStore } from "../stores/chat";
 import type { ToolCallEntry } from "../stores/chat";
@@ -15,11 +16,26 @@ function inputLabel(tc: ToolCallEntry) {
 
 export function ApprovalQueue() {
   const activeId = useChatStore((s) => s.activeId);
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] ?? [] : []));
-  const pending = messages.flatMap((message) =>
-    (message.toolCalls ?? [])
-      .filter((tc) => tc.state === "pending_approval")
-      .map((tc) => ({ message, tc })),
+  const pendingSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    return (s.messages[activeId] ?? [])
+      .flatMap((message) =>
+        (message.toolCalls ?? [])
+          .filter((tc) => tc.state === "pending_approval")
+          .map((tc) => `${message.id}:${tc.toolCallId}:${tc.toolName}`),
+      )
+      .join("|");
+  });
+  const pending = useMemo(
+    () =>
+      activeId
+        ? (useChatStore.getState().messages[activeId] ?? []).flatMap((message) =>
+            (message.toolCalls ?? [])
+              .filter((tc) => tc.state === "pending_approval")
+              .map((tc) => ({ message, tc })),
+          )
+        : [],
+    [activeId, pendingSignature],
   );
 
   if (pending.length === 0) return null;

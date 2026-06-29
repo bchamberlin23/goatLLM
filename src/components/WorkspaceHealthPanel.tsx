@@ -1,4 +1,5 @@
 import { Activity, CheckCircle, FileDiff, ListChecks, XCircle } from "lucide-react";
+import { useMemo } from "react";
 import {
   buildVerificationSuggestions,
 } from "../lib/agent-session";
@@ -11,9 +12,30 @@ export function WorkspaceHealthPanel() {
   const workspacePath = useChatStore((s) => s.workspacePath);
   const verificationPolicy = useChatStore((s) => s.verificationPolicy);
   const projectCheckMemory = useChatStore((s) => s.projectCheckMemory);
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] ?? [] : []));
-  const agentTurns = messages.filter((message) => message.role === "assistant" && message.toolCalls?.length);
-  const latest = agentTurns.length > 0 ? agentTurns[agentTurns.length - 1] : undefined;
+  const latestAgentTurnSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    const messages = s.messages[activeId] ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role !== "assistant" || !message.toolCalls?.length) continue;
+      return [
+        message.id,
+        message.turnDurationMs ?? 0,
+        message.editedFiles?.join(",") ?? "",
+        message.toolCalls.map((tc) => `${tc.toolCallId}:${tc.toolName}:${tc.state}`).join("|"),
+      ].join(":");
+    }
+    return "";
+  });
+  const latest = useMemo(() => {
+    if (!activeId || !latestAgentTurnSignature) return undefined;
+    const messages = useChatStore.getState().messages[activeId] ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.role === "assistant" && message.toolCalls?.length) return message;
+    }
+    return undefined;
+  }, [activeId, latestAgentTurnSignature]);
   const summary = latest ? summarizeAgentTurn(latest) : null;
 
   if (!workspacePath || !summary) return null;

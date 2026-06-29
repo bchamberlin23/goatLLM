@@ -126,7 +126,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
 function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
   const { workspaces, refresh: refreshWorkspaces } = workspaceCtx;
   const conversations = useChatStore((s) => s.conversations);
-  const messages = useChatStore((s) => s.messages);
   const activeId = useChatStore((s) => s.activeId);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
@@ -347,10 +346,10 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
 
   const handleExport = useCallback((id: string, format: "markdown" | "json") => {
     const conv = conversations.find((c) => c.id === id);
-    const msgs = messages[id] ?? [];
+    const msgs = useChatStore.getState().messages[id] ?? [];
     if (conv) downloadExport(conv, msgs, format);
     setChatMenu(null);
-  }, [conversations, messages]);
+  }, [conversations]);
 
   const handleDelete = useCallback((id: string) => {
     const conv = conversations.find((c) => c.id === id);
@@ -836,7 +835,6 @@ function AgentSidebar({ onOpenSettings, workspaceCtx }: ProjectSidebarProps) {
 function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx: DesignWorkspaceCtx }) {
   const { workspaces, addDesignWorkspace, removeDesignWorkspace } = designCtx;
   const conversations = useChatStore((s) => s.conversations);
-  const messages = useChatStore((s) => s.messages);
   const activeId = useChatStore((s) => s.activeId);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
@@ -1049,10 +1047,10 @@ function DesignSidebar({ onOpenSettings, designCtx }: SidebarProps & { designCtx
 
   const handleExport = useCallback((id: string, format: "markdown" | "json") => {
     const conv = conversations.find((c) => c.id === id);
-    const msgs = messages[id] ?? [];
+    const msgs = useChatStore.getState().messages[id] ?? [];
     if (conv) downloadExport(conv, msgs, format);
     setChatMenu(null);
-  }, [conversations, messages]);
+  }, [conversations]);
 
   const handleDelete = useCallback((id: string) => {
     const conv = conversations.find((c) => c.id === id);
@@ -1789,7 +1787,6 @@ function NotebookSidebar({ onOpenSettings }: SidebarProps) {
 
 function ChatSidebar({ onOpenSettings }: SidebarProps) {
   const activeId = useChatStore((s) => s.activeId);
-  const messages = useChatStore((s) => s.messages);
   const setActiveConversation = useChatStore((s) => s.setActiveConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -1950,11 +1947,11 @@ function ChatSidebar({ onOpenSettings }: SidebarProps) {
   const handleExport = useCallback(
     (id: string, format: "markdown" | "json") => {
       const conv = filteredConversations.find((c) => c.id === id);
-      const msgs = messages[id] ?? [];
+      const msgs = useChatStore.getState().messages[id] ?? [];
       if (conv) downloadExport(conv, msgs, format);
       setContextMenu(null);
     },
-    [filteredConversations, messages]
+    [filteredConversations]
   );
 
   const renderConvItem = (conv: (typeof filteredConversations)[0], index: number) => {

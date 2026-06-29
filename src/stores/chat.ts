@@ -1676,6 +1676,12 @@ function normalizeMessageQueue(value: unknown): Record<string, QueuedMessage[]> 
 // Used by appendToMessage to throttle writes to ~750ms so partial content
 // survives a crash without hammering SQLite on every token.
 const streamingPersistTimestamps = new Map<string, number>();
+const streamingPreviewTimestamps = new Map<string, number>();
+const STREAMING_PREVIEW_FLUSH_MS = 500;
+
+function previewForContent(content: string): string {
+  return content.slice(0, 80) + (content.length > 80 ? "…" : "");
+}
 
 // Monotonic timestamp source for new messages. `Date.now()` resolution is 1ms
 // and on fast machines two messages added back-to-back (user prompt + empty
@@ -2395,38 +2401,71 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       updateMessage: (conversationId, messageId, updates) => {
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
-          const updated = convMessages.map((m) =>
-            m.id === messageId ? { ...m, ...updates } : m
-          );
-          const changed = updated.find((m) => m.id === messageId);
+          const idx = convMessages.findIndex((m) => m.id === messageId);
+          if (idx === -1) return state;
+          const changed = { ...convMessages[idx], ...updates };
+          const updated = [...convMessages];
+          updated[idx] = changed;
           if (changed) persistMessage(changed);
+          const shouldFlushPreview =
+            typeof updates.content === "string" && updates.isStreaming === false;
+          if (!shouldFlushPreview) {
+            return {
+              messages: { ...state.messages, [conversationId]: updated },
+            };
+          }
+          streamingPreviewTimestamps.delete(messageId);
+          const preview = previewForContent(changed.content);
+          let changedConversation: Conversation | null = null;
+          const conversations = state.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            changedConversation =
+              c.lastMessagePreview === preview ? c : { ...c, lastMessagePreview: preview };
+            return changedConversation;
+          });
+          if (changedConversation) persistConversation(changedConversation);
           return {
             messages: { ...state.messages, [conversationId]: updated },
+            conversations,
           };
         });
       },
 
       appendToMessage: (conversationId, messageId, chunk) => {
+        const now = Date.now();
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
-          const updatedMessages = convMessages.map((m) =>
-            m.id === messageId ? { ...m, content: m.content + chunk } : m
-          );
-          const updatedMsg = updatedMessages.find((m) => m.id === messageId);
-          const preview = updatedMsg
-            ? updatedMsg.content.slice(0, 80) + (updatedMsg.content.length > 80 ? "…" : "")
-            : state.conversations.find((c) => c.id === conversationId)?.lastMessagePreview ?? "";
-          return {
-            messages: { ...state.messages, [conversationId]: updatedMessages },
-            conversations: state.conversations.map((c) =>
-              c.id === conversationId ? { ...c, lastMessagePreview: preview } : c
-            ),
+          const idx = convMessages.findIndex((m) => m.id === messageId);
+          if (idx === -1) return state;
+          const updatedMsg = {
+            ...convMessages[idx],
+            content: convMessages[idx].content + chunk,
           };
+          const updatedMessages = [...convMessages];
+          updatedMessages[idx] = updatedMsg;
+          const nextMessages = { ...state.messages, [conversationId]: updatedMessages };
+
+          const lastPreviewFlush = streamingPreviewTimestamps.get(messageId);
+          const shouldFlushPreview =
+            lastPreviewFlush === undefined || now - lastPreviewFlush >= STREAMING_PREVIEW_FLUSH_MS;
+          if (!shouldFlushPreview) return { messages: nextMessages };
+
+          streamingPreviewTimestamps.set(messageId, now);
+          const preview = previewForContent(updatedMsg.content);
+          let changed = false;
+          const conversations = state.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            if (c.lastMessagePreview === preview) return c;
+            changed = true;
+            return { ...c, lastMessagePreview: preview };
+          });
+          return changed
+            ? { messages: nextMessages, conversations }
+            : { messages: nextMessages };
         });
         // Throttled persistence: flush partial content every ~750ms so a
         // mid-stream crash, force-quit, or provider error after partial output
         // doesn't leave the message empty on disk forever.
-        const now = Date.now();
         const last = streamingPersistTimestamps.get(messageId) ?? 0;
         if (now - last > 750) {
           streamingPersistTimestamps.set(messageId, now);
@@ -2438,18 +2477,40 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       appendToThinking: (conversationId, messageId, chunk) => {
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
-          const updatedMessages = convMessages.map((m) =>
-            m.id === messageId ? { ...m, thinkingContent: (m.thinkingContent ?? "") + chunk } : m
-          );
+          const idx = convMessages.findIndex((m) => m.id === messageId);
+          if (idx === -1) return state;
+          const updatedMessages = [...convMessages];
+          updatedMessages[idx] = {
+            ...convMessages[idx],
+            thinkingContent: (convMessages[idx].thinkingContent ?? "") + chunk,
+          };
           return { messages: { ...state.messages, [conversationId]: updatedMessages } };
         });
       },
 
       finalizeStreamingMessage: (conversationId, messageId) => {
         streamingPersistTimestamps.delete(messageId);
-        const { messages } = get();
-        const convMessages = messages[conversationId] ?? [];
-        const msg = convMessages.find((m) => m.id === messageId);
+        streamingPreviewTimestamps.delete(messageId);
+        let msg: Message | undefined;
+        set((state) => {
+          const convMessages = state.messages[conversationId] ?? [];
+          msg = convMessages.find((m) => m.id === messageId);
+          if (!msg) return state;
+          const preview = previewForContent(msg.content);
+          const currentConversation = state.conversations.find((c) => c.id === conversationId);
+          if (!currentConversation) return state;
+          if (currentConversation.lastMessagePreview === preview) {
+            persistConversation(currentConversation);
+            return state;
+          }
+          const changedConversation = { ...currentConversation, lastMessagePreview: preview };
+          persistConversation(changedConversation);
+          return {
+            conversations: state.conversations.map((c) =>
+              c.id === conversationId ? changedConversation : c,
+            ),
+          };
+        });
         if (msg) persistMessage(msg);
       },
 
@@ -2484,6 +2545,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
       deleteMessage: (conversationId, messageId) => {
         streamingPersistTimestamps.delete(messageId);
+        streamingPreviewTimestamps.delete(messageId);
         set((state) => {
           const convMessages = state.messages[conversationId] ?? [];
           const filtered = convMessages.filter((m) => m.id !== messageId);

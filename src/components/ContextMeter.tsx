@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useChatStore } from "../stores/chat";
 import { estimateContextTokens, estimateTotalTokens, summarizeWithLlm } from "../lib/context-manager";
 import { createCompactionId, type CompactionEntry } from "../lib/compaction/types";
@@ -9,6 +10,7 @@ import {
 import { buildConversationUsage } from "../lib/product-workspace";
 
 const EMPTY_COMPACTION_ENTRIES: CompactionEntry[] = [];
+const ESTIMATE_CHAR_BUCKET = 512;
 
 /**
  * Tiny circular meter that lives in the top bar and shows how full the
@@ -28,8 +30,20 @@ const EMPTY_COMPACTION_ENTRIES: CompactionEntry[] = [];
  */
 export function ContextMeter() {
   const activeId = useChatStore((s) => s.activeId);
-  const messages = useChatStore((s) =>
-    activeId ? s.messages[activeId] : undefined,
+  const { estimateKey, messageCount } = useChatStore(
+    useShallow((s) => {
+      if (!activeId) return { estimateKey: "0:0:0", messageCount: 0 };
+      const messages = s.messages[activeId] ?? [];
+      const last = messages[messages.length - 1];
+      const lastChars = last
+        ? last.content.length + (last.thinkingContent?.length ?? 0)
+        : 0;
+      const lastToolCalls = last?.toolCalls?.length ?? 0;
+      return {
+        estimateKey: `${messages.length}:${last?.id ?? ""}:${Math.ceil(lastChars / ESTIMATE_CHAR_BUCKET)}:${lastToolCalls}`,
+        messageCount: messages.length,
+      };
+    }),
   );
   const selectedModelId = useChatStore((s) => s.selectedModelId);
   const getModels = useChatStore((s) => s.getModels);
@@ -43,21 +57,10 @@ export function ContextMeter() {
   const ref = useRef<HTMLDivElement>(null);
   const lastActiveIdRef = useRef<string | null>(null);
 
-  const estimateKey = useMemo(() => {
-    if (!messages?.length) return "0";
-    let total = messages.length;
-    for (const m of messages) {
-      total += m.content.length;
-      if (m.thinkingContent) total += m.thinkingContent.length;
-      if (m.toolCalls) total += m.toolCalls.length;
-    }
-    return String(total);
-  }, [messages]);
-
   const [tokens, setTokens] = useState(0);
 
   useEffect(() => {
-    if (!messages) {
+    if (!activeId || messageCount === 0) {
       setTokens(0);
       return;
     }
@@ -65,17 +68,19 @@ export function ContextMeter() {
     const switchedConversation = lastActiveIdRef.current !== activeId;
     lastActiveIdRef.current = activeId ?? null;
 
+    const currentMessages = () => useChatStore.getState().messages[activeId] ?? [];
+
     if (switchedConversation) {
-      setTokens(estimateContextTokens(messages).tokens);
+      setTokens(estimateContextTokens(currentMessages()).tokens);
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setTokens(estimateContextTokens(messages).tokens);
+      setTokens(estimateContextTokens(currentMessages()).tokens);
     }, 1000);
 
     return () => window.clearTimeout(timer);
-  }, [activeId, estimateKey, messages]);
+  }, [activeId, estimateKey, messageCount]);
 
   // Resolve the effective context window for the currently selected model.
   const { windowTokens, windowKnown, source } = useMemo(() => {
@@ -123,7 +128,6 @@ export function ContextMeter() {
   const remaining = Math.max(0, windowTokens - tokens);
   const compactionEnabled = usageSettings.compactionSettings.enabled;
 
-  const messageCount = messages?.length ?? 0;
   const activeModel = useMemo(
     () => (selectedModelId ? getModels().find((m) => m.id === selectedModelId) : undefined),
     [selectedModelId, getModels],
@@ -135,14 +139,16 @@ export function ContextMeter() {
 
   // Calculate cost information
   const usage = useMemo(() => {
-    if (!messages?.length) return null;
+    if (!open || !activeId || messageCount === 0) return null;
+    const messages = useChatStore.getState().messages[activeId] ?? [];
+    if (messages.length === 0) return null;
     return buildConversationUsage(messages, {
       monthlyBudgetUsd: usageSettings.monthlyBudgetUsd,
       expensiveSessionUsd: usageSettings.expensiveSessionUsd,
       priceOverrides: usageSettings.priceOverrides,
       modelIdForMessage: (msg) => msg.modelId ?? selectedModelId ?? undefined,
     });
-  }, [messages, usageSettings, selectedModelId]);
+  }, [open, activeId, messageCount, estimateKey, usageSettings, selectedModelId]);
 
   const costUsd = usage?.totalCostUsd ?? 0;
   const budgetRatio = usage?.budgetStatus.ratio ?? 0;

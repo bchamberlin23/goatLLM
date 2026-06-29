@@ -1,4 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Message, useChatStore, normalizeTitle, type ArtifactKind, type ToolCallEntry } from "../stores/chat";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { AttachmentChips, stripAttachmentMarkers } from "./AttachmentChips";
@@ -30,7 +31,6 @@ import {
 import { shouldShowToolCall } from "../lib/tool-visibility";
 import "./MessageBubble.css";
 
-const EMPTY_MESSAGES: Message[] = [];
 const USER_MESSAGE_COLLAPSE_THRESHOLD = 1200;
 
 function stripMarkdown(md: string): string {
@@ -317,33 +317,33 @@ export const MessageBubble = memo(function MessageBubble({ message }: MessageBub
     store.setActiveConversation(newConvId);
   }, [message.conversationId, message.id]);
 
-  // Branch navigation: find siblings (messages with same parent)
-  const allMessages = useChatStore((s) => s.messages[message.conversationId] ?? EMPTY_MESSAGES);
-  const branchInfo = useMemo(() => {
-    if (!message.parentId) return null;
-    
-    // Find all messages with the same parent (siblings)
-    const siblings = allMessages.filter((m) => m.parentId === message.parentId);
-    if (siblings.length <= 1) return null;
-    
-    const currentIndex = siblings.findIndex((m) => m.id === message.id);
-    return {
-      siblings,
-      currentIndex,
-      total: siblings.length,
-    };
-  }, [allMessages, message.id, message.parentId]);
+  const branchInfo = useChatStore(
+    useShallow((s) => {
+      if (!message.parentId) return null;
+      const messages = s.messages[message.conversationId] ?? [];
+      const siblingIds = messages
+        .filter((m) => m.parentId === message.parentId)
+        .map((m) => m.id);
+      if (siblingIds.length <= 1) return null;
+      const currentIndex = siblingIds.indexOf(message.id);
+      if (currentIndex === -1) return null;
+      return {
+        currentIndex,
+        total: siblingIds.length,
+        previousId: siblingIds[currentIndex - 1] ?? null,
+        nextId: siblingIds[currentIndex + 1] ?? null,
+      };
+    }),
+  );
 
   const handlePrevBranch = useCallback(() => {
-    if (!branchInfo || branchInfo.currentIndex <= 0) return;
-    const prevSibling = branchInfo.siblings[branchInfo.currentIndex - 1];
-    useChatStore.getState().navigateToBranch(message.conversationId, prevSibling.id);
+    if (!branchInfo?.previousId) return;
+    useChatStore.getState().navigateToBranch(message.conversationId, branchInfo.previousId);
   }, [branchInfo, message.conversationId]);
 
   const handleNextBranch = useCallback(() => {
-    if (!branchInfo || branchInfo.currentIndex >= branchInfo.total - 1) return;
-    const nextSibling = branchInfo.siblings[branchInfo.currentIndex + 1];
-    useChatStore.getState().navigateToBranch(message.conversationId, nextSibling.id);
+    if (!branchInfo?.nextId) return;
+    useChatStore.getState().navigateToBranch(message.conversationId, branchInfo.nextId);
   }, [branchInfo, message.conversationId]);
 
   const agentMode = useChatStore((s) => s.agentMode);
@@ -1161,10 +1161,19 @@ function SegmentedAssistantText({
   isStreaming: boolean;
 }) {
   const activeId = useChatStore((s) => s.activeId);
-  const artifacts = useChatStore((s) => (activeId ? s.artifacts[activeId] : undefined));
+  const artifactSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    return (s.artifacts[activeId] ?? [])
+      .map((artifact) => `${artifact.id}:${artifact.kind}:${artifact.title}:${artifact.messageId}`)
+      .join("|");
+  });
   const autoArtifacts = useChatStore((s) => s.autoArtifacts);
   const officeArtifacts = useChatStore((s) => s.officeArtifacts);
   const advancedArtifacts = useChatStore((s) => s.advancedArtifacts);
+  const artifacts = useMemo(
+    () => (activeId ? useChatStore.getState().artifacts[activeId] : undefined),
+    [activeId, artifactSignature],
+  );
 
   const parts = useMemo(() => {
     // Hide the literal BUILD-PLAN-COMPLETE marker from the rendered text —
@@ -1271,17 +1280,29 @@ function SegmentedAssistantText({
 // to a row of cards under the bubble.
 function FallbackArtifactCards({ messageId }: { messageId: string }) {
   const activeId = useChatStore((s) => s.activeId);
-  const artifacts = useChatStore((s) => (activeId ? s.artifacts[activeId] : undefined));
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
+  const artifactSignature = useChatStore((s) => {
+    if (!activeId) return "";
+    return (s.artifacts[activeId] ?? [])
+      .filter((artifact) => artifact.messageId === messageId)
+      .map((artifact) => `${artifact.id}:${artifact.kind}:${artifact.title}`)
+      .join("|");
+  });
+  const messageContent = useChatStore((s) => {
+    if (!activeId) return undefined;
+    return s.messages[activeId]?.find((m) => m.id === messageId)?.content;
+  });
+  const artifacts = useMemo(
+    () => (activeId ? useChatStore.getState().artifacts[activeId] : undefined),
+    [activeId, artifactSignature],
+  );
   const messageArtifacts = artifacts?.filter((a) => a.messageId === messageId) ?? [];
 
   if (messageArtifacts.length === 0) return null;
 
   // Look at the message text — if every artifact is referenced by an inline
   // fence, the segmenter already drew them. Skip the duplicate cards.
-  const message = messages?.find((m) => m.id === messageId);
-  if (message) {
-    const inlineParts = splitContentByArtifacts(message.content);
+  if (messageContent) {
+    const inlineParts = splitContentByArtifacts(messageContent);
     const inlineKeys = new Set(
       inlineParts
         .filter((p): p is Extract<ContentSegment, { type: "artifact" }> => p.type === "artifact")
@@ -1322,7 +1343,11 @@ function PlanBuildCTA({ message }: { message: Message }) {
   const planMode = useChatStore((s) => s.planMode);
   const setPlanMode = useChatStore((s) => s.setPlanMode);
   const triggerResend = useChatStore((s) => s.triggerResend);
-  const messages = useChatStore((s) => (activeId ? s.messages[activeId] : undefined));
+  const tailMessageId = useChatStore((s) => {
+    if (!activeId) return null;
+    const messages = s.messages[activeId];
+    return messages?.[messages.length - 1]?.id ?? null;
+  });
   const isStreaming = useChatStore((s) => activeId ? s.isConversationStreaming(activeId) : false);
   // Local consumed flag for instant feedback. Once the user clicks Build
   // (or otherwise dismisses), we hide the CTA immediately rather than
@@ -1339,15 +1364,14 @@ function PlanBuildCTA({ message }: { message: Message }) {
   // Once any further message lands — the build resend, a manual follow-up,
   // anything — the plan is no longer the live tail and the button stops
   // making sense. This makes the CTA single-shot by construction.
-  if (messages && messages.length > 0) {
-    const idx = messages.findIndex((m) => m.id === message.id);
-    if (idx !== -1 && idx !== messages.length - 1) return null;
-  }
+  if (tailMessageId && tailMessageId !== message.id) return null;
 
   if (consumed) return null;
 
   const handleBuild = () => {
-    if (!activeId || isStreaming || !messages) return;
+    if (!activeId || isStreaming) return;
+    const messages = useChatStore.getState().messages[activeId];
+    if (!messages) return;
     // Find the last user message to replay. Plan-mode only ever sits
     // between a single user prompt and a single assistant plan, so this
     // is unambiguous.
