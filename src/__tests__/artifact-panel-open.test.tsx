@@ -211,4 +211,22 @@ describe("artifact panel opening", () => {
     });
     expect(useChatStore.getState().artifactPanelOpen).toBe(true);
   });
+
+  it("renders markdown workspace files as an in-app preview", async () => {
+    resetStore();
+    useChatStore.setState({
+      artifactPanelOpen: true,
+      workspaceFile: {
+        path: "README.md",
+        name: "README.md",
+        content: "# Preview Heading\n\nA **bold** note with [a link](https://example.com).",
+      },
+    });
+
+    render(<SafeArtifactPanel />);
+
+    expect(await screen.findByRole("heading", { name: "Preview Heading", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "a link" })).toHaveAttribute("href", "https://example.com");
+    expect(screen.queryByTitle("README.md")).not.toBeInTheDocument();
+  });
 });

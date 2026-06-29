@@ -34,6 +34,7 @@ import {
   officeMimeType,
 } from "../lib/office-artifacts";
 import { resolveArtifactReferences } from "../lib/artifact-resolver";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 const MonacoEditor = lazy(() =>
   import("@monaco-editor/react").then((m) => ({ default: m.default })),
@@ -525,51 +526,7 @@ function ArtifactContent({
       );
     case "markdown-document":
     case "design-system": {
-      // Render markdown as HTML
-      const markdownHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { 
-      margin: 0; 
-      padding: 32px; 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
-    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    code { background: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
-    pre { background: #f6f8fa; padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; border-radius: 3px; }
-    pre code { background: transparent; padding: 0; }
-    blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
-    table { border-spacing: 0; border-collapse: collapse; margin-top: 0; margin-bottom: 16px; }
-    table th, table td { padding: 6px 13px; border: 1px solid #dfe2e5; }
-    table th { font-weight: 600; background: #f6f8fa; }
-  </style>
-</head>
-<body>
-  <div id="content"></div>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
-    const md = ${JSON.stringify(artifact.code)};
-    document.getElementById('content').innerHTML = marked.parse(md);
-  </script>
-</body>
-</html>`;
-      return (
-        <iframe
-          key={`preview-${previewKey}`}
-          className="flex-1 w-full border-none bg-white"
-          srcDoc={markdownHtml}
-          sandbox=""
-          title={artifact.title}
-        />
-      );
+      return <MarkdownPreview content={artifact.code} />;
     }
     case "react-component":
     case "diagram":
@@ -786,52 +743,7 @@ function renderWorkspacePreview(
   }
 
   if (["md", "markdown"].includes(ext)) {
-    // Markdown - render as HTML
-    const markdownHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {
-      margin: 0;
-      padding: 32px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
-    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    code { background: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
-    pre { background: #f6f8fa; padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; border-radius: 3px; }
-    pre code { background: transparent; padding: 0; }
-    blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
-    table { border-spacing: 0; border-collapse: collapse; margin-top: 0; margin-bottom: 16px; }
-    table th, table td { padding: 6px 13px; border: 1px solid #dfe2e5; }
-    table th { font-weight: 600; background: #f6f8fa; }
-    img { max-width: 100%; }
-  </style>
-</head>
-<body>
-  <div id="content"></div>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
-    const md = ${JSON.stringify(content)};
-    document.getElementById('content').innerHTML = marked.parse(md);
-  </script>
-</body>
-</html>`;
-    return (
-      <iframe
-        key={`${wsFile.path}-${content.length}`}
-        className="flex-1 w-full border-none bg-white"
-        srcDoc={markdownHtml}
-        sandbox=""
-        title={wsFile.name}
-      />
-    );
+    return <MarkdownPreview content={content} />;
   }
 
   if (ext === "css") {
@@ -1054,10 +966,12 @@ export function ArtifactPanel() {
 
   // Check if workspace file can be previewed (HTML, SVG, Markdown, CSS)
   const wsFileIsPreviewable = wsFile && /\.(html?|htm|svg|md|markdown|css)$/i.test(wsFile.name);
+  const wsFileNeedsReferenceResolution = !!wsFile && /\.(html?|htm|svg|css)$/i.test(wsFile.name);
 
   useEffect(() => {
-    if (!wsFile || !wsFileIsPreviewable) {
+    if (!wsFile || !wsFileNeedsReferenceResolution) {
       setResolvedWsHtml(null);
+      setResolvingWsFile(false);
       return;
     }
 
@@ -1082,7 +996,7 @@ export function ArtifactPanel() {
     })();
 
     return () => { cancelled = true; };
-  }, [wsFile?.path, wsFile?.content, workspacePath]);
+  }, [wsFile?.path, wsFile?.content, workspacePath, wsFileNeedsReferenceResolution]);
 
   // Auto-switch: while the agent is streaming, pin the editor open so the
   // user watches the code being typed; once streaming finishes, snap to

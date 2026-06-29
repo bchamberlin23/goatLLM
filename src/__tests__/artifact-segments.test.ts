@@ -108,4 +108,24 @@ middle
       .map((p) => p.kind);
     expect(kinds).toEqual(["docx", "xlsx", "pptx"]);
   });
+
+  it("recognizes markdown fence aliases when markdown documents are enabled", () => {
+    const src = `### Notes
+\`\`\`md
+# Preview Heading
+\`\`\``;
+    const out = splitContentByArtifacts(src, {
+      enabledKinds: new Set(["markdown-document"]),
+    });
+
+    expect(out).toEqual([
+      {
+        type: "artifact",
+        kind: "markdown-document",
+        title: "Notes",
+        complete: true,
+        code: "# Preview Heading",
+      },
+    ]);
+  });
 });

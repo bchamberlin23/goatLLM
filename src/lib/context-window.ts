@@ -153,10 +153,12 @@ function autoDetectContextWindow(modelId: string, providerId: string): number {
   if (name.includes("kimi-k2")) return 262_144;
 
   // GLM
+  if (providerId === "cline-pass" && name.includes("glm-5.2")) return 1_024_000;
   if (name.includes("glm-5")) return 200_000;
   if (name.includes("glm-4")) return 128_000;
 
   // MiniMax
+  if (name.includes("minimax-m3")) return 524_288;
   if (name.includes("minimax-m2")) return 204_800;
 
   // MiMo
@@ -178,6 +180,7 @@ function autoDetectContextWindow(modelId: string, providerId: string): number {
     groq: 128_000,
     "opencode-go": 1_000_000,
     "opencode-go-free": 200_000,
+    "cline-pass": 128_000,
   };
   return providerDefaults[providerId] ?? 0;
 }

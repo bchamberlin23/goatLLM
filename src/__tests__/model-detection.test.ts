@@ -66,4 +66,18 @@ describe("model detection", () => {
       { id: "text-model", name: "text-model", vision: true },
     ]);
   });
+
+  it("normalizes ClinePass recommended-models payloads into live subscription models", () => {
+    expect(
+      normalizeProviderModels("cline-pass", {
+        clinePass: [
+          { id: "cline-pass/qwen3.7-max", name: "cline-pass/qwen3.7-max" },
+          { id: "cline-pass/minimax-m3", name: "MiniMax-M3", capabilities: ["images", "reasoning"] },
+        ],
+      }),
+    ).toEqual([
+      { id: "cline-pass/qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144, reasoning: true },
+      { id: "cline-pass/minimax-m3", name: "MiniMax M3", contextWindow: 524_288, vision: true, reasoning: true },
+    ]);
+  });
 });

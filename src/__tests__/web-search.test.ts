@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ToolExecutionOptions } from "ai";
 import { READ_ONLY_TOOLS } from "../lib/tools/registry";
 import { useChatStore } from "../stores/chat";
 import { browserFetch } from "../lib/browser-fetch";
@@ -58,6 +59,46 @@ describe("web_search tool", () => {
     expect(result).toContain("https://example.com/target");
     expect(result).toContain("Example Title");
     expect(result).toContain("Example Snippet content here...");
+  });
+
+  it("allows internal Deep Research searches after the normal per-turn cap", async () => {
+    const store = useChatStore.getState();
+    store.webSearchCount = 3;
+    store.researchMode = false;
+
+    const mockResponse = {
+      results: [
+        {
+          title: "Example Title",
+          url: "https://example.com/target",
+          content: "Example Snippet content here...",
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    });
+    globalThis.fetch = fetchMock;
+
+    const tool = READ_ONLY_TOOLS.web_search;
+    const execute = tool.execute;
+    if (!execute) throw new Error("web_search tool is missing execute");
+    const options: ToolExecutionOptions = {
+      toolCallId: "test",
+      messages: [],
+      experimental_context: { deepResearch: true },
+    };
+    const result = await execute(
+      { query: "deep research query" },
+      options,
+    ) as string;
+
+    expect(result).not.toContain("Maximum web searches");
+    expect(result).toContain("https://example.com/target");
+    expect(result).toContain("Example Title");
+    expect(store.webSearchCount).toBe(3);
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it("parses SearXNG JSON metasearch results correctly", async () => {

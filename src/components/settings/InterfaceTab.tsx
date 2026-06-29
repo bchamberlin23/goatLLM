@@ -105,8 +105,8 @@ export function InterfaceTab() {
         <ToggleRow
           enabled={animatedBorderEnabled}
           onToggle={setAnimatedBorderEnabled}
-          title="Animated input border glow"
-          description="Make the highlight travel around the message input box."
+          title="Working input glow"
+          description="Breathe a warm highlight around the message input while the model is thinking or responding."
         />
         {glowBackgroundEnabled && (
           <div className="mt-3 flex flex-col gap-1.5 pl-1">

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { LlmConfig } from "../lib/llm";
 import { heuristicTitle } from "../lib/llm";
-import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
+import { getBuiltInProviders, getCuratedModels, getProviderBaseUrl, getProviderDiscoveryUrl, getProviderInfo, mergeDiscoveredModels, providerSupportsDiscovery } from "../lib/providers";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import type { ModelConfig, ProviderCompat, ThinkingBudgets, ThinkingLevelMap } from "../lib/providers";
 import { getZenCredential, ZEN_FREE_PROVIDER_ID } from "../lib/zen-credentials";
@@ -1741,6 +1741,7 @@ export const CLOUD_PROVIDER_MODELS: Record<string, ModelConfig[]> = (() => {
     "openrouter",
     "opencode-go",
     "groq",
+    "cline-pass",
   ];
   const out: Record<string, ModelConfig[]> = {};
   for (const id of ids) {
@@ -1762,6 +1763,7 @@ const CLOUD_PROVIDER_BASE_URLS: Record<string, string> = (() => {
     "openrouter",
     "opencode-go",
     "groq",
+    "cline-pass",
   ];
   const out: Record<string, string> = {};
   for (const id of ids) {
@@ -4798,10 +4800,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       },
 
       /**
-       * Hit a cloud provider's /v1/models endpoint and merge the result
+       * Hit a cloud provider's model discovery endpoint and merge the result
        * with the curated catalog. Mirrors `discoverLocalModels` for
        * cloud providers that opted into discovery (OpenRouter, Groq,
-       * OpenCode Go). The curated list wins on conflict — registry
+       * OpenCode Go, ClinePass). The curated list wins on conflict — registry
        * metadata is the authoritative source for display name, vision
        * flag, and context window.
        *
@@ -4838,7 +4840,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           const customFetch = await initFetch();
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 6000);
-          const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+          const url = getProviderDiscoveryUrl(providerId) ?? `${baseUrl.replace(/\/+$/, "")}/models`;
           const res = await customFetch(url, {
             signal: controller.signal,
             headers: {

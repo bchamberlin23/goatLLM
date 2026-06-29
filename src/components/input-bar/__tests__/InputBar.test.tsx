@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InputBar as PublicInputBar } from "../../InputBar";
 import { ComposerTextarea } from "../ComposerTextarea";
@@ -22,6 +22,7 @@ function resetStore() {
     resendPayload: null,
     messageQueue: {},
     steerPayload: null,
+    animatedBorderEnabled: false,
     researchMode: false,
     agentMode: false,
     designMode: false,
@@ -33,6 +34,42 @@ function resetStore() {
     disabledSkills: new Set(),
     autoTriggerSkills: new Set(),
   });
+}
+
+function setWorkingComposerState({
+  animatedBorderEnabled,
+  streaming,
+}: {
+  animatedBorderEnabled: boolean;
+  streaming: boolean;
+}) {
+  const conversationId = "conv-working";
+  useChatStore.setState({
+    activeId: conversationId,
+    conversations: [
+      {
+        id: conversationId,
+        title: "Working conversation",
+        lastMessagePreview: "",
+        lastMessageAt: 1,
+        createdAt: 1,
+        modelId: null,
+        systemPrompt: "",
+        mode: "chat",
+      },
+    ],
+    messages: { [conversationId]: [] },
+    animatedBorderEnabled,
+    streamingConversationId: streaming ? conversationId : null,
+    streamingAbortControllers: streaming ? { [conversationId]: new AbortController() } : {},
+  });
+  return conversationId;
+}
+
+function getComposerSurface() {
+  const surface = screen.getByLabelText("Message input").closest(".composer-surface");
+  expect(surface).toBeInstanceOf(HTMLElement);
+  return surface as HTMLElement;
 }
 
 describe("InputBar decomposition", () => {
@@ -95,4 +132,47 @@ describe("InputBar decomposition", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onHistoryRecall).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ["public", PublicInputBar],
+    ["decomposed", InputBar],
+  ] as const)(
+    "shows the %s composer breathing effect only while the model is working and the toggle is on",
+    (_, Component) => {
+      resetStore();
+      const conversationId = setWorkingComposerState({
+        animatedBorderEnabled: true,
+        streaming: false,
+      });
+
+      const { rerender } = render(<Component />);
+
+      let surface = getComposerSurface();
+      expect(surface).not.toHaveClass("composer-working-breath");
+      expect(surface.querySelector(".working-breath-ring")).toBeNull();
+
+      act(() => {
+        useChatStore.setState({
+          streamingConversationId: conversationId,
+          streamingAbortControllers: { [conversationId]: new AbortController() },
+        });
+      });
+      rerender(<Component />);
+
+      surface = getComposerSurface();
+      expect(surface).toHaveClass("composer-working-breath");
+      expect(surface.querySelector(".working-breath-ring")).toBeInTheDocument();
+
+      act(() => {
+        useChatStore.setState({
+          animatedBorderEnabled: false,
+        });
+      });
+      rerender(<Component />);
+
+      surface = getComposerSurface();
+      expect(surface).not.toHaveClass("composer-working-breath");
+      expect(surface.querySelector(".working-breath-ring")).toBeNull();
+    },
+  );
 });

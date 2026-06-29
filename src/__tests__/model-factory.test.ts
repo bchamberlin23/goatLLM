@@ -70,4 +70,20 @@ describe("createModel", () => {
 
     expect(mocks.wrapLanguageModel).not.toHaveBeenCalled();
   });
+
+  it("routes ClinePass through the OpenAI-compatible client", async () => {
+    await createModel({
+      provider: "cline-pass",
+      modelId: "cline-pass/glm-5.2",
+      apiKey: "cline-token",
+      baseUrl: "https://api.cline.bot/api/v1",
+    });
+
+    expect(mocks.compatibleProvider).toHaveBeenCalledWith(expect.objectContaining({
+      name: "cline-pass",
+      baseURL: "https://api.cline.bot/api/v1",
+      apiKey: "cline-token",
+    }));
+    expect(mocks.languageModel).toHaveBeenCalledWith("cline-pass/glm-5.2");
+  });
 });

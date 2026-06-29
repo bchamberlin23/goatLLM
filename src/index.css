@@ -1180,32 +1180,77 @@ button:not(:disabled):active {
   animation: dr-fade-in 0.26s cubic-bezier(0.2, 0, 0, 1) both;
 }
 
-/* Traveling Border Beam Animation */
-.animate-border-beam {
-  stroke-dasharray: 20 80;
-  animation: border-beam 4s linear infinite;
-  stroke: rgba(var(--theme-accent-rgb), 1);
-  stroke-width: 1.5;
-  filter: drop-shadow(0 0 3px rgba(var(--theme-accent-rgb), 1)) drop-shadow(0 0 8px rgba(var(--theme-accent-rgb), 0.6));
-}
-
-@keyframes border-beam {
-  0% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -100;
-  }
-}
-
-.composer-surface.animated-border {
-  /* Reduce/remove static orange glow to let the border beam stand out */
+/* Working composer breathing aura */
+.composer-surface.composer-working-breath {
+  border-color: rgba(var(--theme-accent-rgb), 0.22);
   box-shadow:
     0 24px 70px -34px rgba(0, 0, 0, 0.92),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.08),
+    0 0 44px -26px rgba(var(--theme-accent-rgb), 0.9),
     0 1px 0 rgba(255, 255, 255, 0.065) inset;
 }
-.composer-surface.animated-border:focus-within {
+
+.composer-surface.composer-working-breath:focus-within {
   box-shadow:
     0 26px 80px -38px rgba(0, 0, 0, 0.98),
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.14),
+    0 0 54px -28px rgba(var(--theme-accent-rgb), 0.94),
     0 1px 0 rgba(255, 255, 255, 0.08) inset !important;
+}
+
+.working-breath-ring {
+  inset: -2px;
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.42);
+  box-shadow:
+    0 0 0 1px rgba(var(--theme-accent-rgb), 0.08),
+    0 0 28px -10px rgba(var(--theme-accent-rgb), 0.78),
+    0 0 68px -34px rgba(var(--theme-accent-rgb), 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075);
+  opacity: 0.72;
+  transform: scale(0.996);
+  animation: composer-breathe 2.6s var(--ease-move) infinite;
+}
+
+.working-breath-ring::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  border: 1px solid rgba(var(--theme-accent-rgb), 0.16);
+  opacity: 0.46;
+  animation: composer-breathe-inner 2.6s var(--ease-move) infinite;
+}
+
+@keyframes composer-breathe {
+  0%, 100% {
+    opacity: 0.56;
+    transform: scale(0.996);
+    box-shadow:
+      0 0 0 1px rgba(var(--theme-accent-rgb), 0.055),
+      0 0 20px -12px rgba(var(--theme-accent-rgb), 0.64),
+      0 0 52px -38px rgba(var(--theme-accent-rgb), 0.88),
+      inset 0 1px 0 rgba(255, 255, 255, 0.065);
+  }
+
+  50% {
+    opacity: 0.98;
+    transform: scale(1.006);
+    box-shadow:
+      0 0 0 1px rgba(var(--theme-accent-rgb), 0.14),
+      0 0 34px -10px rgba(var(--theme-accent-rgb), 0.86),
+      0 0 86px -34px rgba(var(--theme-accent-rgb), 1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  }
+}
+
+@keyframes composer-breathe-inner {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.62;
+    transform: scale(0.992);
+  }
 }

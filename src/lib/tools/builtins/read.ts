@@ -44,6 +44,10 @@ function textField(record: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+function isDeepResearchContext(context: unknown): boolean {
+  return isRecord(context) && context.deepResearch === true;
+}
+
 const WORKSPACE_MAP_MAX_FILES = 240;
 const WORKSPACE_MAP_MAX_DEPTH = 5;
 
@@ -385,8 +389,9 @@ export const READ_ONLY_TOOLS = {
       query: z.string().describe("The search query"),
       maxResults: z.number().optional().describe("Max results to return (1-10, default 5)"),
     }),
-    execute: async ({ query, maxResults }) => {
+    execute: async ({ query, maxResults }, options) => {
       const state = useChatStore.getState();
+      const bypassSearchLimit = state.researchMode || isDeepResearchContext(options.experimental_context);
 
       // Register web results as citation sources (chat mode only) and stamp
       // each with the [n] number the model should cite inline. Agent/design
@@ -413,10 +418,10 @@ export const READ_ONLY_TOOLS = {
         });
       };
 
-      if (!state.researchMode && state.webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
+      if (!bypassSearchLimit && state.webSearchCount >= MAX_WEB_SEARCH_CALLS_PER_TURN) {
         return `Maximum web searches (${String(MAX_WEB_SEARCH_CALLS_PER_TURN)}) already used this turn. Answer with what you already know.`;
       }
-      if (!state.researchMode) {
+      if (!bypassSearchLimit) {
         state.incrementWebSearchCount();
       }
 

@@ -145,6 +145,53 @@ describe("loadAllFromDb", () => {
     });
   });
 
+  it("compacts large file-write tool payloads before journaling and mirroring", async () => {
+    const largeContent = "x".repeat(120_000);
+    const message: Message = {
+      id: "m-large-write",
+      conversationId: "c1",
+      role: "assistant",
+      content: "Wrote the file.",
+      createdAt: 40,
+      toolCalls: [
+        {
+          toolCallId: "tool-large-write",
+          toolName: "write_file",
+          input: {
+            path: "src/generated.ts",
+            content: largeContent,
+          },
+          state: "done",
+        },
+      ],
+    };
+
+    persistMessage(message);
+
+    expect((message.toolCalls?.[0]?.input as { content?: string }).content).toBe(largeContent);
+
+    const journal = localStorage.getItem("goatllm-journal-msg:m-large-write");
+    expect(journal).toBeTruthy();
+    expect(journal).toContain("src/generated.ts");
+    expect(journal).not.toContain(largeContent);
+    expect(journal!.length).toBeLessThan(20_000);
+
+    const persisted = JSON.parse(journal!) as Message;
+    const input = persisted.toolCalls?.[0]?.input as { content?: string };
+    expect(input.content).toContain("omitted from persisted tool payload");
+    expect(input.content!.length).toBeLessThan(5_000);
+
+    await vi.waitFor(() => {
+      const saveCall = invoke.mock.calls.find(([cmd]) => cmd === "save_message");
+      expect(saveCall).toBeTruthy();
+      const payload = saveCall![1].payload as { toolCalls: string };
+      expect(payload.toolCalls).toContain("src/generated.ts");
+      expect(payload.toolCalls).toContain("omitted from persisted tool payload");
+      expect(payload.toolCalls).not.toContain(largeContent);
+      expect(payload.toolCalls.length).toBeLessThan(20_000);
+    });
+  });
+
   it("mirrors notebooks through the journal and SQLite IPC", async () => {
     const notebook = {
       ...createNotebook("Research", 100),

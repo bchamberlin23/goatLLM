@@ -142,22 +142,46 @@ function humanNameFromItem(item: ModelLike, id: string): string {
   return stringValue(item.display_name) || stringValue(item.displayName) || stringValue(item.name) || id;
 }
 
-function modelItemsFromBody(body: unknown): ModelLike[] {
+function humanizeClinePassName(name: string): string {
+  const raw = name
+    .replace(/^cline-pass\//, "")
+    .replace(/^qwen(?=\d)/i, "qwen ");
+  const words = raw
+    .replace(/[-_]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const lower = word.toLowerCase();
+      if (lower === "glm") return "GLM";
+      if (lower === "mimo") return "MiMo";
+      if (lower === "minimax") return "MiniMax";
+      if (lower === "deepseek") return "DeepSeek";
+      if (lower === "qwen") return "Qwen";
+      if (lower === "kimi") return "Kimi";
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    });
+  return words.join(" ") || name;
+}
+
+function modelItemsFromBody(body: unknown, providerId?: string): ModelLike[] {
   if (Array.isArray(body)) return body.filter((item): item is ModelLike => !!item && typeof item === "object");
   if (!body || typeof body !== "object") return [];
   const obj = body as ModelLike;
-  const source = Array.isArray(obj.data)
-    ? obj.data
-    : Array.isArray(obj.models)
-      ? obj.models
-      : Array.isArray(obj.items)
-        ? obj.items
-        : [];
+  const source =
+    providerId === "cline-pass" && Array.isArray(obj.clinePass)
+      ? obj.clinePass
+      : Array.isArray(obj.data)
+        ? obj.data
+        : Array.isArray(obj.models)
+          ? obj.models
+          : Array.isArray(obj.items)
+            ? obj.items
+            : [];
   return source.filter((item): item is ModelLike => !!item && typeof item === "object");
 }
 
 export function normalizeProviderModels(providerId: string, body: unknown): DiscoveredModel[] {
-  return modelItemsFromBody(body)
+  return modelItemsFromBody(body, providerId)
     .map((item) => {
       const id = idFromItem(item);
       if (!id) return null;
@@ -165,12 +189,13 @@ export function normalizeProviderModels(providerId: string, body: unknown): Disc
       const detectedContext = exactContext ?? getContextWindow(providerId, id);
       const contextWindow = detectedContext > 0 ? detectedContext : undefined;
       const vision = findVisionCapability(item) ?? inferVisionFromModelId(id);
-      const reasoning = findReasoningCapability(item);
+      const reasoning = findReasoningCapability(item) ?? (providerId === "cline-pass" ? true : undefined);
       const thinkingLevelMap = findThinkingLevelMap(item);
       const thinkingBudgets = findThinkingBudgets(item);
+      const name = humanNameFromItem(item, id);
       return {
         id,
-        name: humanNameFromItem(item, id),
+        name: providerId === "cline-pass" ? humanizeClinePassName(name) : name,
         ...(contextWindow ? { contextWindow } : {}),
         ...(vision !== undefined ? { vision } : {}),
         ...(reasoning !== undefined ? { reasoning } : {}),

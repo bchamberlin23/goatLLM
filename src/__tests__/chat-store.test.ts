@@ -3,6 +3,19 @@ import { useChatStore, type CreatedAgentThread } from "../stores/chat";
 import { OPENAI_CODEX_SUBSCRIPTION_PROVIDER_ID } from "../lib/openai-codex-subscription";
 import { createNotebookNote, createNotebookSource } from "../lib/canvas";
 
+const fetchAdapterMocks = vi.hoisted(() => ({
+  adapterFetch: vi.fn(),
+}));
+
+vi.mock("../lib/fetch-adapter", () => ({
+  initFetch: vi.fn(async () => fetchAdapterMocks.adapterFetch),
+  getFetch: vi.fn(() => fetchAdapterMocks.adapterFetch),
+}));
+
+const initialStoreActions = {
+  discoverCloudModels: useChatStore.getState().discoverCloudModels,
+};
+
 function freshStore() {
   // Reset store state between tests
   localStorage.clear();
@@ -12,6 +25,11 @@ function freshStore() {
     messages: {},
     messageQueue: {},
     steerPayload: null,
+    providerConfigs: {},
+    discoveredModels: {},
+    discoveryStatus: {},
+    discoveryError: {},
+    discoverCloudModels: initialStoreActions.discoverCloudModels,
     selectedModelId: null,
     isStreaming: false,
     searchQuery: "",
@@ -22,6 +40,7 @@ function freshStore() {
 describe("ChatStore", () => {
   beforeEach(() => {
     freshStore();
+    fetchAdapterMocks.adapterFetch.mockReset();
   });
 
   describe("conversations", () => {
@@ -448,6 +467,7 @@ describe("ChatStore", () => {
         providerConfigs: {
           openrouter: { apiKey: "sk-router" },
           groq: { apiKey: "sk-groq" },
+          "cline-pass": { apiKey: "cline-token" },
           anthropic: { apiKey: "sk-anthropic" },
         },
       });
@@ -456,9 +476,42 @@ describe("ChatStore", () => {
 
       await useChatStore.getState().discoverAllCloudModels();
 
-      expect(discoverCloudModels).toHaveBeenCalledTimes(2);
+      expect(discoverCloudModels).toHaveBeenCalledTimes(3);
       expect(discoverCloudModels).toHaveBeenCalledWith("openrouter");
       expect(discoverCloudModels).toHaveBeenCalledWith("groq");
+      expect(discoverCloudModels).toHaveBeenCalledWith("cline-pass");
+    });
+
+    it("refreshes ClinePass from Cline's recommended models endpoint", async () => {
+      fetchAdapterMocks.adapterFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          clinePass: [
+            { id: "cline-pass/qwen3.7-max", name: "cline-pass/qwen3.7-max" },
+            { id: "cline-pass/glm-5.2", name: "GLM-5.2" },
+          ],
+        }),
+      });
+      useChatStore.setState({
+        providerConfigs: {
+          "cline-pass": { apiKey: "cline-token" },
+        },
+      });
+
+      await useChatStore.getState().discoverCloudModels("cline-pass");
+
+      expect(fetchAdapterMocks.adapterFetch).toHaveBeenCalledWith(
+        "https://api.cline.bot/api/v1/ai/cline/recommended-models",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+          }),
+        }),
+      );
+      expect(useChatStore.getState().discoveredModels["cline-pass"]).toEqual([
+        { id: "cline-pass/qwen3.7-max", name: "Qwen 3.7 Max", contextWindow: 262_144, reasoning: true },
+        { id: "cline-pass/glm-5.2", name: "GLM 5.2", contextWindow: 1_024_000, reasoning: true },
+      ]);
     });
 
     it("does not merge discovery for providers that don't opt in", () => {

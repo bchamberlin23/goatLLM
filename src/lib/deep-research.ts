@@ -67,7 +67,11 @@ function isSearchResultItem(value: unknown): value is SearchResultItem {
 }
 
 function toolExecutionOptions(toolCallId: string, abortSignal?: AbortSignal): ToolExecutionOptions {
-  const options: ToolExecutionOptions = { toolCallId, messages: [] };
+  const options: ToolExecutionOptions = {
+    toolCallId,
+    messages: [],
+    experimental_context: { deepResearch: true },
+  };
   if (abortSignal) options.abortSignal = abortSignal;
   return options;
 }

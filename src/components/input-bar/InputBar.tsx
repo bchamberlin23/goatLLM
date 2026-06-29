@@ -104,6 +104,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
     !!selectedModelId;
   const activeModeKey = agentMode ? "agent" : designMode ? "design" : "chat";
   const searchAvailable = searchBackend === "tavily" ? !!tavilyApiKey : true;
+  const showWorkingBreath = animatedBorderEnabled && isStreaming;
 
   const skillsForCurrentMode = useMemo(
     () =>
@@ -394,7 +395,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
               <div
                 className={[
                   "composer-surface relative w-full min-w-0 rounded-[24px]",
-                  animatedBorderEnabled ? "animated-border" : "",
+                  showWorkingBreath ? "composer-working-breath" : "",
                   showPlusMenu || showSkillPicker || slashMenuOpen ? "z-[95]" : "",
                   isFollowUp
                     ? "px-5 py-3"
@@ -402,25 +403,12 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
                   "transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px",
                 ].join(" ")}
               >
-                {animatedBorderEnabled && (
+                {showWorkingBreath && (
                   <div
-                    className="pointer-events-none absolute inset-0 rounded-[24px]"
+                    className="working-breath-ring pointer-events-none absolute inset-0 rounded-[24px]"
                     style={{ zIndex: 10 }}
-                  >
-                    <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
-                      <rect
-                        x="0"
-                        y="0"
-                        width="100%"
-                        height="100%"
-                        rx="24"
-                        ry="24"
-                        fill="none"
-                        className="animate-border-beam"
-                        pathLength="100"
-                      />
-                    </svg>
-                  </div>
+                    aria-hidden="true"
+                  />
                 )}
                 <ComposerErrorBanner message={error} onDismiss={() => setError(null)} />
                 <AttachmentChips files={files} onRemove={handleRemoveFile} />

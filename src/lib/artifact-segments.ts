@@ -28,6 +28,9 @@ const ARTIFACT_LANG_MAP: Record<string, ArtifactKind> = {
   xlsx: "xlsx",
   excel: "xlsx",
   spreadsheet: "xlsx",
+  "markdown-document": "markdown-document",
+  markdown: "markdown-document",
+  md: "markdown-document",
 };
 
 /**

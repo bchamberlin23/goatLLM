@@ -29,7 +29,7 @@
  *     for models that report only an opaque `id`).
  *
  * The `supportsDiscovery: true` flag is the explicit opt-in for
- * providers whose /v1/models endpoint we *do* want to hit, on user
+ * providers whose model catalog endpoint we *do* want to hit, on user
  * demand, to merge in models the curated list doesn't know about.
  */
 
@@ -55,13 +55,14 @@ export interface ProviderInfo {
   baseUrl: string;
   models: ModelConfig[];
   /**
-   * If true, the provider exposes an OpenAI-compatible /v1/models
+   * If true, the provider exposes a model discovery endpoint
    * endpoint the user can hit on-demand to augment the curated list
    * with models the registry doesn't know about. Today: OpenRouter,
-   * Groq, OpenCode Go. Local providers (Ollama, LM Studio) handle
-   * this through `discoverLocalModels` in the chat store instead.
+   * Groq, OpenCode Go, ClinePass. Local providers (Ollama, LM Studio)
+   * handle this through `discoverLocalModels` in the chat store instead.
    */
   supportsDiscovery?: boolean;
+  discoveryUrl?: string;
   compat?: ProviderCompat;
 }
 
@@ -219,6 +220,23 @@ const CLOUD_PROVIDERS: ProviderInfo[] = [
       { id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: 8_192 },
     ],
   },
+  {
+    id: "cline-pass",
+    name: "ClinePass",
+    baseUrl: "https://api.cline.bot/api/v1",
+    supportsDiscovery: true,
+    discoveryUrl: "https://api.cline.bot/api/v1/ai/cline/recommended-models",
+    models: [
+      { id: "cline-pass/minimax-m3", name: "MiniMax M3", contextWindow: 524_288, vision: true, reasoning: true },
+      { id: "cline-pass/mimo-v2.5-pro", name: "MiMo V2.5 Pro", contextWindow: 1_048_576, reasoning: true },
+      { id: "cline-pass/glm-5.2", name: "GLM 5.2", contextWindow: 1_024_000, reasoning: true },
+      { id: "cline-pass/mimo-v2.5", name: "MiMo V2.5", contextWindow: 32_000, vision: true, reasoning: true },
+      { id: "cline-pass/kimi-k2.7-code", name: "Kimi K2.7 Code", contextWindow: 262_144, vision: true, reasoning: true },
+      { id: "cline-pass/deepseek-v4-flash", name: "DeepSeek V4 Flash", contextWindow: 1_024_000, reasoning: true },
+      { id: "cline-pass/deepseek-v4-pro", name: "DeepSeek V4 Pro", contextWindow: 1_024_000, reasoning: true },
+      { id: "cline-pass/kimi-k2.6", name: "Kimi K2.6", contextWindow: 256_000, vision: true, reasoning: true },
+    ],
+  },
 ];
 
 // ── Public API ─────────────────────────────────────────────────
@@ -243,12 +261,14 @@ export function getCloudProviders(): Array<{
   name: string;
   baseUrl: string;
   supportsDiscovery: boolean;
+  discoveryUrl?: string;
 }> {
   return CLOUD_PROVIDERS.map((p) => ({
     id: p.id,
     name: p.name,
     baseUrl: p.baseUrl,
     supportsDiscovery: p.supportsDiscovery ?? false,
+    discoveryUrl: p.discoveryUrl,
   }));
 }
 
@@ -280,11 +300,15 @@ export function getProviderBaseUrl(providerId: string): string | undefined {
   return findProviderInfo(providerId)?.baseUrl;
 }
 
+export function getProviderDiscoveryUrl(providerId: string): string | undefined {
+  return findProviderInfo(providerId)?.discoveryUrl;
+}
+
 /**
- * True if the user can hit this provider's /v1/models endpoint to
- * augment the curated list. Today: OpenRouter, Groq, OpenCode Go.
- * Local providers have their own `discoverLocalModels` path because
- * they need special handling (Ollama context fan-out, etc.).
+ * True if the user can hit this provider's model discovery endpoint to
+ * augment the curated list. Today: OpenRouter, Groq, OpenCode Go,
+ * ClinePass. Local providers have their own `discoverLocalModels`
+ * path because they need special handling (Ollama context fan-out, etc.).
  */
 export function providerSupportsDiscovery(providerId: string): boolean {
   return findProviderInfo(providerId)?.supportsDiscovery ?? false;

@@ -214,18 +214,56 @@ describe("runDeepResearch Orchestrator", () => {
       "## Apple Revenue\n\nApple revenue was $383 billion.",
     ];
     let callIndex = 0;
-    vi.mocked(generateText).mockImplementation(async () => {
+    vi.mocked(generateText).mockImplementation(() => {
       const text = mockResponses[callIndex] ?? mockResponses[mockResponses.length - 1];
       callIndex++;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
-      return { text } as any;
+      return Promise.resolve({ text } as any);
     });
 
-    await runDeepResearch("What was Apple's 2023 revenue?", dummyConfig, () => {}, undefined, 1);
+    await runDeepResearch("What was Apple's 2023 revenue?", dummyConfig, () => undefined, undefined, 1);
 
     expect(READ_ONLY_TOOLS.scrape_url.execute).toHaveBeenCalledWith(
       { url: "https://example.com/apple-news", maxChars: 15000 },
       expect.anything(),
+    );
+  });
+
+  it("marks orchestrated searches as internal Deep Research calls", async () => {
+    const { generateText } = await import("ai");
+    const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
+
+    const mockResponses = [
+      JSON.stringify({
+        title: "Apple 2023 Revenue",
+        steps: ["What was Apple's 2023 revenue?"],
+      }),
+      "general",
+      JSON.stringify(["apple revenue 2023"]),
+      JSON.stringify({
+        rational: "Mentions revenue",
+        evidence: "revenue of $383 billion",
+        summary: "Apple's 2023 revenue was $383 billion.",
+      }),
+      "Evolving report: Apple 2023 revenue was $383 billion.",
+      "## Apple Revenue\n\nApple revenue was $383 billion.",
+      "## Apple Revenue\n\nApple revenue was $383 billion with supporting detail.",
+    ];
+    let callIndex = 0;
+    vi.mocked(generateText).mockImplementation(() => {
+      const text = mockResponses[callIndex] ?? mockResponses[mockResponses.length - 1];
+      callIndex++;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
+      return Promise.resolve({ text } as any);
+    });
+
+    await runDeepResearch("What was Apple's 2023 revenue?", dummyConfig, () => undefined, undefined, 1);
+
+    expect(READ_ONLY_TOOLS.web_search.execute).toHaveBeenCalledWith(
+      { query: "apple revenue 2023", maxResults: 10 },
+      expect.objectContaining({
+        experimental_context: expect.objectContaining({ deepResearch: true }),
+      }),
     );
   });
 
@@ -268,7 +306,6 @@ describe("runDeepResearch Orchestrator", () => {
 
   it("limits concurrent extraction work", async () => {
     const { generateText } = await import("ai");
-    const { browserFetch } = await import("../lib/browser-fetch");
     const { READ_ONLY_TOOLS } = await import("../lib/tools/registry");
 
     vi.mocked(READ_ONLY_TOOLS.web_search.execute!).mockResolvedValue(
@@ -280,16 +317,15 @@ describe("runDeepResearch Orchestrator", () => {
       ),
     );
 
-    let activeFetches = 0;
-    let maxActiveFetches = 0;
+    let activeScrapes = 0;
+    let maxActiveScrapes = 0;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
-    vi.mocked(browserFetch).mockImplementation(async ({ url }: any) => {
-      activeFetches++;
-      maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
+    vi.mocked(READ_ONLY_TOOLS.scrape_url.execute!).mockImplementation(async ({ url }: any) => {
+      activeScrapes++;
+      maxActiveScrapes = Math.max(maxActiveScrapes, activeScrapes);
       await new Promise((resolve) => setTimeout(resolve, 5));
-      activeFetches--;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- sibling-prompt WIP, ownership respected per task spec
-      return { url, content: "useful source content" } as any;
+      activeScrapes--;
+      return `[Web scrape: ${url}]\nURL: ${url}\n\nuseful source content`;
     });
 
     const responses = [
@@ -318,7 +354,8 @@ describe("runDeepResearch Orchestrator", () => {
       maxUrlsPerRound: 3,
     });
 
-    expect(maxActiveFetches).toBeLessThanOrEqual(2);
+    expect(maxActiveScrapes).toBeGreaterThan(0);
+    expect(maxActiveScrapes).toBeLessThanOrEqual(2);
   });
 
   it("surfaces actionable errors when search returns no findings for repeated rounds", async () => {

@@ -55,6 +55,10 @@ function sourceMime(kind: ArtifactKind) {
   return "text/plain";
 }
 
+function workspaceFileNeedsReferenceResolution(file: WorkspaceFile | null) {
+  return !!file && /\.(html?|htm|svg|css)$/i.test(file.name);
+}
+
 export function useArtifactPanel({
   activeId,
   activeArtifact,
@@ -208,8 +212,13 @@ export function useArtifactPanel({
   }, [activeArtifact?.id, activeArtifact?.kind, activeArtifact?.code, previewKey]);
 
   useEffect(() => {
-    if (!workspaceFile || !workspaceFileIsPreviewable) {
+    if (
+      !workspaceFile ||
+      !workspaceFileIsPreviewable ||
+      !workspaceFileNeedsReferenceResolution(workspaceFile)
+    ) {
       setResolvedWsHtml(null);
+      setResolvingWsFile(false);
       return;
     }
     let cancelled = false;

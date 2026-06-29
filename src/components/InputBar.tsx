@@ -2269,6 +2269,7 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
 
   const canSend =
     (value.trim().length > 0 || files.length > 0) && !noModelsAvailable && !!selectedModelId;
+  const showWorkingBreath = animatedBorderEnabled && isStreaming;
 
   const handleToggleMic = useCallback(() => {
     if (speech.listening) {
@@ -2281,27 +2282,14 @@ export function InputBar({ onOpenSettings }: { onOpenSettings?: () => void } = {
   return (
     <div className="w-full max-w-[720px] min-w-0">
       <div
-        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${animatedBorderEnabled ? "animated-border" : ""} ${showPlusMenu || showSkillPicker || slashMenuOpen ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
+        className={`composer-surface relative w-full min-w-0 rounded-[24px] ${showWorkingBreath ? "composer-working-breath" : ""} ${showPlusMenu || showSkillPicker || slashMenuOpen ? "z-[95]" : ""} ${isFollowUp ? "px-5 py-3" : "min-h-[154px] p-5 max-[520px]:min-h-[146px] max-[520px]:p-4"} transition-[border-color,box-shadow,transform,background] duration-200 focus-within:border-white/[0.14] focus-within:shadow-[0_26px_80px_-38px_rgba(0,0,0,0.98),0_0_0_4px_rgba(var(--theme-accent-rgb),0.07),inset_0_1px_0_rgba(255,255,255,0.08)] focus-within:-translate-y-px`}
       >
-        {animatedBorderEnabled && (
+        {showWorkingBreath && (
           <div
-            className="pointer-events-none absolute inset-0 rounded-[24px]"
+            className="working-breath-ring pointer-events-none absolute inset-0 rounded-[24px]"
             style={{ zIndex: 10 }}
-          >
-            <svg className="absolute inset-0 w-full h-full" style={{ overflow: "visible" }}>
-              <rect
-                x="0"
-                y="0"
-                width="100%"
-                height="100%"
-                rx="24"
-                ry="24"
-                fill="none"
-                className="animate-border-beam"
-                pathLength="100"
-              />
-            </svg>
-          </div>
+            aria-hidden="true"
+          />
         )}
         {error && (
           <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-[#f87171]/[0.055] border border-[#f87171]/20 rounded-lg text-[12.5px] text-[#fca5a5] animate-[fadeIn_180ms_ease]">

@@ -14,6 +14,7 @@ import {
   getCloudProviders as registryGetCloudProviders,
   getCuratedModels as registryGetCuratedModels,
   getProviderBaseUrl as registryGetProviderBaseUrl,
+  getProviderDiscoveryUrl as registryGetProviderDiscoveryUrl,
   getProviderInfo as registryGetProviderInfo,
   providerSupportsDiscovery as registryProviderSupportsDiscovery,
   mergeDiscoveredModels as registryMergeDiscoveredModels,
@@ -93,6 +94,15 @@ export function getCuratedModels(providerId: string): ModelConfig[] {
  */
 export function getProviderBaseUrl(providerId: string): string | undefined {
   return registryGetProviderBaseUrl(providerId);
+}
+
+/**
+ * Optional provider-specific model discovery URL. Most OpenAI-compatible
+ * providers use `${baseUrl}/models`; ClinePass publishes its subscription
+ * model list through Cline's recommended-models endpoint.
+ */
+export function getProviderDiscoveryUrl(providerId: string): string | undefined {
+  return registryGetProviderDiscoveryUrl(providerId);
 }
 
 /**

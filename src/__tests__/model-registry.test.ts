@@ -75,9 +75,10 @@ describe("model registry", () => {
       expect(ids).toContain("openrouter");
       expect(ids).toContain("opencode-go");
       expect(ids).toContain("groq");
+      expect(ids).toContain("cline-pass");
     });
 
-    it("flags OpenCode Go, OpenRouter, and Groq as supporting /v1/models discovery", () => {
+    it("flags OpenCode Go, OpenRouter, Groq, and ClinePass as supporting model discovery", () => {
       // Mirrors pi-ai's "supports custom /v1/models" pattern: only
       // providers whose catalog we want to merge at runtime opt in.
       // Adding a new discovery-capable provider means flipping this
@@ -85,6 +86,7 @@ describe("model registry", () => {
       expect(providerSupportsDiscovery("openrouter")).toBe(true);
       expect(providerSupportsDiscovery("groq")).toBe(true);
       expect(providerSupportsDiscovery("opencode-go")).toBe(true);
+      expect(providerSupportsDiscovery("cline-pass")).toBe(true);
       expect(providerSupportsDiscovery("opencode-go-free")).toBe(false);
     });
 
@@ -105,6 +107,26 @@ describe("model registry", () => {
       expect(openai.length).toBeGreaterThan(0);
       expect(openai.find((m) => m.id === "gpt-4o")?.contextWindow).toBe(128_000);
       expect(openai.find((m) => m.id === "gpt-4o")?.vision).toBe(true);
+    });
+
+    it("seeds ClinePass with the generated subscription catalog while live discovery updates it", () => {
+      const models = getCuratedModels("cline-pass");
+
+      expect(models).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: "cline-pass/minimax-m3",
+          name: "MiniMax M3",
+          contextWindow: 524_288,
+          vision: true,
+          reasoning: true,
+        }),
+        expect.objectContaining({
+          id: "cline-pass/glm-5.2",
+          name: "GLM 5.2",
+          contextWindow: 1_024_000,
+          reasoning: true,
+        }),
+      ]));
     });
 
     it("returns an empty array for unknown providers", () => {
@@ -142,6 +164,7 @@ describe("model registry", () => {
       expect(getProviderBaseUrl("openai")).toBe("https://api.openai.com/v1");
       expect(getProviderBaseUrl("anthropic")).toBe("https://api.anthropic.com");
       expect(getProviderBaseUrl("groq")).toBe("https://api.groq.com/openai/v1");
+      expect(getProviderBaseUrl("cline-pass")).toBe("https://api.cline.bot/api/v1");
     });
 
     it("returns undefined for unknown providers (caller falls back to config)", () => {

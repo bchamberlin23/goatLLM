@@ -43,6 +43,7 @@ export async function createModel(config: LlmConfig): Promise<LanguageModel> {
     config.provider === "deepseek" ||
     config.provider === "mimo" ||
     config.provider === "openrouter" ||
+    config.provider === "cline-pass" ||
     config.provider === "ollama" ||
     config.provider === "lmstudio" ||
     config.provider.startsWith("custom-")

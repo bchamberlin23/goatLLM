@@ -1,6 +1,7 @@
 import { Code } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Artifact } from "../../stores/chat";
+import { MarkdownPreview } from "../MarkdownPreview";
 import { OfficePreview } from "./OfficePreview";
 import { PdfLoader } from "./PdfLoader";
 import { PyRunner } from "./PyRunner";
@@ -58,44 +59,6 @@ function svgDocument(svg: string) {
   </style>
 </head>
 <body>${svg}</body>
-</html>`;
-}
-
-function markdownDocument(markdown: string) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {
-      margin: 0;
-      padding: 32px;
-      font-family: Geist, Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1, h2, h3, h4, h5, h6 { margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
-    h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
-    code { background: rgba(27,31,35,0.05); padding: 0.2em 0.4em; border-radius: 3px; font-size: 85%; }
-    pre { background: #f6f8fa; padding: 16px; overflow: auto; font-size: 85%; line-height: 1.45; border-radius: 3px; }
-    pre code { background: transparent; padding: 0; }
-    blockquote { margin: 0; padding: 0 1em; color: #6a737d; border-left: 0.25em solid #dfe2e5; }
-    table { border-spacing: 0; border-collapse: collapse; margin-top: 0; margin-bottom: 16px; }
-    table th, table td { padding: 6px 13px; border: 1px solid #dfe2e5; }
-    table th { font-weight: 600; background: #f6f8fa; }
-  </style>
-</head>
-<body>
-  <div id="content"></div>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script>
-    const md = ${JSON.stringify(markdown)};
-    document.getElementById('content').innerHTML = marked.parse(md);
-  </script>
-</body>
 </html>`;
 }
 
@@ -215,15 +178,7 @@ export function PreviewPane({
   }
 
   if (artifact.kind === "markdown-document" || artifact.kind === "design-system") {
-    return (
-      <iframe
-        key={`preview-${previewKey}`}
-        className="flex-1 w-full border-none bg-white"
-        srcDoc={markdownDocument(artifact.code)}
-        sandbox={getSandboxAttribute("none")}
-        title={artifact.title}
-      />
-    );
+    return <MarkdownPreview content={artifact.code} />;
   }
 
   if (artifact.kind === "react-component") {

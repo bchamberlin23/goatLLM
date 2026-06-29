@@ -43,6 +43,21 @@ const JOURNAL_COMPACTION_PREFIX = "goatllm-journal-compaction:";
 const JOURNAL_DEL_CONV_PREFIX = "goatllm-journal-del-conv:";
 const JOURNAL_DEL_MSG_PREFIX = "goatllm-journal-del-msg:";
 const NOTEBOOKS_KEY = "goatllm-notebooks";
+const PERSISTED_TOOL_STRING_LIMIT = 8 * 1024;
+const PERSISTED_TOOL_STRING_PREVIEW = 2 * 1024;
+const COMPACT_TOOL_PAYLOAD_KEYS = new Set([
+  "content",
+  "CodeContent",
+  "codeContent",
+  "old_text",
+  "new_text",
+  "oldText",
+  "newText",
+  "TargetContent",
+  "ReplacementContent",
+  "targetContent",
+  "replacementContent",
+]);
 
 function safeSet(key: string, value: string) {
   try {
@@ -63,6 +78,42 @@ function safeSet(key: string, value: string) {
 
 function safeRemove(key: string) {
   try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
+function compactPersistedToolString(value: string): string {
+  if (value.length <= PERSISTED_TOOL_STRING_LIMIT) return value;
+  const preview = value.slice(0, PERSISTED_TOOL_STRING_PREVIEW);
+  const omitted = value.length - preview.length;
+  return `${preview}\n\n[goatLLM: ${omitted} chars omitted from persisted tool payload; live file contents are on disk.]`;
+}
+
+function compactPersistedToolPayload(value: unknown, key?: string): unknown {
+  if (typeof value === "string") {
+    return key && COMPACT_TOOL_PAYLOAD_KEYS.has(key)
+      ? compactPersistedToolString(value)
+      : value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => compactPersistedToolPayload(item));
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const compacted: Record<string, unknown> = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    compacted[childKey] = compactPersistedToolPayload(childValue, childKey);
+  }
+  return compacted;
+}
+
+function compactMessageForPersistence(m: Message): Message {
+  if (!m.toolCalls?.length) return m;
+  return {
+    ...m,
+    toolCalls: m.toolCalls.map((tc) => ({
+      ...tc,
+      input: compactPersistedToolPayload(tc.input),
+    })),
+  };
 }
 
 function oldestMessageKey(): string | null {
@@ -608,9 +659,10 @@ export function persistConversation(c: Conversation): void {
  * Upsert a message. Writes the journal synchronously and queues the SQLite mirror.
  */
 export function persistMessage(m: Message): void {
-  safeSet(JOURNAL_MSG_PREFIX + m.id, JSON.stringify(m));
+  const persisted = compactMessageForPersistence(m);
+  safeSet(JOURNAL_MSG_PREFIX + persisted.id, JSON.stringify(persisted));
   safeRemove(JOURNAL_DEL_MSG_PREFIX + m.id);
-  enqueueWrite(() => invokeSaveMessage(m));
+  enqueueWrite(() => invokeSaveMessage(persisted));
 }
 
 export function persistCompactionEntry(entry: CompactionEntry): void {
